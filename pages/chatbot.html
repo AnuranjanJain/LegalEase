@@ -1,0 +1,211 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8"/>
+    <meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+    <title>LegalEase - AI Chatbot</title>
+    <link href="data:image/x-icon;base64," rel="icon" type="image/x-icon"/>
+    <script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+    <link href="https://fonts.googleapis.com" rel="preconnect"/>
+    <link crossorigin="" href="https://fonts.gstatic.com" rel="preconnect"/>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;700&amp;display=swap" rel="stylesheet"/>
+    <script>
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    colors: {
+                        "primary": "#197fe6",
+                        "background-light": "#f6f7f8",
+                        "background-dark": "#111921",
+                    },
+                    fontFamily: {
+                        "display": ["Inter"]
+                    },
+                    borderRadius: {
+                        "DEFAULT": "0.25rem",
+                        "lg": "0.5rem",
+                        "xl": "0.75rem",
+                        "full": "9999px"
+                    },
+                },
+            },
+        }
+    </script>
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+        }
+    </style>
+</head>
+<body class="bg-background-light dark:bg-background-dark font-display">
+    <div class="flex h-screen flex-col">
+        <!-- Header -->
+        <header class="flex items-center justify-between border-b border-background-light-200 dark:border-background-dark-700 px-6 py-3 bg-white dark:bg-background-dark-900">
+            <div class="flex items-center gap-4">
+                <div class="w-8 h-8 text-primary">
+                    <svg fill="none" viewBox="0 0 48 48" xmlns="http://www.w3.org/2000/svg">
+                        <path d="M44 11.2727C44 14.0109 39.8386 16.3957 33.69 17.6364C39.8386 18.877 44 21.2618 44 24C44 26.7382 39.8386 29.123 33.69 30.3636C39.8386 31.6043 44 33.9891 44 36.7273C44 40.7439 35.0457 44 24 44C12.9543 44 4 40.7439 4 36.7273C4 33.9891 8.16144 31.6043 14.31 30.3636C8.16144 29.123 4 26.7382 4 24C4 21.2618 8.16144 18.877 14.31 17.6364C8.16144 16.3957 4 14.0109 4 11.2727C4 7.25611 12.9543 4 24 4C35.0457 4 44 7.25611 44 11.2727Z" fill="currentColor"></path>
+                    </svg>
+                </div>
+                <h1 class="text-xl font-bold text-gray-900 dark:text-white">LegalEase</h1>
+            </div>
+            <nav class="hidden md:flex items-center gap-6">
+                <a class="text-sm font-medium text-gray-600 dark:text-gray-300 hover:text-primary dark:hover:text-primary" href="../index.html">Home</a>
+                <a class="text-sm font-medium text-gray-600 dark:text-gray-300 hover:text-primary dark:hover:text-primary" href="dashboard.html">Dashboard</a>
+                <a class="text-sm font-medium text-gray-600 dark:text-gray-300 hover:text-primary dark:hover:text-primary" href="documents.html">Documents</a>
+                <a class="text-sm font-medium text-primary dark:text-primary" href="chatbot.html">Chatbot</a>
+                <a class="text-sm font-medium text-gray-600 dark:text-gray-300 hover:text-primary dark:hover:text-primary" href="profile.html">Profile</a>
+            </nav>
+            <div class="flex items-center gap-4">
+                <button class="p-2 rounded-full hover:bg-primary/10 dark:hover:bg-primary/20 text-gray-600 dark:text-gray-300">
+                    <svg fill="currentColor" height="20" viewBox="0 0 256 256" width="20" xmlns="http://www.w3.org/2000/svg">
+                        <path d="M221.8,175.94C216.25,166.38,208,139.33,208,104a80,80,0,1,0-160,0c0,35.34-8.26,62.38-13.81,71.94A16,16,0,0,0,48,200H88.81a40,40,0,0,0,78.38,0H208a16,16,0,0,0,13.8-24.06ZM128,216a24,24,0,0,1-22.62-16h45.24A24,24,0,0,1,128,216ZM48,184c7.7-13.24,16-43.92,16-80a64,64,0,1,1,128,0c0,36.05,8.28,66.73,16,80Z"></path>
+                    </svg>
+                </button>
+                <div class="w-10 h-10 rounded-full bg-cover bg-center" style='background-image: url("https://lh3.googleusercontent.com/aida-public/AB6AXuCaWHMQSuJdUoNmE3btaMaucuKLaE6yl1uelmC0UHsAbbSM15HGGGIE0PqZpU_bdHGFx4nV6JHPcZl6rB5jvu8uat0ZHtWttU60PdjpIkl560yMY_9jYQxCDFxmhEwkESImfvjoq5iZ0AegqDhSS2yhtejoTjF_MWYBV24k7sv2zPq-AArKFTmwKkL1yRG4B-xb41A2DXNP609SrH0ACGarvMfO3WJOx5V6iA8G-rrpd0TJ1z7l6pC2qLBjYz1O1Pb6iEc9epIQpuY");'></div>
+            </div>
+        </header>
+
+        <!-- Main Content -->
+        <main class="flex-1 flex overflow-hidden">
+            <div class="flex-1 flex flex-col p-6">
+                <!-- Page Title -->
+                <div class="flex-shrink-0 mb-6">
+                    <h2 class="text-3xl font-bold text-gray-900 dark:text-white">Legal AI Assistant</h2>
+                    <p class="text-sm text-gray-500 dark:text-gray-400 mt-1">Ask questions about your legal documents or any legal topic.</p>
+                </div>
+
+                <!-- Chat Messages -->
+                <div class="flex-1 overflow-y-auto space-y-6 pr-4">
+                    <!-- AI Message -->
+                    <div class="flex items-start gap-4">
+                        <div class="w-10 h-10 rounded-full bg-cover bg-center flex-shrink-0" style='background-image: url("https://lh3.googleusercontent.com/aida-public/AB6AXuA_d8v6-eTE3W8QN1CwkgT6T4tNc1e8sOEhDr89Wn4jLy_WZrrI0delbSnq4HXGK6LnKvO1E3HLOV7jd8pGzYL8YOe4blCvdsFTuFESWre3cIZZ_NOll-lg0raHjtamO-_DoM7GHoDRYtwPXA-BCnPFZheDu73-EUQ_vZIm2aZEnWVvacKytscObShvlLkPwAzDPBqzZpYDI-d78_PEgTNrv4CRVBNX0EIPzSI92zUhKC_WqVtSMBn1a2wn-WofI8MLJgwI9hjjEvQ");'></div>
+                        <div class="flex flex-col items-start max-w-lg">
+                            <p class="text-xs text-gray-500 dark:text-gray-400 mb-1">LegalEase AI</p>
+                            <div class="bg-white dark:bg-background-dark-900 rounded-lg p-3 shadow-sm">
+                                <p class="text-base text-gray-800 dark:text-gray-200">Hi there! I'm your legal AI assistant. How can I help you today with your legal questions?</p>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- User Message -->
+                    <div class="flex items-start justify-end gap-4">
+                        <div class="flex flex-col items-end max-w-lg">
+                            <p class="text-xs text-gray-500 dark:text-gray-400 mb-1 text-right">You</p>
+                            <div class="bg-primary rounded-lg p-3 shadow-sm">
+                                <p class="text-base text-white">I have a question about my lease agreement. Can you help?</p>
+                            </div>
+                        </div>
+                        <div class="w-10 h-10 rounded-full bg-cover bg-center flex-shrink-0" style='background-image: url("https://lh3.googleusercontent.com/aida-public/AB6AXuAQLtK5aCw666v8ldwG3GwS-LDeU3VJTWw2P7FKKZFWBJn8c7RAV14OdDisQqqI9TlNVZzV2-aRo5bc4VMg16VYHJoIaZiPAqmGOLNz8fhxWRCsn2qYeciOhAwCX-qRzD7jgaEaGv7jtGYsOmx3sXaED_fFASzr0jcefQK_nVlKF97g5D3I2n3B4ZV3c_NVQLTxO72gzYCz5mgnclBRw3YMTkDWThZWBTyzwgDkmULNN_QJgphB_r4dA52yswJ5k22jaUvn0d2CVJA");'></div>
+                    </div>
+
+                    <!-- AI Response -->
+                    <div class="flex items-start gap-4">
+                        <div class="w-10 h-10 rounded-full bg-cover bg-center flex-shrink-0" style='background-image: url("https://lh3.googleusercontent.com/aida-public/AB6AXuC567kKrZyjTkPq01e5PHOBVxr_mtFZAbx9x7-sENwMD1PohNJf0vjMPVAQixrf9-NMDwZ7UD24TG4xA_q6qTEJrESmEN2lzTWDXArFki_RgvJwx0-Tn_dgG0KO4-1DUI54rsU4MbPPfYeAhg2Kgl5vQKIqCnV3xGv9V_boQ9BmzZOPGlGCjPW8YMj7zHAIbJoshSZxemY4nc2nRFMRPdqvMS45o8m3ARK5aH-5HavzByaJf5DGAG0PcnJkdyERJFwWt9vJLJPKGHM");'></div>
+                        <div class="flex flex-col items-start max-w-lg">
+                            <p class="text-xs text-gray-500 dark:text-gray-400 mb-1">LegalEase AI</p>
+                            <div class="bg-white dark:bg-background-dark-900 rounded-lg p-3 shadow-sm">
+                                <p class="text-base text-gray-800 dark:text-gray-200">Of course! I'd be happy to help you with your lease agreement. What specifically would you like to know? For example, I can help explain:</p>
+                                <ul class="list-disc list-inside mt-2 text-sm text-gray-700 dark:text-gray-300">
+                                    <li>Rent increase policies</li>
+                                    <li>Early termination clauses</li>
+                                    <li>Security deposit terms</li>
+                                    <li>Maintenance responsibilities</li>
+                                    <li>Subletting policies</li>
+                                </ul>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- User Follow-up -->
+                    <div class="flex items-start justify-end gap-4">
+                        <div class="flex flex-col items-end max-w-lg">
+                            <p class="text-xs text-gray-500 dark:text-gray-400 mb-1 text-right">You</p>
+                            <div class="bg-primary rounded-lg p-3 shadow-sm">
+                                <p class="text-base text-white">What are my rights if my landlord wants to increase the rent?</p>
+                            </div>
+                        </div>
+                        <div class="w-10 h-10 rounded-full bg-cover bg-center flex-shrink-0" style='background-image: url("https://lh3.googleusercontent.com/aida-public/AB6AXuAQLtK5aCw666v8ldwG3GwS-LDeU3VJTWw2P7FKKZFWBJn8c7RAV14OdDisQqqI9TlNVZzV2-aRo5bc4VMg16VYHJoIaZiPAqmGOLNz8fhxWRCsn2qYeciOhAwCX-qRzD7jgaEaGv7jtGYsOmx3sXaED_fFASzr0jcefQK_nVlKF97g5D3I2n3B4ZV3c_NVQLTxO72gzYCz5mgnclBRw3YMTkDWThZWBTyzwgDkmULNN_QJgphB_r4dA52yswJ5k22jaUvn0d2CVJA");'></div>
+                    </div>
+
+                    <!-- AI Response with Legal Info -->
+                    <div class="flex items-start gap-4">
+                        <div class="w-10 h-10 rounded-full bg-cover bg-center flex-shrink-0" style='background-image: url("https://lh3.googleusercontent.com/aida-public/AB6AXuC567kKrZyjTkPq01e5PHOBVxr_mtFZAbx9x7-sENwMD1PohNJf0vjMPVAQixrf9-NMDwZ7UD24TG4xA_q6qTEJrESmEN2lzTWDXArFki_RgvJwx0-Tn_dgG0KO4-1DUI54rsU4MbPPfYeAhg2Kgl5vQKIqCnV3xGv9V_boQ9BmzZOPGlGCjPW8YMj7zHAIbJoshSZxemY4nc2nRFMRPdqvMS45o8m3ARK5aH-5HavzByaJf5DGAG0PcnJkdyERJFwWt9vJLJPKGHM");'></div>
+                        <div class="flex flex-col items-start max-w-lg">
+                            <p class="text-xs text-gray-500 dark:text-gray-400 mb-1">LegalEase AI</p>
+                            <div class="bg-white dark:bg-background-dark-900 rounded-lg p-3 shadow-sm">
+                                <p class="text-base text-gray-800 dark:text-gray-200 mb-3">Great question! Your rights regarding rent increases depend on several factors:</p>
+                                <div class="space-y-2 text-sm">
+                                    <p class="font-semibold text-gray-900 dark:text-white">📋 Notice Requirements:</p>
+                                    <p class="text-gray-700 dark:text-gray-300">Most states require 30-60 days written notice before a rent increase.</p>
+                                    
+                                    <p class="font-semibold text-gray-900 dark:text-white mt-3">🔒 Lease Terms:</p>
+                                    <p class="text-gray-700 dark:text-gray-300">During a fixed-term lease, rent typically cannot be increased unless specified in the lease.</p>
+                                    
+                                    <p class="font-semibold text-gray-900 dark:text-white mt-3">⚖️ Local Laws:</p>
+                                    <p class="text-gray-700 dark:text-gray-300">Some areas have rent control laws that limit how much and how often rent can be increased.</p>
+                                </div>
+                                <div class="mt-3 p-2 bg-yellow-50 dark:bg-yellow-900/20 rounded border-l-4 border-yellow-400">
+                                    <p class="text-xs text-yellow-800 dark:text-yellow-200">💡 Tip: Check your local tenant protection laws and review your lease agreement for specific terms.</p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Chat Input -->
+                <div class="mt-auto pt-4 @container">
+                    <div class="relative">
+                        <input class="w-full pl-4 pr-28 py-3 rounded-lg border-2 border-gray-200 dark:border-background-dark-700 bg-white dark:bg-background-dark-900 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent placeholder-gray-400 dark:placeholder-gray-500" placeholder="Ask a legal question..." type="text"/>
+                        <div class="absolute inset-y-0 right-0 flex items-center pr-3">
+                            <button class="p-2 rounded-full text-gray-500 dark:text-gray-400 hover:text-primary dark:hover:text-primary hover:bg-primary/10 dark:hover:bg-primary/20">
+                                <svg fill="currentColor" height="20" viewBox="0 0 256 256" width="20" xmlns="http://www.w3.org/2000/svg">
+                                    <path d="M209.66,122.34a8,8,0,0,1,0,11.32l-82.05,82a56,56,0,0,1-79.2-79.21L147.67,35.73a40,40,0,1,1,56.61,56.55L105,193A24,24,0,1,1,71,159L154.3,74.38A8,8,0,1,1,165.7,85.6L82.39,170.31a8,8,0,1,0,11.27,11.36L192.93,81A24,24,0,1,0,159,47L59.76,147.68a40,40,0,1,0,56.53,56.62l82.06-82A8,8,0,0,1,209.66,122.34Z"></path>
+                                </svg>
+                            </button>
+                            <button class="ml-2 py-2 px-4 rounded-lg bg-primary text-white font-semibold text-sm hidden @[480px]:block">Send</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Sidebar -->
+            <aside class="w-80 border-l border-gray-200 dark:border-background-dark-700 p-6 bg-white dark:bg-background-dark-900 hidden lg:block">
+                <h3 class="text-xl font-bold text-gray-900 dark:text-white mb-4">Quick Topics</h3>
+                
+                <!-- Recent Questions -->
+                <div class="mb-6">
+                    <h4 class="text-sm font-medium text-gray-700 dark:text-gray-300 mb-3">Recent Questions</h4>
+                    <ul class="space-y-1">
+                        <li><a class="block p-3 rounded-lg text-sm text-gray-700 dark:text-gray-300 hover:bg-primary/10 dark:hover:bg-primary/20" href="#">What are my rights as a tenant?</a></li>
+                        <li><a class="block p-3 rounded-lg text-sm text-gray-700 dark:text-gray-300 hover:bg-primary/10 dark:hover:bg-primary/20" href="#">Can I sublet my apartment?</a></li>
+                        <li><a class="block p-3 rounded-lg text-sm text-gray-700 dark:text-gray-300 hover:bg-primary/10 dark:hover:bg-primary/20" href="#">What happens if I break my lease?</a></li>
+                        <li><a class="block p-3 rounded-lg text-sm text-gray-700 dark:text-gray-300 hover:bg-primary/10 dark:hover:bg-primary/20" href="#">How much notice do I need to give before moving out?</a></li>
+                    </ul>
+                </div>
+
+                <!-- Common Legal Topics -->
+                <div class="mb-6">
+                    <h4 class="text-sm font-medium text-gray-700 dark:text-gray-300 mb-3">Popular Topics</h4>
+                    <div class="space-y-2">
+                        <button class="w-full text-left p-2 rounded-lg text-sm text-gray-600 dark:text-gray-400 hover:bg-primary/10 dark:hover:bg-primary/20 hover:text-primary dark:hover:text-primary">🏠 Rental & Lease Law</button>
+                        <button class="w-full text-left p-2 rounded-lg text-sm text-gray-600 dark:text-gray-400 hover:bg-primary/10 dark:hover:bg-primary/20 hover:text-primary dark:hover:text-primary">💼 Employment Law</button>
+                        <button class="w-full text-left p-2 rounded-lg text-sm text-gray-600 dark:text-gray-400 hover:bg-primary/10 dark:hover:bg-primary/20 hover:text-primary dark:hover:text-primary">📄 Contract Law</button>
+                        <button class="w-full text-left p-2 rounded-lg text-sm text-gray-600 dark:text-gray-400 hover:bg-primary/10 dark:hover:bg-primary/20 hover:text-primary dark:hover:text-primary">🏛️ Family Law</button>
+                        <button class="w-full text-left p-2 rounded-lg text-sm text-gray-600 dark:text-gray-400 hover:bg-primary/10 dark:hover:bg-primary/20 hover:text-primary dark:hover:text-primary">🚗 Personal Injury</button>
+                        <button class="w-full text-left p-2 rounded-lg text-sm text-gray-600 dark:text-gray-400 hover:bg-primary/10 dark:hover:bg-primary/20 hover:text-primary dark:hover:text-primary">💳 Consumer Rights</button>
+                    </div>
+                </div>
+
+                <!-- Disclaimer -->
+                <div class="p-4 bg-yellow-50 dark:bg-yellow-900/20 rounded-lg border border-yellow-200 dark:border-yellow-700">
+                    <p class="text-xs text-yellow-800 dark:text-yellow-200">
+                        ⚠️ <strong>Disclaimer:</strong> This AI assistant provides general legal information only and should not be considered legal advice. For specific legal matters, consult with a qualified attorney.
+                    </p>
+                </div>
+            </aside>
+        </main>
+    </div>
+</body>
+</html>
