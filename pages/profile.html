@@ -1,0 +1,303 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8"/>
+    <meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+    <title>LegalEase - User Profile</title>
+    <script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+    <link href="https://fonts.googleapis.com" rel="preconnect"/>
+    <link crossorigin="" href="https://fonts.gstatic.com" rel="preconnect"/>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&amp;display=swap" rel="stylesheet"/>
+    <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined" rel="stylesheet"/>
+    <script id="tailwind-config">
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    colors: {
+                        "primary": "#197fe6",
+                        "background-light": "#f6f7f8",
+                        "background-dark": "#111921",
+                    },
+                    fontFamily: {
+                        "display": ["Inter"]
+                    },
+                    borderRadius: {"DEFAULT": "0.25rem", "lg": "0.5rem", "xl": "0.75rem", "full": "9999px"},
+                },
+            },
+        }
+    </script>
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+        }
+    </style>
+</head>
+<body class="bg-background-light dark:bg-background-dark font-display text-gray-800 dark:text-gray-200">
+    <div class="flex flex-col min-h-screen">
+        <!-- Header -->
+        <header class="bg-white dark:bg-background-dark border-b border-gray-200 dark:border-gray-800">
+            <div class="container mx-auto px-4 sm:px-6 lg:px-8">
+                <div class="flex items-center justify-between h-16">
+                    <div class="flex items-center gap-4">
+                        <div class="text-primary">
+                            <svg class="h-8 w-8" fill="none" viewBox="0 0 48 48" xmlns="http://www.w3.org/2000/svg">
+                                <path d="M44 11.2727C44 14.0109 39.8386 16.3957 33.69 17.6364C39.8386 18.877 44 21.2618 44 24C44 26.7382 39.8386 29.123 33.69 30.3636C39.8386 31.6043 44 33.9891 44 36.7273C44 40.7439 35.0457 44 24 44C12.9543 44 4 40.7439 4 36.7273C4 33.9891 8.16144 31.6043 14.31 30.3636C8.16144 29.123 4 26.7382 4 24C4 21.2618 8.16144 18.877 14.31 17.6364C8.16144 16.3957 4 14.0109 4 11.2727C4 7.25611 12.9543 4 24 4C35.0457 4 44 7.25611 44 11.2727Z" fill="currentColor"></path>
+                            </svg>
+                        </div>
+                        <h1 class="text-xl font-bold text-gray-900 dark:text-white">LegalEase</h1>
+                    </div>
+                    <nav class="hidden md:flex items-center space-x-8">
+                        <a class="text-sm font-medium text-gray-600 dark:text-gray-300 hover:text-primary dark:hover:text-primary transition-colors" href="../index.html">Home</a>
+                        <a class="text-sm font-medium text-gray-600 dark:text-gray-300 hover:text-primary dark:hover:text-primary transition-colors" href="dashboard.html">Dashboard</a>
+                        <a class="text-sm font-medium text-gray-600 dark:text-gray-300 hover:text-primary dark:hover:text-primary transition-colors" href="documents.html">Documents</a>
+                        <a class="text-sm font-medium text-gray-600 dark:text-gray-300 hover:text-primary dark:hover:text-primary transition-colors" href="chatbot.html">Chatbot</a>
+                        <a class="text-sm font-medium text-primary dark:text-primary" href="profile.html">Profile</a>
+                    </nav>
+                    <div class="flex items-center gap-4">
+                        <button class="p-2 rounded-full text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800 hover:text-gray-700 dark:hover:text-gray-200 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-background-light dark:focus:ring-offset-background-dark focus:ring-primary">
+                            <span class="material-symbols-outlined">notifications</span>
+                        </button>
+                        <div class="relative">
+                            <button class="flex items-center focus:outline-none">
+                                <img alt="User avatar" class="h-10 w-10 rounded-full object-cover" src="https://lh3.googleusercontent.com/aida-public/AB6AXuD3LF8AQTeN2rwXts3P9uQnC0Z8FTTLDmaLgp2XnigGrD4jgSBQDMzTfqrzkAmyB59xzs0ZGl6SH8QyrcgJdqAYytrWhHaMZMCMzaSWWlfL5LnK6JfFjbv53HBuYYCEDpsmKkkLJ4peI8maM6EaODpwB07PwB5d4bI-ZPAil3V-utDKwuiKqT1WQEVCP9mjfp7Gsiy2TZXCRhWnigCRhn_AmF2d8X1EI2zzHEjMnLYcaaDRKizpHxPzjzenNnE2G-VERH7rDrxA2jY"/>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </header>
+
+        <!-- Main Content -->
+        <main class="flex-grow container mx-auto px-4 sm:px-6 lg:px-8 py-8 md:py-12">
+            <div class="max-w-4xl mx-auto">
+                <!-- Page Header -->
+                <div class="mb-8">
+                    <h2 class="text-3xl font-bold text-gray-900 dark:text-white">Account Settings</h2>
+                    <p class="mt-1 text-sm text-gray-500 dark:text-gray-400">Manage your account settings and preferences.</p>
+                </div>
+
+                <!-- Tab Navigation -->
+                <div class="border-b border-gray-200 dark:border-gray-700 mb-8">
+                    <nav aria-label="Tabs" class="-mb-px flex space-x-6">
+                        <a class="border-primary text-primary whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm" href="#profile">
+                            Profile
+                        </a>
+                        <a class="border-transparent text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300 hover:border-gray-300 dark:hover:border-gray-600 whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm" href="#settings">
+                            Settings
+                        </a>
+                        <a class="border-transparent text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300 hover:border-gray-300 dark:hover:border-gray-600 whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm" href="#billing">
+                            Billing
+                        </a>
+                        <a class="border-transparent text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300 hover:border-gray-300 dark:hover:border-gray-600 whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm" href="#security">
+                            Security
+                        </a>
+                    </nav>
+                </div>
+
+                <!-- Profile Content -->
+                <div class="bg-white dark:bg-background-dark/50 shadow-sm rounded-lg overflow-hidden">
+                    <div class="p-6 sm:p-8 space-y-8">
+                        <!-- Profile Picture Section -->
+                        <div class="flex items-center space-x-6">
+                            <div class="flex-shrink-0">
+                                <img class="h-20 w-20 rounded-full object-cover" src="https://lh3.googleusercontent.com/aida-public/AB6AXuD3LF8AQTeN2rwXts3P9uQnC0Z8FTTLDmaLgp2XnigGrD4jgSBQDMzTfqrzkAmyB59xzs0ZGl6SH8QyrcgJdqAYytrWhHaMZMCMzaSWWlfL5LnK6JfFjbv53HBuYYCEDpsmKkkLJ4peI8maM6EaODpwB07PwB5d4bI-ZPAil3V-utDKwuiKqT1WQEVCP9mjfp7Gsiy2TZXCRhWnigCRhn_AmF2d8X1EI2zzHEjMnLYcaaDRKizpHxPzjzenNnE2G-VERH7rDrxA2jY" alt="Profile picture"/>
+                            </div>
+                            <div class="flex-1 min-w-0">
+                                <h3 class="text-lg font-medium text-gray-900 dark:text-white">Profile Picture</h3>
+                                <p class="text-sm text-gray-500 dark:text-gray-400">Upload a new profile picture or remove the current one.</p>
+                                <div class="mt-3 flex gap-3">
+                                    <button type="button" class="inline-flex items-center px-3 py-2 border border-gray-300 dark:border-gray-600 shadow-sm text-sm leading-4 font-medium rounded-md text-gray-700 dark:text-gray-300 bg-white dark:bg-background-dark hover:bg-gray-50 dark:hover:bg-gray-800 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary">
+                                        Change Photo
+                                    </button>
+                                    <button type="button" class="inline-flex items-center px-3 py-2 text-sm leading-4 font-medium text-red-600 dark:text-red-400 hover:text-red-500 dark:hover:text-red-300">
+                                        Remove
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Personal Information -->
+                        <div>
+                            <h3 class="text-lg font-medium leading-6 text-gray-900 dark:text-white">Personal Information</h3>
+                            <div class="mt-6 grid grid-cols-1 gap-y-6 gap-x-4 sm:grid-cols-6">
+                                <div class="sm:col-span-3">
+                                    <label class="block text-sm font-medium text-gray-700 dark:text-gray-300" for="first-name">First Name</label>
+                                    <div class="mt-1">
+                                        <input class="block w-full rounded-lg border-gray-300 dark:border-gray-600 bg-background-light dark:bg-background-dark/30 shadow-sm focus:ring-primary focus:border-primary sm:text-sm py-3 px-4" id="first-name" name="first-name" type="text" value="Sarah" autocomplete="given-name"/>
+                                    </div>
+                                </div>
+
+                                <div class="sm:col-span-3">
+                                    <label class="block text-sm font-medium text-gray-700 dark:text-gray-300" for="last-name">Last Name</label>
+                                    <div class="mt-1">
+                                        <input class="block w-full rounded-lg border-gray-300 dark:border-gray-600 bg-background-light dark:bg-background-dark/30 shadow-sm focus:ring-primary focus:border-primary sm:text-sm py-3 px-4" id="last-name" name="last-name" type="text" value="Johnson" autocomplete="family-name"/>
+                                    </div>
+                                </div>
+
+                                <div class="sm:col-span-4">
+                                    <label class="block text-sm font-medium text-gray-700 dark:text-gray-300" for="email">Email address</label>
+                                    <div class="mt-1">
+                                        <input class="block w-full rounded-lg border-gray-300 dark:border-gray-600 bg-background-light dark:bg-background-dark/30 shadow-sm focus:ring-primary focus:border-primary sm:text-sm py-3 px-4" id="email" name="email" type="email" value="sarah.johnson@email.com" autocomplete="email"/>
+                                    </div>
+                                </div>
+
+                                <div class="sm:col-span-4">
+                                    <label class="block text-sm font-medium text-gray-700 dark:text-gray-300" for="phone-number">Phone Number</label>
+                                    <div class="mt-1">
+                                        <input class="block w-full rounded-lg border-gray-300 dark:border-gray-600 bg-background-light dark:bg-background-dark/30 shadow-sm focus:ring-primary focus:border-primary sm:text-sm py-3 px-4" id="phone-number" name="phone-number" type="tel" value="+1 (555) 123-4567" autocomplete="tel"/>
+                                    </div>
+                                </div>
+
+                                <div class="sm:col-span-6">
+                                    <label class="block text-sm font-medium text-gray-700 dark:text-gray-300" for="bio">Bio</label>
+                                    <div class="mt-1">
+                                        <textarea class="block w-full rounded-lg border-gray-300 dark:border-gray-600 bg-background-light dark:bg-background-dark/30 shadow-sm focus:ring-primary focus:border-primary sm:text-sm py-3 px-4" id="bio" name="bio" rows="3" placeholder="Tell us about yourself...">Legal professional with 5+ years of experience in contract law and compliance.</textarea>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Address Information -->
+                        <div class="border-t border-gray-200 dark:border-gray-700 pt-8">
+                            <h3 class="text-lg font-medium leading-6 text-gray-900 dark:text-white">Address</h3>
+                            <div class="mt-6 grid grid-cols-1 gap-y-6 gap-x-4 sm:grid-cols-6">
+                                <div class="sm:col-span-6">
+                                    <label class="block text-sm font-medium text-gray-700 dark:text-gray-300" for="street-address">Street address</label>
+                                    <div class="mt-1">
+                                        <input class="block w-full rounded-lg border-gray-300 dark:border-gray-600 bg-background-light dark:bg-background-dark/30 shadow-sm focus:ring-primary focus:border-primary sm:text-sm py-3 px-4" id="street-address" name="street-address" type="text" value="123 Main Street, Apt 4B" autocomplete="street-address"/>
+                                    </div>
+                                </div>
+
+                                <div class="sm:col-span-2">
+                                    <label class="block text-sm font-medium text-gray-700 dark:text-gray-300" for="city">City</label>
+                                    <div class="mt-1">
+                                        <input class="block w-full rounded-lg border-gray-300 dark:border-gray-600 bg-background-light dark:bg-background-dark/30 shadow-sm focus:ring-primary focus:border-primary sm:text-sm py-3 px-4" id="city" name="city" type="text" value="New York" autocomplete="address-level2"/>
+                                    </div>
+                                </div>
+
+                                <div class="sm:col-span-2">
+                                    <label class="block text-sm font-medium text-gray-700 dark:text-gray-300" for="region">State / Province</label>
+                                    <div class="mt-1">
+                                        <input class="block w-full rounded-lg border-gray-300 dark:border-gray-600 bg-background-light dark:bg-background-dark/30 shadow-sm focus:ring-primary focus:border-primary sm:text-sm py-3 px-4" id="region" name="region" type="text" value="NY" autocomplete="address-level1"/>
+                                    </div>
+                                </div>
+
+                                <div class="sm:col-span-2">
+                                    <label class="block text-sm font-medium text-gray-700 dark:text-gray-300" for="postal-code">ZIP / Postal code</label>
+                                    <div class="mt-1">
+                                        <input class="block w-full rounded-lg border-gray-300 dark:border-gray-600 bg-background-light dark:bg-background-dark/30 shadow-sm focus:ring-primary focus:border-primary sm:text-sm py-3 px-4" id="postal-code" name="postal-code" type="text" value="10001" autocomplete="postal-code"/>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Preferences -->
+                        <div class="border-t border-gray-200 dark:border-gray-700 pt-8">
+                            <h3 class="text-lg font-medium leading-6 text-gray-900 dark:text-white">Preferences</h3>
+                            <div class="mt-6 space-y-6">
+                                <!-- Language Preference -->
+                                <div>
+                                    <label class="block text-sm font-medium text-gray-700 dark:text-gray-300" for="language">Language</label>
+                                    <div class="mt-1">
+                                        <select class="block w-full rounded-lg border-gray-300 dark:border-gray-600 bg-background-light dark:bg-background-dark/30 shadow-sm focus:ring-primary focus:border-primary sm:text-sm py-3 px-4" id="language" name="language">
+                                            <option value="en">English</option>
+                                            <option value="es">Spanish</option>
+                                            <option value="fr">French</option>
+                                            <option value="de">German</option>
+                                        </select>
+                                    </div>
+                                </div>
+
+                                <!-- Timezone -->
+                                <div>
+                                    <label class="block text-sm font-medium text-gray-700 dark:text-gray-300" for="timezone">Timezone</label>
+                                    <div class="mt-1">
+                                        <select class="block w-full rounded-lg border-gray-300 dark:border-gray-600 bg-background-light dark:bg-background-dark/30 shadow-sm focus:ring-primary focus:border-primary sm:text-sm py-3 px-4" id="timezone" name="timezone">
+                                            <option value="EST">Eastern Standard Time (EST)</option>
+                                            <option value="CST">Central Standard Time (CST)</option>
+                                            <option value="MST">Mountain Standard Time (MST)</option>
+                                            <option value="PST">Pacific Standard Time (PST)</option>
+                                        </select>
+                                    </div>
+                                </div>
+
+                                <!-- Email Notifications -->
+                                <div class="space-y-4">
+                                    <h4 class="text-sm font-medium text-gray-700 dark:text-gray-300">Email Notifications</h4>
+                                    <div class="space-y-3">
+                                        <div class="flex items-center">
+                                            <input checked class="h-4 w-4 text-primary focus:ring-primary border-gray-300 dark:border-gray-600 rounded" id="email-documents" name="email-documents" type="checkbox"/>
+                                            <label class="ml-3 text-sm text-gray-700 dark:text-gray-300" for="email-documents">Document processing completed</label>
+                                        </div>
+                                        <div class="flex items-center">
+                                            <input checked class="h-4 w-4 text-primary focus:ring-primary border-gray-300 dark:border-gray-600 rounded" id="email-security" name="email-security" type="checkbox"/>
+                                            <label class="ml-3 text-sm text-gray-700 dark:text-gray-300" for="email-security">Security alerts</label>
+                                        </div>
+                                        <div class="flex items-center">
+                                            <input class="h-4 w-4 text-primary focus:ring-primary border-gray-300 dark:border-gray-600 rounded" id="email-marketing" name="email-marketing" type="checkbox"/>
+                                            <label class="ml-3 text-sm text-gray-700 dark:text-gray-300" for="email-marketing">Product updates and news</label>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Save Button -->
+                    <div class="px-6 sm:px-8 py-4 bg-gray-50 dark:bg-background-dark/20 text-right">
+                        <button class="inline-flex justify-center rounded-lg border border-transparent bg-primary py-2 px-6 text-sm font-medium text-white shadow-sm hover:bg-primary/90 focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-2 focus:ring-offset-gray-50 dark:focus:ring-offset-background-dark/20" type="button">
+                            Save Changes
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Account Stats -->
+                <div class="mt-8 grid grid-cols-1 md:grid-cols-3 gap-6">
+                    <div class="bg-white dark:bg-background-dark/50 rounded-lg border border-gray-200 dark:border-gray-700 p-6">
+                        <div class="flex items-center">
+                            <div class="flex-shrink-0">
+                                <div class="flex h-10 w-10 items-center justify-center rounded-lg bg-primary/10 text-primary">
+                                    <span class="material-symbols-outlined">description</span>
+                                </div>
+                            </div>
+                            <div class="ml-4">
+                                <p class="text-sm font-medium text-gray-500 dark:text-gray-400">Documents Processed</p>
+                                <p class="text-2xl font-bold text-gray-900 dark:text-white">24</p>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="bg-white dark:bg-background-dark/50 rounded-lg border border-gray-200 dark:border-gray-700 p-6">
+                        <div class="flex items-center">
+                            <div class="flex-shrink-0">
+                                <div class="flex h-10 w-10 items-center justify-center rounded-lg bg-green-100 text-green-600 dark:bg-green-900/30 dark:text-green-400">
+                                    <span class="material-symbols-outlined">schedule</span>
+                                </div>
+                            </div>
+                            <div class="ml-4">
+                                <p class="text-sm font-medium text-gray-500 dark:text-gray-400">Time Saved</p>
+                                <p class="text-2xl font-bold text-gray-900 dark:text-white">18h</p>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="bg-white dark:bg-background-dark/50 rounded-lg border border-gray-200 dark:border-gray-700 p-6">
+                        <div class="flex items-center">
+                            <div class="flex-shrink-0">
+                                <div class="flex h-10 w-10 items-center justify-center rounded-lg bg-blue-100 text-blue-600 dark:bg-blue-900/30 dark:text-blue-400">
+                                    <span class="material-symbols-outlined">chat</span>
+                                </div>
+                            </div>
+                            <div class="ml-4">
+                                <p class="text-sm font-medium text-gray-500 dark:text-gray-400">Questions Asked</p>
+                                <p class="text-2xl font-bold text-gray-900 dark:text-white">156</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </main>
+    </div>
+</body>
+</html>

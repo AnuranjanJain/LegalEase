@@ -1,0 +1,200 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8"/>
+    <meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+    <title>LegalEase - Document Upload & Summary</title>
+    <link href="data:image/x-icon;base64," rel="icon" type="image/x-icon"/>
+    <script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+    <link href="https://fonts.googleapis.com" rel="preconnect"/>
+    <link crossorigin="" href="https://fonts.gstatic.com" rel="preconnect"/>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;900&amp;display=swap" rel="stylesheet"/>
+    <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined" rel="stylesheet"/>
+    <script id="tailwind-config">
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    colors: {
+                        "primary": "#197fe6",
+                        "background-light": "#f6f7f8",
+                        "background-dark": "#111921",
+                    },
+                    fontFamily: {
+                        "display": ["Inter"]
+                    },
+                    borderRadius: {
+                        "DEFAULT": "0.25rem",
+                        "lg": "0.5rem",
+                        "xl": "0.75rem",
+                        "full": "9999px"
+                    },
+                },
+            },
+        }
+    </script>
+</head>
+<body class="bg-background-light dark:bg-background-dark font-display text-[#18181B] dark:text-gray-200">
+    <div class="flex min-h-screen w-full flex-col">
+        <!-- Header -->
+        <header class="flex items-center justify-between whitespace-nowrap border-b border-gray-200/80 dark:border-gray-700/80 px-10 py-4">
+            <div class="flex items-center gap-3">
+                <div class="h-8 w-8 text-primary">
+                    <svg fill="none" viewBox="0 0 48 48" xmlns="http://www.w3.org/2000/svg">
+                        <path d="M44 11.2727C44 14.0109 39.8386 16.3957 33.69 17.6364C39.8386 18.877 44 21.2618 44 24C44 26.7382 39.8386 29.123 33.69 30.3636C39.8386 31.6043 44 33.9891 44 36.7273C44 40.7439 35.0457 44 24 44C12.9543 44 4 40.7439 4 36.7273C4 33.9891 8.16144 31.6043 14.31 30.3636C8.16144 29.123 4 26.7382 4 24C4 21.2618 8.16144 18.877 14.31 17.6364C8.16144 16.3957 4 14.0109 4 11.2727C4 7.25611 12.9543 4 24 4C35.0457 4 44 7.25611 44 11.2727Z" fill="currentColor"></path>
+                    </svg>
+                </div>
+                <h2 class="text-xl font-bold">LegalEase</h2>
+            </div>
+            <nav class="hidden md:flex items-center gap-8">
+                <a class="text-sm font-medium hover:text-primary transition-colors" href="../index.html">Home</a>
+                <a class="text-sm font-medium hover:text-primary transition-colors" href="dashboard.html">Dashboard</a>
+                <a class="text-sm font-medium text-primary" href="documents.html">Documents</a>
+                <a class="text-sm font-medium hover:text-primary transition-colors" href="chatbot.html">Chatbot</a>
+                <a class="text-sm font-medium hover:text-primary transition-colors" href="profile.html">Profile</a>
+            </nav>
+            <div class="flex items-center gap-4">
+                <button class="flex h-10 w-10 cursor-pointer items-center justify-center rounded-full bg-transparent hover:bg-primary/10 transition-colors">
+                    <span class="material-symbols-outlined text-gray-600 dark:text-gray-300">notifications</span>
+                </button>
+                <div class="aspect-square w-10 rounded-full bg-cover bg-center bg-no-repeat" style='background-image: url("https://lh3.googleusercontent.com/aida-public/AB6AXuA1lPDVHDLH_nU9vd-ocLidDxzqmLizp52UrN5-chVIqCO6LWffExpdL_uy4QhzGSvmi1dcjdTvslLgv1utSafyYknQdWZUObidYSSOGPIVcT3eLCETTE5NCOLe2fkd_e1U68B9Xeu80WY4yymeE3viQDcnxrNcY0y5Igk9wOyfmj2zbsXMTEXJDFoDGEt3ch4QBT18cWt0eRJatIBRXtnzwFNInayOrxRYeUGW-EWNpvbz8HT83EDYHdTa65O0j4JMs7FaUm0WZ8o");'></div>
+            </div>
+        </header>
+
+        <!-- Main Content -->
+        <main class="flex-1 px-4 py-10 md:px-10 lg:px-20">
+            <div class="mx-auto max-w-4xl">
+                <div class="text-center mb-12">
+                    <h1 class="text-4xl md:text-5xl font-bold tracking-tight mb-4">Simplify Your Legal Documents</h1>
+                    <p class="text-lg text-gray-600 dark:text-gray-400">Upload your document and let our AI provide you with a clear, understandable summary.</p>
+                </div>
+
+                <!-- Upload Area -->
+                <div class="relative flex flex-col items-center justify-center gap-4 rounded-xl border-2 border-dashed border-gray-300 dark:border-gray-700 bg-white dark:bg-background-dark/50 p-10 md:p-20 text-center transition-all duration-300 hover:border-primary hover:bg-primary/5">
+                    <div class="absolute top-4 right-4 flex items-center gap-2 text-sm text-gray-500 dark:text-gray-400">
+                        <span class="material-symbols-outlined text-lg">lock</span>
+                        <span>Secure &amp; Confidential</span>
+                    </div>
+                    <div class="flex h-16 w-16 items-center justify-center rounded-full bg-primary/10 text-primary">
+                        <span class="material-symbols-outlined" style="font-size: 32px">upload_file</span>
+                    </div>
+                    <p class="text-lg font-semibold">Drag and drop your document here</p>
+                    <p class="text-gray-500 dark:text-gray-400">or</p>
+                    <button class="flex items-center justify-center gap-2 rounded-lg bg-primary px-6 py-3 text-base font-bold text-white shadow-sm transition-all hover:bg-primary/90 hover:shadow-lg">
+                        Browse Files
+                    </button>
+                    <p class="mt-4 text-xs text-gray-400 dark:text-gray-500">Max file size: 25MB. Supported formats: .pdf, .docx, .txt</p>
+                </div>
+
+                <!-- Features Section -->
+                <div class="mt-16 space-y-12">
+                    <!-- Document Summary -->
+                    <div class="flex items-start gap-6">
+                        <div class="flex h-12 w-12 flex-shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary">
+                            <span class="material-symbols-outlined">description</span>
+                        </div>
+                        <div>
+                            <h2 class="text-2xl font-bold mb-2">Document Summary</h2>
+                            <p class="text-gray-600 dark:text-gray-400">
+                                This section provides a concise overview of the key points and clauses within your legal document, making it easier to grasp the core content at a glance.
+                            </p>
+                        </div>
+                    </div>
+
+                    <!-- Jargon Explanations -->
+                    <div class="flex items-start gap-6">
+                        <div class="flex h-12 w-12 flex-shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary">
+                            <span class="material-symbols-outlined">translate</span>
+                        </div>
+                        <div>
+                            <h2 class="text-2xl font-bold mb-2">Jargon Explanations</h2>
+                            <p class="text-gray-600 dark:text-gray-400">
+                                Here, complex legal terms are broken down into plain language, ensuring you understand every detail without needing a law degree.
+                            </p>
+                        </div>
+                    </div>
+
+                    <!-- Risk Alerts -->
+                    <div class="flex items-start gap-6">
+                        <div class="flex h-12 w-12 flex-shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary">
+                            <span class="material-symbols-outlined">warning</span>
+                        </div>
+                        <div>
+                            <h2 class="text-2xl font-bold mb-2">Risk Alerts</h2>
+                            <p class="text-gray-600 dark:text-gray-400">
+                                This feature highlights potential risks or critical areas within the document that require your attention, helping you make informed decisions.
+                            </p>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Recent Documents Section -->
+                <div class="mt-16">
+                    <h2 class="text-2xl font-bold mb-6">Recent Documents</h2>
+                    <div class="space-y-4">
+                        <div class="flex items-center justify-between p-4 rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-background-dark/50">
+                            <div class="flex items-center gap-4">
+                                <div class="flex h-10 w-10 items-center justify-center rounded-lg bg-red-50 text-red-600">
+                                    <span class="material-symbols-outlined">picture_as_pdf</span>
+                                </div>
+                                <div>
+                                    <h3 class="font-medium">Lease Agreement - Apartment 4B</h3>
+                                    <p class="text-sm text-gray-500 dark:text-gray-400">Uploaded 2 hours ago</p>
+                                </div>
+                            </div>
+                            <div class="flex items-center gap-2">
+                                <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200">
+                                    Processed
+                                </span>
+                                <button class="p-2 text-gray-400 hover:text-gray-600 dark:hover:text-gray-200">
+                                    <span class="material-symbols-outlined">more_vert</span>
+                                </button>
+                            </div>
+                        </div>
+
+                        <div class="flex items-center justify-between p-4 rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-background-dark/50">
+                            <div class="flex items-center gap-4">
+                                <div class="flex h-10 w-10 items-center justify-center rounded-lg bg-blue-50 text-blue-600">
+                                    <span class="material-symbols-outlined">description</span>
+                                </div>
+                                <div>
+                                    <h3 class="font-medium">Employment Contract - TechCorp</h3>
+                                    <p class="text-sm text-gray-500 dark:text-gray-400">Uploaded 1 day ago</p>
+                                </div>
+                            </div>
+                            <div class="flex items-center gap-2">
+                                <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200">
+                                    Processing
+                                </span>
+                                <button class="p-2 text-gray-400 hover:text-gray-600 dark:hover:text-gray-200">
+                                    <span class="material-symbols-outlined">more_vert</span>
+                                </button>
+                            </div>
+                        </div>
+
+                        <div class="flex items-center justify-between p-4 rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-background-dark/50">
+                            <div class="flex items-center gap-4">
+                                <div class="flex h-10 w-10 items-center justify-center rounded-lg bg-red-50 text-red-600">
+                                    <span class="material-symbols-outlined">picture_as_pdf</span>
+                                </div>
+                                <div>
+                                    <h3 class="font-medium">Privacy Policy Update</h3>
+                                    <p class="text-sm text-gray-500 dark:text-gray-400">Uploaded 3 days ago</p>
+                                </div>
+                            </div>
+                            <div class="flex items-center gap-2">
+                                <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200">
+                                    Processed
+                                </span>
+                                <button class="p-2 text-gray-400 hover:text-gray-600 dark:hover:text-gray-200">
+                                    <span class="material-symbols-outlined">more_vert</span>
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </main>
+    </div>
+</body>
+</html>

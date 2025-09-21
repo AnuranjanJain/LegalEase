@@ -1,0 +1,304 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8"/>
+    <meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+    <title>LegalEase - Dashboard</title>
+    <link href="data:image/x-icon;base64," rel="icon" type="image/x-icon"/>
+    <script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+    <link href="https://fonts.googleapis.com" rel="preconnect"/>
+    <link crossorigin="" href="https://fonts.gstatic.com" rel="preconnect"/>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;900&amp;display=swap" rel="stylesheet"/>
+    <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined" rel="stylesheet"/>
+    <script id="tailwind-config">
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    colors: {
+                        "primary": "#197fe6",
+                        "background-light": "#f6f7f8",
+                        "background-dark": "#111921",
+                    },
+                    fontFamily: {
+                        "display": ["Inter"]
+                    },
+                    borderRadius: {
+                        "DEFAULT": "0.25rem",
+                        "lg": "0.5rem",
+                        "xl": "0.75rem",
+                        "full": "9999px"
+                    },
+                },
+            },
+        }
+    </script>
+</head>
+<body class="bg-background-light dark:bg-background-dark font-display text-gray-800 dark:text-gray-200">
+    <div class="flex flex-col min-h-screen">
+        <!-- Header -->
+        <header class="bg-white dark:bg-background-dark border-b border-gray-200 dark:border-gray-800">
+            <div class="container mx-auto px-4 sm:px-6 lg:px-8">
+                <div class="flex items-center justify-between h-16">
+                    <div class="flex items-center gap-4">
+                        <div class="text-primary">
+                            <svg class="h-8 w-8" fill="none" viewBox="0 0 48 48" xmlns="http://www.w3.org/2000/svg">
+                                <path d="M44 11.2727C44 14.0109 39.8386 16.3957 33.69 17.6364C39.8386 18.877 44 21.2618 44 24C44 26.7382 39.8386 29.123 33.69 30.3636C39.8386 31.6043 44 33.9891 44 36.7273C44 40.7439 35.0457 44 24 44C12.9543 44 4 40.7439 4 36.7273C4 33.9891 8.16144 31.6043 14.31 30.3636C8.16144 29.123 4 26.7382 4 24C4 21.2618 8.16144 18.877 14.31 17.6364C8.16144 16.3957 4 14.0109 4 11.2727C4 7.25611 12.9543 4 24 4C35.0457 4 44 7.25611 44 11.2727Z" fill="currentColor"></path>
+                            </svg>
+                        </div>
+                        <h1 class="text-xl font-bold text-gray-900 dark:text-white">LegalEase</h1>
+                    </div>
+                    <nav class="hidden md:flex items-center space-x-8">
+                        <a class="text-sm font-medium text-gray-600 dark:text-gray-300 hover:text-primary dark:hover:text-primary transition-colors" href="../index.html">Home</a>
+                        <a class="text-sm font-medium text-primary dark:text-primary" href="dashboard.html">Dashboard</a>
+                        <a class="text-sm font-medium text-gray-600 dark:text-gray-300 hover:text-primary dark:hover:text-primary transition-colors" href="documents.html">Documents</a>
+                        <a class="text-sm font-medium text-gray-600 dark:text-gray-300 hover:text-primary dark:hover:text-primary transition-colors" href="chatbot.html">Chatbot</a>
+                        <a class="text-sm font-medium text-gray-600 dark:text-gray-300 hover:text-primary dark:hover:text-primary transition-colors" href="profile.html">Profile</a>
+                    </nav>
+                    <div class="flex items-center gap-4">
+                        <button class="p-2 rounded-full text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800 hover:text-gray-700 dark:hover:text-gray-200 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-background-light dark:focus:ring-offset-background-dark focus:ring-primary">
+                            <span class="material-symbols-outlined">notifications</span>
+                        </button>
+                        <div class="relative">
+                            <button class="flex items-center focus:outline-none">
+                                <img alt="User avatar" class="h-10 w-10 rounded-full object-cover" src="https://lh3.googleusercontent.com/aida-public/AB6AXuD3LF8AQTeN2rwXts3P9uQnC0Z8FTTLDmaLgp2XnigGrD4jgSBQDMzTfqrzkAmyB59xzs0ZGl6SH8QyrcgJdqAYytrWhHaMZMCMzaSWWlfL5LnK6JfFjbv53HBuYYCEDpsmKkkLJ4peI8maM6EaODpwB07PwB5d4bI-ZPAil3V-utDKwuiKqT1WQEVCP9mjfp7Gsiy2TZXCRhWnigCRhn_AmF2d8X1EI2zzHEjMnLYcaaDRKizpHxPzjzenNnE2G-VERH7rDrxA2jY"/>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </header>
+
+        <!-- Main Content -->
+        <main class="flex-grow container mx-auto px-4 sm:px-6 lg:px-8 py-8">
+            <!-- Welcome Section -->
+            <div class="mb-8">
+                <h1 class="text-3xl font-bold text-gray-900 dark:text-white">Welcome back, Sarah!</h1>
+                <p class="mt-1 text-gray-600 dark:text-gray-400">Here's what's happening with your legal documents today.</p>
+            </div>
+
+            <!-- Stats Overview -->
+            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
+                <div class="bg-white dark:bg-background-dark/50 rounded-lg border border-gray-200 dark:border-gray-700 p-6">
+                    <div class="flex items-center">
+                        <div class="flex-shrink-0">
+                            <div class="flex h-12 w-12 items-center justify-center rounded-lg bg-primary/10 text-primary">
+                                <span class="material-symbols-outlined">description</span>
+                            </div>
+                        </div>
+                        <div class="ml-4">
+                            <p class="text-sm font-medium text-gray-500 dark:text-gray-400">Total Documents</p>
+                            <p class="text-2xl font-bold text-gray-900 dark:text-white">24</p>
+                            <p class="text-sm text-green-600 dark:text-green-400">+3 this week</p>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="bg-white dark:bg-background-dark/50 rounded-lg border border-gray-200 dark:border-gray-700 p-6">
+                    <div class="flex items-center">
+                        <div class="flex-shrink-0">
+                            <div class="flex h-12 w-12 items-center justify-center rounded-lg bg-green-100 text-green-600 dark:bg-green-900/30 dark:text-green-400">
+                                <span class="material-symbols-outlined">check_circle</span>
+                            </div>
+                        </div>
+                        <div class="ml-4">
+                            <p class="text-sm font-medium text-gray-500 dark:text-gray-400">Processed</p>
+                            <p class="text-2xl font-bold text-gray-900 dark:text-white">22</p>
+                            <p class="text-sm text-gray-500 dark:text-gray-400">91.7% success rate</p>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="bg-white dark:bg-background-dark/50 rounded-lg border border-gray-200 dark:border-gray-700 p-6">
+                    <div class="flex items-center">
+                        <div class="flex-shrink-0">
+                            <div class="flex h-12 w-12 items-center justify-center rounded-lg bg-yellow-100 text-yellow-600 dark:bg-yellow-900/30 dark:text-yellow-400">
+                                <span class="material-symbols-outlined">autorenew</span>
+                            </div>
+                        </div>
+                        <div class="ml-4">
+                            <p class="text-sm font-medium text-gray-500 dark:text-gray-400">Processing</p>
+                            <p class="text-2xl font-bold text-gray-900 dark:text-white">2</p>
+                            <p class="text-sm text-gray-500 dark:text-gray-400">Est. 5 min remaining</p>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="bg-white dark:bg-background-dark/50 rounded-lg border border-gray-200 dark:border-gray-700 p-6">
+                    <div class="flex items-center">
+                        <div class="flex-shrink-0">
+                            <div class="flex h-12 w-12 items-center justify-center rounded-lg bg-blue-100 text-blue-600 dark:bg-blue-900/30 dark:text-blue-400">
+                                <span class="material-symbols-outlined">schedule</span>
+                            </div>
+                        </div>
+                        <div class="ml-4">
+                            <p class="text-sm font-medium text-gray-500 dark:text-gray-400">Time Saved</p>
+                            <p class="text-2xl font-bold text-gray-900 dark:text-white">18h</p>
+                            <p class="text-sm text-gray-500 dark:text-gray-400">This month</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Quick Actions -->
+            <div class="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-8">
+                <div class="lg:col-span-2">
+                    <h2 class="text-xl font-bold text-gray-900 dark:text-white mb-4">Quick Actions</h2>
+                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                        <a href="documents.html" class="group p-6 rounded-lg bg-white dark:bg-background-dark/50 border border-gray-200 dark:border-gray-700 hover:shadow-lg hover:border-primary transition-all">
+                            <div class="flex h-12 w-12 items-center justify-center rounded-lg bg-primary/10 text-primary group-hover:bg-primary group-hover:text-white transition-all mb-4">
+                                <span class="material-symbols-outlined">upload_file</span>
+                            </div>
+                            <h3 class="text-lg font-semibold text-gray-900 dark:text-white mb-2">Upload Document</h3>
+                            <p class="text-sm text-gray-600 dark:text-gray-400">Upload a new legal document for AI analysis</p>
+                        </a>
+
+                        <a href="chatbot.html" class="group p-6 rounded-lg bg-white dark:bg-background-dark/50 border border-gray-200 dark:border-gray-700 hover:shadow-lg hover:border-primary transition-all">
+                            <div class="flex h-12 w-12 items-center justify-center rounded-lg bg-primary/10 text-primary group-hover:bg-primary group-hover:text-white transition-all mb-4">
+                                <span class="material-symbols-outlined">chat</span>
+                            </div>
+                            <h3 class="text-lg font-semibold text-gray-900 dark:text-white mb-2">Ask AI Assistant</h3>
+                            <p class="text-sm text-gray-600 dark:text-gray-400">Get legal questions answered by our AI</p>
+                        </a>
+
+                        <a href="processing.html" class="group p-6 rounded-lg bg-white dark:bg-background-dark/50 border border-gray-200 dark:border-gray-700 hover:shadow-lg hover:border-primary transition-all">
+                            <div class="flex h-12 w-12 items-center justify-center rounded-lg bg-primary/10 text-primary group-hover:bg-primary group-hover:text-white transition-all mb-4">
+                                <span class="material-symbols-outlined">autorenew</span>
+                            </div>
+                            <h3 class="text-lg font-semibold text-gray-900 dark:text-white mb-2">Check Status</h3>
+                            <p class="text-sm text-gray-600 dark:text-gray-400">View document processing status</p>
+                        </a>
+
+                        <a href="profile.html" class="group p-6 rounded-lg bg-white dark:bg-background-dark/50 border border-gray-200 dark:border-gray-700 hover:shadow-lg hover:border-primary transition-all">
+                            <div class="flex h-12 w-12 items-center justify-center rounded-lg bg-primary/10 text-primary group-hover:bg-primary group-hover:text-white transition-all mb-4">
+                                <span class="material-symbols-outlined">person</span>
+                            </div>
+                            <h3 class="text-lg font-semibold text-gray-900 dark:text-white mb-2">Account Settings</h3>
+                            <p class="text-sm text-gray-600 dark:text-gray-400">Manage your profile and preferences</p>
+                        </a>
+                    </div>
+                </div>
+
+                <!-- Recent Activity -->
+                <div class="bg-white dark:bg-background-dark/50 rounded-lg border border-gray-200 dark:border-gray-700 p-6">
+                    <h3 class="text-lg font-semibold text-gray-900 dark:text-white mb-4">Recent Activity</h3>
+                    <div class="space-y-4">
+                        <div class="flex items-center gap-3">
+                            <div class="flex h-8 w-8 items-center justify-center rounded-full bg-green-100 text-green-600 dark:bg-green-900/30 dark:text-green-400">
+                                <span class="material-symbols-outlined text-sm">check</span>
+                            </div>
+                            <div class="flex-1 min-w-0">
+                                <p class="text-sm font-medium text-gray-900 dark:text-white">Lease Agreement processed</p>
+                                <p class="text-xs text-gray-500 dark:text-gray-400">2 hours ago</p>
+                            </div>
+                        </div>
+
+                        <div class="flex items-center gap-3">
+                            <div class="flex h-8 w-8 items-center justify-center rounded-full bg-blue-100 text-blue-600 dark:bg-blue-900/30 dark:text-blue-400">
+                                <span class="material-symbols-outlined text-sm">chat</span>
+                            </div>
+                            <div class="flex-1 min-w-0">
+                                <p class="text-sm font-medium text-gray-900 dark:text-white">Asked about tenant rights</p>
+                                <p class="text-xs text-gray-500 dark:text-gray-400">4 hours ago</p>
+                            </div>
+                        </div>
+
+                        <div class="flex items-center gap-3">
+                            <div class="flex h-8 w-8 items-center justify-center rounded-full bg-yellow-100 text-yellow-600 dark:bg-yellow-900/30 dark:text-yellow-400">
+                                <span class="material-symbols-outlined text-sm">upload</span>
+                            </div>
+                            <div class="flex-1 min-w-0">
+                                <p class="text-sm font-medium text-gray-900 dark:text-white">Employment contract uploaded</p>
+                                <p class="text-xs text-gray-500 dark:text-gray-400">1 day ago</p>
+                            </div>
+                        </div>
+
+                        <div class="flex items-center gap-3">
+                            <div class="flex h-8 w-8 items-center justify-center rounded-full bg-green-100 text-green-600 dark:bg-green-900/30 dark:text-green-400">
+                                <span class="material-symbols-outlined text-sm">check</span>
+                            </div>
+                            <div class="flex-1 min-w-0">
+                                <p class="text-sm font-medium text-gray-900 dark:text-white">Privacy policy analyzed</p>
+                                <p class="text-xs text-gray-500 dark:text-gray-400">2 days ago</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Recent Documents -->
+            <div class="bg-white dark:bg-background-dark/50 rounded-lg border border-gray-200 dark:border-gray-700">
+                <div class="px-6 py-4 border-b border-gray-200 dark:border-gray-700">
+                    <div class="flex items-center justify-between">
+                        <h2 class="text-xl font-bold text-gray-900 dark:text-white">Recent Documents</h2>
+                        <a href="documents.html" class="text-sm font-medium text-primary hover:text-primary/80">View all</a>
+                    </div>
+                </div>
+                <div class="p-6">
+                    <div class="space-y-4">
+                        <div class="flex items-center justify-between p-4 rounded-lg border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-background-dark/30">
+                            <div class="flex items-center gap-4">
+                                <div class="flex h-10 w-10 items-center justify-center rounded-lg bg-red-50 text-red-600 dark:bg-red-900/30 dark:text-red-400">
+                                    <span class="material-symbols-outlined">picture_as_pdf</span>
+                                </div>
+                                <div>
+                                    <h3 class="font-medium text-gray-900 dark:text-white">Lease Agreement - Apartment 4B</h3>
+                                    <p class="text-sm text-gray-500 dark:text-gray-400">Uploaded 2 hours ago • 2.4 MB</p>
+                                </div>
+                            </div>
+                            <div class="flex items-center gap-2">
+                                <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200">
+                                    Processed
+                                </span>
+                                <button class="p-2 text-gray-400 hover:text-gray-600 dark:hover:text-gray-200">
+                                    <span class="material-symbols-outlined">download</span>
+                                </button>
+                            </div>
+                        </div>
+
+                        <div class="flex items-center justify-between p-4 rounded-lg border border-gray-200 dark:border-gray-700">
+                            <div class="flex items-center gap-4">
+                                <div class="flex h-10 w-10 items-center justify-center rounded-lg bg-blue-50 text-blue-600 dark:bg-blue-900/30 dark:text-blue-400">
+                                    <span class="material-symbols-outlined">description</span>
+                                </div>
+                                <div>
+                                    <h3 class="font-medium text-gray-900 dark:text-white">Employment Contract - TechCorp</h3>
+                                    <p class="text-sm text-gray-500 dark:text-gray-400">Uploaded 1 day ago • 1.8 MB</p>
+                                </div>
+                            </div>
+                            <div class="flex items-center gap-2">
+                                <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200">
+                                    Processing
+                                </span>
+                                <button class="p-2 text-gray-400 hover:text-gray-600 dark:hover:text-gray-200">
+                                    <span class="material-symbols-outlined">more_vert</span>
+                                </button>
+                            </div>
+                        </div>
+
+                        <div class="flex items-center justify-between p-4 rounded-lg border border-gray-200 dark:border-gray-700">
+                            <div class="flex items-center gap-4">
+                                <div class="flex h-10 w-10 items-center justify-center rounded-lg bg-red-50 text-red-600 dark:bg-red-900/30 dark:text-red-400">
+                                    <span class="material-symbols-outlined">picture_as_pdf</span>
+                                </div>
+                                <div>
+                                    <h3 class="font-medium text-gray-900 dark:text-white">Privacy Policy Update</h3>
+                                    <p class="text-sm text-gray-500 dark:text-gray-400">Uploaded 3 days ago • 952 KB</p>
+                                </div>
+                            </div>
+                            <div class="flex items-center gap-2">
+                                <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200">
+                                    Processed
+                                </span>
+                                <button class="p-2 text-gray-400 hover:text-gray-600 dark:hover:text-gray-200">
+                                    <span class="material-symbols-outlined">download</span>
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </main>
+    </div>
+</body>
+</html>
