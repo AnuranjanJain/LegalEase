@@ -54,9 +54,37 @@ body {
 }
 
 /* Custom Focus Styles */
+:focus-visible {
+    outline: 2px solid #197fe6;
+    outline-offset: 2px;
+}
+
 .focus-ring:focus {
     outline: none;
-    box-shadow: 0 0 0 3px rgba(25, 127, 230, 0.1);
+    box-shadow: 0 0 0 3px rgba(25, 127, 230, 0.4);
+}
+
+/* Layout Utilities */
+.app-container {
+    max-width: 80rem; /* 1280px - equivalent to max-w-7xl */
+    margin-left: auto;
+    margin-right: auto;
+    padding-left: 1rem;
+    padding-right: 1rem;
+}
+
+@media (min-width: 640px) {
+    .app-container {
+        padding-left: 1.5rem;
+        padding-right: 1.5rem;
+    }
+}
+
+@media (min-width: 1024px) {
+    .app-container {
+        padding-left: 2rem;
+        padding-right: 2rem;
+    }
 }
 
 /* Loading States */

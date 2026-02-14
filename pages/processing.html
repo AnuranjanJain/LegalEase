@@ -9,24 +9,9 @@
     <link crossorigin="" href="https://fonts.gstatic.com" rel="preconnect"/>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;700&amp;display=swap" rel="stylesheet"/>
     <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined" rel="stylesheet"/>
-    <script id="tailwind-config">
-        tailwind.config = {
-            darkMode: "class",
-            theme: {
-                extend: {
-                    colors: {
-                        "primary": "#197fe6",
-                        "background-light": "#f6f7f8",
-                        "background-dark": "#111921",
-                    },
-                    fontFamily: {
-                        "display": ["Inter"]
-                    },
-                    borderRadius: {"DEFAULT": "0.25rem", "lg": "0.5rem", "xl": "0.75rem", "full": "9999px"},
-                },
-            },
-        }
-    </script>
+    <link href="../assets/css/styles.css" rel="stylesheet"/>
+    <script src="../assets/js/tailwind-config.js"></script>
+    <script src="../assets/js/components.js"></script>
     <style>
         .animate-spin-slow {
             animation: spin 3s linear infinite;
@@ -44,29 +29,7 @@
 <body class="bg-background-light dark:bg-background-dark font-display text-gray-800 dark:text-gray-200">
     <div class="flex flex-col min-h-screen">
         <!-- Header -->
-        <header class="flex items-center justify-between px-6 sm:px-10 py-4 border-b border-gray-200 dark:border-gray-800">
-            <div class="flex items-center gap-3">
-                <div class="w-8 h-8 text-primary">
-                    <svg fill="none" viewBox="0 0 48 48" xmlns="http://www.w3.org/2000/svg">
-                        <path clip-rule="evenodd" d="M12.0799 24L4 19.2479L9.95537 8.75216L18.04 13.4961L18.0446 4H29.9554L29.96 13.4961L38.0446 8.75216L44 19.2479L35.92 24L44 28.7521L38.0446 39.2479L29.96 34.5039L29.9554 44H18.0446L18.04 34.5039L9.95537 39.2479L4 28.7521L12.0799 24Z" fill="currentColor" fill-rule="evenodd"></path>
-                    </svg>
-                </div>
-                <h1 class="text-xl font-bold text-gray-900 dark:text-white">LegalEase</h1>
-            </div>
-            <nav class="hidden md:flex items-center gap-6">
-                <a class="text-sm font-medium text-gray-600 dark:text-gray-300 hover:text-primary dark:hover:text-primary transition-colors" href="../index.html">Home</a>
-                <a class="text-sm font-medium text-gray-600 dark:text-gray-300 hover:text-primary dark:hover:text-primary transition-colors" href="dashboard.html">Dashboard</a>
-                <a class="text-sm font-medium text-primary dark:text-primary" href="processing.html">Processing</a>
-                <a class="text-sm font-medium text-gray-600 dark:text-gray-300 hover:text-primary dark:hover:text-primary transition-colors" href="chatbot.html">Chatbot</a>
-                <a class="text-sm font-medium text-gray-600 dark:text-gray-300 hover:text-primary dark:hover:text-primary transition-colors" href="profile.html">Profile</a>
-            </nav>
-            <div class="flex items-center gap-4">
-                <button class="p-2 rounded-full text-gray-500 dark:text-gray-400 hover:bg-primary/10 dark:hover:bg-primary/20 hover:text-primary dark:hover:text-primary transition-colors">
-                    <span class="material-symbols-outlined">notifications</span>
-                </button>
-                <img alt="User avatar" class="w-10 h-10 rounded-full" src="https://lh3.googleusercontent.com/aida-public/AB6AXuANPnLooXcU3itRuQhjBXe_gEx4Xtr_7yFMUMYCJQMZF7BlGp3_XLQM71dIrH5Pv-wRNWrgM4FmSTvzOxIwGn_IJpHcJRrDV7RqHbow3onS_OOR-3WP87f193SCm1IH7O2wJX3BuyJWk8ZwvZCHOX9EbfxJgDNTrNRO2VtAvvCNn2ZfFtLJfBzzsIfBL42vc74plqhOfgVmV33R9S7J4AezbUUk-mSwrukg8Pa9KtorSL3EZwq2U1r90OYsuJNxeS8horEXbYpw9W0"/>
-            </div>
-        </header>
+        <header id="global-header" class="bg-white dark:bg-background-dark border-b border-gray-200 dark:border-gray-800"></header>
 
         <!-- Main Content -->
         <main class="flex-grow flex items-center justify-center py-12 px-4 sm:px-6 lg:px-8">
@@ -152,7 +115,7 @@
                     <h3 class="text-sm font-medium text-gray-900 dark:text-white mb-2">Processing Document</h3>
                     <div class="flex items-center gap-3">
                         <div class="flex h-8 w-8 items-center justify-center rounded bg-red-50 text-red-600 dark:bg-red-900/30 dark:text-red-400">
-                            <span class="material-symbols-outlined text-sm">picture_as_pdf</span>
+                            <span class="material-symbols-outlined text-sm" aria-hidden="true">picture_as_pdf</span>
                         </div>
                         <div>
                             <p class="text-sm font-medium text-gray-900 dark:text-white">Lease_Agreement_Final.pdf</p>
@@ -164,7 +127,7 @@
                 <!-- Estimated Time -->
                 <div class="text-center">
                     <div class="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-blue-50 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300">
-                        <span class="material-symbols-outlined text-sm">schedule</span>
+                        <span class="material-symbols-outlined text-sm" aria-hidden="true">schedule</span>
                         <span class="text-sm font-medium">Estimated time: 2-3 minutes</span>
                     </div>
                 </div>
@@ -267,6 +230,8 @@
                 </div>
             </div>
         </section>
+        <!-- Footer -->
+        <footer id="global-footer" class="bg-white dark:bg-gray-900 border-t border-gray-200 dark:border-gray-800"></footer>
     </div>
 </body>
 </html>

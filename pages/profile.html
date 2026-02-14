@@ -9,24 +9,9 @@
     <link crossorigin="" href="https://fonts.gstatic.com" rel="preconnect"/>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&amp;display=swap" rel="stylesheet"/>
     <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined" rel="stylesheet"/>
-    <script id="tailwind-config">
-        tailwind.config = {
-            darkMode: "class",
-            theme: {
-                extend: {
-                    colors: {
-                        "primary": "#197fe6",
-                        "background-light": "#f6f7f8",
-                        "background-dark": "#111921",
-                    },
-                    fontFamily: {
-                        "display": ["Inter"]
-                    },
-                    borderRadius: {"DEFAULT": "0.25rem", "lg": "0.5rem", "xl": "0.75rem", "full": "9999px"},
-                },
-            },
-        }
-    </script>
+    <link href="../assets/css/styles.css" rel="stylesheet"/>
+    <script src="../assets/js/tailwind-config.js"></script>
+    <script src="../assets/js/components.js"></script>
     <style>
         body {
             font-family: 'Inter', sans-serif;
@@ -36,46 +21,17 @@
 <body class="bg-background-light dark:bg-background-dark font-display text-gray-800 dark:text-gray-200">
     <div class="flex flex-col min-h-screen">
         <!-- Header -->
-        <header class="bg-white dark:bg-background-dark border-b border-gray-200 dark:border-gray-800">
-            <div class="container mx-auto px-4 sm:px-6 lg:px-8">
-                <div class="flex items-center justify-between h-16">
-                    <div class="flex items-center gap-4">
-                        <div class="text-primary">
-                            <svg class="h-8 w-8" fill="none" viewBox="0 0 48 48" xmlns="http://www.w3.org/2000/svg">
-                                <path d="M44 11.2727C44 14.0109 39.8386 16.3957 33.69 17.6364C39.8386 18.877 44 21.2618 44 24C44 26.7382 39.8386 29.123 33.69 30.3636C39.8386 31.6043 44 33.9891 44 36.7273C44 40.7439 35.0457 44 24 44C12.9543 44 4 40.7439 4 36.7273C4 33.9891 8.16144 31.6043 14.31 30.3636C8.16144 29.123 4 26.7382 4 24C4 21.2618 8.16144 18.877 14.31 17.6364C8.16144 16.3957 4 14.0109 4 11.2727C4 7.25611 12.9543 4 24 4C35.0457 4 44 7.25611 44 11.2727Z" fill="currentColor"></path>
-                            </svg>
-                        </div>
-                        <h1 class="text-xl font-bold text-gray-900 dark:text-white">LegalEase</h1>
-                    </div>
-                    <nav class="hidden md:flex items-center space-x-8">
-                        <a class="text-sm font-medium text-gray-600 dark:text-gray-300 hover:text-primary dark:hover:text-primary transition-colors" href="../index.html">Home</a>
-                        <a class="text-sm font-medium text-gray-600 dark:text-gray-300 hover:text-primary dark:hover:text-primary transition-colors" href="dashboard.html">Dashboard</a>
-                        <a class="text-sm font-medium text-gray-600 dark:text-gray-300 hover:text-primary dark:hover:text-primary transition-colors" href="documents.html">Documents</a>
-                        <a class="text-sm font-medium text-gray-600 dark:text-gray-300 hover:text-primary dark:hover:text-primary transition-colors" href="chatbot.html">Chatbot</a>
-                        <a class="text-sm font-medium text-primary dark:text-primary" href="profile.html">Profile</a>
-                    </nav>
-                    <div class="flex items-center gap-4">
-                        <button class="p-2 rounded-full text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800 hover:text-gray-700 dark:hover:text-gray-200 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-background-light dark:focus:ring-offset-background-dark focus:ring-primary">
-                            <span class="material-symbols-outlined">notifications</span>
-                        </button>
-                        <div class="relative">
-                            <button class="flex items-center focus:outline-none">
-                                <img alt="User avatar" class="h-10 w-10 rounded-full object-cover" src="https://lh3.googleusercontent.com/aida-public/AB6AXuD3LF8AQTeN2rwXts3P9uQnC0Z8FTTLDmaLgp2XnigGrD4jgSBQDMzTfqrzkAmyB59xzs0ZGl6SH8QyrcgJdqAYytrWhHaMZMCMzaSWWlfL5LnK6JfFjbv53HBuYYCEDpsmKkkLJ4peI8maM6EaODpwB07PwB5d4bI-ZPAil3V-utDKwuiKqT1WQEVCP9mjfp7Gsiy2TZXCRhWnigCRhn_AmF2d8X1EI2zzHEjMnLYcaaDRKizpHxPzjzenNnE2G-VERH7rDrxA2jY"/>
-                            </button>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        </header>
+        <header id="global-header" class="bg-white dark:bg-background-dark border-b border-gray-200 dark:border-gray-800"></header>
 
         <!-- Main Content -->
-        <main class="flex-grow container mx-auto px-4 sm:px-6 lg:px-8 py-8 md:py-12">
-            <div class="max-w-4xl mx-auto">
-                <!-- Page Header -->
-                <div class="mb-8">
-                    <h2 class="text-3xl font-bold text-gray-900 dark:text-white">Account Settings</h2>
-                    <p class="mt-1 text-sm text-gray-500 dark:text-gray-400">Manage your account settings and preferences.</p>
-                </div>
+        <main class="flex-grow py-8 md:py-12">
+            <div class="app-container">
+                <div class="max-w-4xl mx-auto">
+                    <!-- Page Header -->
+                    <div class="mb-8">
+                        <h2 class="text-3xl font-bold text-gray-900 dark:text-white">Account Settings</h2>
+                        <p class="mt-1 text-sm text-gray-500 dark:text-gray-400">Manage your account settings and preferences.</p>
+                    </div>
 
                 <!-- Tab Navigation -->
                 <div class="border-b border-gray-200 dark:border-gray-700 mb-8">
@@ -298,6 +254,8 @@
                 </div>
             </div>
         </main>
+        <!-- Footer -->
+        <footer id="global-footer" class="bg-white dark:bg-gray-900 border-t border-gray-200 dark:border-gray-800"></footer>
     </div>
 </body>
 </html>

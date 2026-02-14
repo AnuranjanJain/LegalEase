@@ -2,6 +2,10 @@
 
 // Initialize the application when DOM is loaded
 document.addEventListener('DOMContentLoaded', function() {
+    if (window.LegalEaseComponents) {
+        window.LegalEaseComponents.initHeader();
+        window.LegalEaseComponents.initFooter();
+    }
     initNavigation();
     initFileUpload();
     initChatbot();
