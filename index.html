@@ -1,191 +1,97 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="en">
-<head>
-    <meta charset="utf-8"/>
-    <meta content="width=device-width, initial-scale=1.0" name="viewport"/>
-    <title>LegalEase - Simplify Your Legal Documents</title>
-    <link href="data:image/x-icon;base64," rel="icon" type="image/x-icon"/>
-    <script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
-    <link href="https://fonts.googleapis.com" rel="preconnect"/>
-    <link crossorigin="" href="https://fonts.gstatic.com" rel="preconnect"/>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;900&amp;display=swap" rel="stylesheet"/>
-    <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined" rel="stylesheet"/>
-    <link href="assets/css/styles.css" rel="stylesheet"/>
-    <script src="assets/js/tailwind-config.js"></script>
-    <script src="assets/js/components.js"></script>
-</head>
-<body class="bg-background-light dark:bg-background-dark font-display text-gray-800 dark:text-gray-200">
-    <div class="flex flex-col min-h-screen">
-        <!-- Header -->
-        <header id="global-header" class="bg-white dark:bg-background-dark border-b border-gray-200 dark:border-gray-800"></header>
+  <head>
+    <meta charset="UTF-8" />
+    <link rel="icon" type="image/svg+xml" href="/vite.svg" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>LegalEase</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+      tailwind.config = {
+        darkMode: 'class',
+        theme: {
+          extend: {
+            colors: {
+              primary: {
+                DEFAULT: '#2563EB',
+                50: '#eff6ff',
+                100: '#dbeafe',
+                200: '#bfdbfe',
+                300: '#93c5fd',
+                400: '#60a5fa',
+                500: '#3b82f6',
+                600: '#2563eb',
+                700: '#1d4ed8',
+                800: '#1e40af',
+                900: '#1e3a8a',
+                950: '#172554',
+              },
+              background: {
+                light: '#F3F4F6',
+                dark: '#111827',
+              }
+            },
+            fontFamily: {
+              display: ['Inter', 'sans-serif'],
+            },
+            animation: {
+              'slide-up': 'slideUp 0.2s ease-out',
+              'spin-slow': 'spin 3s linear infinite',
+            },
+            keyframes: {
+              slideUp: {
+                '0%': { transform: 'translateY(10px)', opacity: '0' },
+                '100%': { transform: 'translateY(0)', opacity: '1' },
+              }
+            }
+          }
+        }
+      }
+    </script>
+    <style type="text/tailwindcss">
+      @layer base {
+        html, body, #root {
+          @apply h-full;
+        }
+        body {
+          @apply antialiased bg-background-light dark:bg-background-dark text-gray-900 dark:text-gray-100;
+        }
+      }
 
-        <!-- Main Content -->
-        <main class="flex-grow">
-            <!-- Hero Section -->
-            <section class="bg-gradient-to-br from-primary/5 to-primary/10 py-20 px-4 sm:px-6 lg:px-8">
-                <div class="app-container text-center">
-                    <h1 class="text-4xl md:text-6xl font-bold tracking-tight mb-6">
-                        Simplify Your <span class="text-primary">Legal Documents</span>
-                    </h1>
-                    <p class="text-xl text-gray-600 dark:text-gray-400 mb-8 max-w-3xl mx-auto">
-                        Upload your legal documents and let our AI provide you with clear, understandable summaries. 
-                        No more complex jargon - just plain English explanations.
-                    </p>
-                    <div class="flex flex-col sm:flex-row gap-4 justify-center">
-                        <a href="pages/documents.html" class="inline-flex items-center justify-center gap-2 rounded-lg bg-primary px-8 py-4 text-lg font-bold text-white shadow-sm transition-all hover:bg-primary/90 hover:shadow-lg">
-                            <span class="material-symbols-outlined">upload_file</span>
-                            Upload Document
-                        </a>
-                        <a href="pages/chatbot.html" class="inline-flex items-center justify-center gap-2 rounded-lg border-2 border-primary text-primary px-8 py-4 text-lg font-bold transition-all hover:bg-primary hover:text-white">
-                            <span class="material-symbols-outlined">chat</span>
-                            Ask Legal Questions
-                        </a>
-                    </div>
-                </div>
-            </section>
+      @layer components {
+        .app-container {
+          @apply container mx-auto px-4 sm:px-6 lg:px-8;
+        }
+      }
 
-            <!-- Features Section -->
-            <section class="py-20">
-                <div class="app-container">
-                    <div class="text-center mb-16">
-                        <h2 class="text-3xl md:text-4xl font-bold mb-4">How LegalEase Works</h2>
-                        <p class="text-xl text-gray-600 dark:text-gray-400">
-                            Three simple steps to understand your legal documents better
-                        </p>
-                    </div>
-                    
-                    <div class="grid grid-cols-1 md:grid-cols-3 gap-8">
-                        <!-- Feature 1: Document Summary -->
-                        <div class="text-center p-8 rounded-xl bg-white dark:bg-background-dark/50 shadow-sm border border-gray-200 dark:border-gray-700">
-                            <div class="flex h-16 w-16 items-center justify-center rounded-full bg-primary/10 text-primary mx-auto mb-6">
-                                <span class="material-symbols-outlined" style="font-size: 32px" aria-hidden="true">description</span>
-                            </div>
-                            <h3 class="text-2xl font-bold mb-4">Document Summary</h3>
-                            <p class="text-gray-600 dark:text-gray-400">
-                                Get a concise overview of the key points and clauses within your legal document, 
-                                making it easier to grasp the core content at a glance.
-                            </p>
-                        </div>
+      @layer utilities {
+        .scrollbar-hide::-webkit-scrollbar {
+          display: none;
+        }
+        .scrollbar-hide {
+          -ms-overflow-style: none;
+          scrollbar-width: none;
+        }
+      }
 
-                        <!-- Feature 2: Jargon Explanations -->
-                        <div class="text-center p-8 rounded-xl bg-white dark:bg-background-dark/50 shadow-sm border border-gray-200 dark:border-gray-700">
-                            <div class="flex h-16 w-16 items-center justify-center rounded-full bg-primary/10 text-primary mx-auto mb-6">
-                                <span class="material-symbols-outlined" style="font-size: 32px" aria-hidden="true">translate</span>
-                            </div>
-                            <h3 class="text-2xl font-bold mb-4">Jargon Explanations</h3>
-                            <p class="text-gray-600 dark:text-gray-400">
-                                Complex legal terms are broken down into plain language, ensuring you understand 
-                                every detail without needing a law degree.
-                            </p>
-                        </div>
-
-                        <!-- Feature 3: Risk Alerts -->
-                        <div class="text-center p-8 rounded-xl bg-white dark:bg-background-dark/50 shadow-sm border border-gray-200 dark:border-gray-700">
-                            <div class="flex h-16 w-16 items-center justify-center rounded-full bg-primary/10 text-primary mx-auto mb-6">
-                                <span class="material-symbols-outlined" style="font-size: 32px" aria-hidden="true">warning</span>
-                            </div>
-                            <h3 class="text-2xl font-bold mb-4">Risk Alerts</h3>
-                            <p class="text-gray-600 dark:text-gray-400">
-                                Highlights potential risks or critical areas within the document that require your attention, 
-                                helping you make informed decisions.
-                            </p>
-                        </div>
-                    </div>
-                </div>
-            </section>
-
-            <!-- Quick Actions Section -->
-            <section class="bg-gray-50 dark:bg-background-dark/30 py-20">
-                <div class="app-container">
-                    <div class="text-center mb-16">
-                        <h2 class="text-3xl md:text-4xl font-bold mb-4">Quick Actions</h2>
-                        <p class="text-xl text-gray-600 dark:text-gray-400">
-                            Access all your legal tools in one place
-                        </p>
-                    </div>
-                    
-                    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-                        <!-- Upload Documents -->
-                        <a href="pages/documents.html" class="group p-6 rounded-xl bg-white dark:bg-background-dark/50 shadow-sm border border-gray-200 dark:border-gray-700 hover:shadow-lg hover:border-primary transition-all">
-                            <div class="flex h-12 w-12 items-center justify-center rounded-lg bg-primary/10 text-primary group-hover:bg-primary group-hover:text-white transition-all mb-4">
-                                <span class="material-symbols-outlined">upload_file</span>
-                            </div>
-                            <h3 class="text-lg font-semibold mb-2">Upload Documents</h3>
-                            <p class="text-sm text-gray-600 dark:text-gray-400">
-                                Upload and analyze your legal documents with AI
-                            </p>
-                        </a>
-
-                        <!-- AI Chatbot -->
-                        <a href="pages/chatbot.html" class="group p-6 rounded-xl bg-white dark:bg-background-dark/50 shadow-sm border border-gray-200 dark:border-gray-700 hover:shadow-lg hover:border-primary transition-all">
-                            <div class="flex h-12 w-12 items-center justify-center rounded-lg bg-primary/10 text-primary group-hover:bg-primary group-hover:text-white transition-all mb-4">
-                                <span class="material-symbols-outlined">chat</span>
-                            </div>
-                            <h3 class="text-lg font-semibold mb-2">AI Chatbot</h3>
-                            <p class="text-sm text-gray-600 dark:text-gray-400">
-                                Ask questions about legal topics and documents
-                            </p>
-                        </a>
-
-                        <!-- Document Processing -->
-                        <a href="pages/processing.html" class="group p-6 rounded-xl bg-white dark:bg-background-dark/50 shadow-sm border border-gray-200 dark:border-gray-700 hover:shadow-lg hover:border-primary transition-all">
-                            <div class="flex h-12 w-12 items-center justify-center rounded-lg bg-primary/10 text-primary group-hover:bg-primary group-hover:text-white transition-all mb-4">
-                                <span class="material-symbols-outlined">autorenew</span>
-                            </div>
-                            <h3 class="text-lg font-semibold mb-2">Processing Status</h3>
-                            <p class="text-sm text-gray-600 dark:text-gray-400">
-                                Check the status of your document processing
-                            </p>
-                        </a>
-
-                        <!-- User Profile -->
-                        <a href="pages/profile.html" class="group p-6 rounded-xl bg-white dark:bg-background-dark/50 shadow-sm border border-gray-200 dark:border-gray-700 hover:shadow-lg hover:border-primary transition-all">
-                            <div class="flex h-12 w-12 items-center justify-center rounded-lg bg-primary/10 text-primary group-hover:bg-primary group-hover:text-white transition-all mb-4">
-                                <span class="material-symbols-outlined">person</span>
-                            </div>
-                            <h3 class="text-lg font-semibold mb-2">Profile</h3>
-                            <p class="text-sm text-gray-600 dark:text-gray-400">
-                                Manage your account settings and preferences
-                            </p>
-                        </a>
-                    </div>
-                </div>
-            </section>
-
-            <!-- Security Section -->
-            <section class="py-20 px-4 sm:px-6 lg:px-8">
-                <div class="max-w-4xl mx-auto text-center">
-                    <div class="flex h-16 w-16 items-center justify-center rounded-full bg-primary/10 text-primary mx-auto mb-6">
-                        <span class="material-symbols-outlined" style="font-size: 32px">lock</span>
-                    </div>
-                    <h2 class="text-3xl md:text-4xl font-bold mb-6">Secure & Confidential</h2>
-                    <p class="text-xl text-gray-600 dark:text-gray-400 mb-8">
-                        Your documents are protected with enterprise-grade security. We use end-to-end encryption 
-                        and never store your sensitive information longer than necessary.
-                    </p>
-                    <div class="grid grid-cols-1 md:grid-cols-3 gap-8 text-center">
-                        <div>
-                            <span class="material-symbols-outlined text-primary text-3xl mb-2 block">encrypted</span>
-                            <h4 class="font-semibold mb-2">End-to-End Encryption</h4>
-                            <p class="text-sm text-gray-600 dark:text-gray-400">All data is encrypted in transit and at rest</p>
-                        </div>
-                        <div>
-                            <span class="material-symbols-outlined text-primary text-3xl mb-2 block">delete</span>
-                            <h4 class="font-semibold mb-2">Auto-Delete</h4>
-                            <p class="text-sm text-gray-600 dark:text-gray-400">Documents are automatically deleted after processing</p>
-                        </div>
-                        <div>
-                            <span class="material-symbols-outlined text-primary text-3xl mb-2 block">verified_user</span>
-                            <h4 class="font-semibold mb-2">GDPR Compliant</h4>
-                            <p class="text-sm text-gray-600 dark:text-gray-400">Full compliance with privacy regulations</p>
-                        </div>
-                    </div>
-                </div>
-            </section>
-        </main>
-
-        <!-- Footer -->
-        <footer id="global-footer" class="bg-white dark:bg-gray-900 border-t border-gray-200 dark:border-gray-800"></footer>
-    </div>
-</body>
+      /* Custom Scrollbar */
+      ::-webkit-scrollbar {
+        width: 8px;
+        height: 8px;
+      }
+      ::-webkit-scrollbar-track {
+        @apply bg-transparent;
+      }
+      ::-webkit-scrollbar-thumb {
+        @apply bg-gray-300 dark:bg-gray-700 rounded-full hover:bg-gray-400 dark:hover:bg-gray-600;
+      }
+    </style>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
 </html>
