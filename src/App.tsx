@@ -1,3 +1,4 @@
+import { useEffect } from 'react';
 import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
 import { Layout } from './layouts/Layout';
 import { HomePage } from './pages/HomePage';
@@ -6,8 +7,14 @@ import { DocumentsPage } from './pages/DocumentsPage';
 import { ChatbotPage } from './pages/ChatbotPage';
 import { ProfilePage } from './pages/ProfilePage';
 import { ProcessingPage } from './pages/ProcessingPage';
+import { StorageService } from './services/storage';
 
 function App() {
+  useEffect(() => {
+    StorageService.initSampleData();
+    StorageService.getProfile(); // Init sample profile if not exists
+  }, []);
+
   return (
     <Router>
       <Routes>
