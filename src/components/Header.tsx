@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect } from 'react';
 import { NavLink } from 'react-router-dom';
-import { Menu, X, Bell, Moon, Sun, ChevronDown } from 'lucide-react';
+import { Menu, X, Bell, Moon, Sun, User, Settings } from 'lucide-react';
 import { useDarkMode } from '../hooks/useDarkMode';
 
 export function Header() {
@@ -56,8 +56,7 @@ export function Header() {
                 key={link.name}
                 to={link.path}
                 className={({ isActive }) =>
-                  `text-sm font-medium transition-colors ${
-                    isActive ? 'text-primary' : 'text-gray-600 dark:text-gray-300 hover:text-primary dark:hover:text-primary'
+                  `text-sm font-medium transition-colors ${isActive ? 'text-primary' : 'text-gray-600 dark:text-gray-300 hover:text-primary dark:hover:text-primary'
                   }`
                 }
               >
@@ -94,31 +93,35 @@ export function Header() {
             <div className="relative ml-2" ref={userMenuRef}>
               <button
                 onClick={toggleUserMenu}
-                className="flex items-center focus:outline-none focus-visible:ring-2 focus-visible:ring-primary rounded-full"
+                className="flex items-center justify-center h-9 w-9 rounded-full bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-400 hover:text-primary hover:bg-primary/10 transition-all focus:outline-none focus-visible:ring-2 focus-visible:ring-primary"
                 aria-haspopup="true"
                 aria-expanded={isUserMenuOpen}
                 aria-label="Open user profile menu"
               >
-                <img
-                  alt="User profile picture"
-                  className="h-10 w-10 rounded-full border-2 border-id-gray-200 dark:border-gray-700 hover:border-primary transition-all object-cover"
-                  src="https://images.unsplash.com/photo-1494790108377-be9c29b29330?ixlib=rb-1.2.1&auto=format&fit=crop&w=128&q=80"
-                />
+                <User size={20} />
               </button>
-              
+
               {/* Dropdown (Hidden by default) */}
               {isUserMenuOpen && (
-                <div className="absolute right-0 mt-2 w-48 rounded-md shadow-lg py-1 bg-white dark:bg-gray-800 ring-1 ring-black ring-opacity-5 focus:outline-none z-50 animate-slide-up origin-top-right">
-                  <NavLink to="/profile" className="block px-4 py-2 text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700" onClick={() => setIsUserMenuOpen(false)}>
-                    Your Profile
+                <div className="absolute right-0 mt-3 w-64 rounded-xl shadow-xl py-3 bg-white dark:bg-gray-800 ring-1 ring-black ring-opacity-5 focus:outline-none z-50 animate-slide-up origin-top-right border border-gray-100 dark:border-gray-700">
+                  <div className="px-4 py-3 border-b border-gray-50 dark:border-gray-700 mb-2">
+                    <p className="text-sm font-semibold text-gray-900 dark:text-white">Sarah Wilson</p>
+                    <p className="text-xs text-gray-500 dark:text-gray-400 truncate">sarah.w@example.com</p>
+                  </div>
+                  <NavLink to="/profile" className="flex items-center gap-3 px-4 py-2.5 text-sm text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 hover:text-primary transition-colors" onClick={() => setIsUserMenuOpen(false)}>
+                    <User size={18} />
+                    <span>Your Profile</span>
                   </NavLink>
-                  <a href="#" className="block px-4 py-2 text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700" onClick={() => setIsUserMenuOpen(false)}>
-                    Settings
+                  <a href="#" className="flex items-center gap-3 px-4 py-2.5 text-sm text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 hover:text-primary transition-colors" onClick={() => setIsUserMenuOpen(false)}>
+                    <Settings size={18} />
+                    <span>Settings</span>
                   </a>
-                  <hr className="border-gray-200 dark:border-gray-700 my-1"/>
-                  <button className="block w-full text-left px-4 py-2 text-sm text-red-600 hover:bg-gray-100 dark:hover:bg-gray-700" onClick={() => setIsUserMenuOpen(false)}>
-                    Sign out
-                  </button>
+                  <div className="px-2 mt-2 pt-2 border-t border-gray-50 dark:border-gray-700">
+                    <button className="flex items-center gap-3 w-full text-left px-2 py-2.5 text-sm text-red-500 font-medium hover:bg-red-50 dark:hover:bg-red-900/10 rounded-lg transition-colors" onClick={() => setIsUserMenuOpen(false)}>
+                      <X size={18} />
+                      <span>Sign out</span>
+                    </button>
+                  </div>
                 </div>
               )}
             </div>
@@ -134,10 +137,9 @@ export function Header() {
                   key={link.name}
                   to={link.path}
                   className={({ isActive }) =>
-                    `block px-3 py-2 rounded-md text-base font-medium transition-colors ${
-                      isActive
-                        ? 'bg-primary/10 text-primary'
-                        : 'text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 hover:text-gray-900 dark:hover:text-white'
+                    `block px-3 py-2 rounded-md text-base font-medium transition-colors ${isActive
+                      ? 'bg-primary/10 text-primary'
+                      : 'text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 hover:text-gray-900 dark:hover:text-white'
                     }`
                   }
                   onClick={() => setIsMobileMenuOpen(false)}

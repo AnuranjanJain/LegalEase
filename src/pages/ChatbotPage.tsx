@@ -7,15 +7,59 @@ export function ChatbotPage() {
   ]);
   const [input, setInput] = useState('');
 
-  const handleSend = () => {
+  const [isTyping, setIsTyping] = useState(false);
+
+  const handleSend = async () => {
     if (!input.trim()) return;
-    const newMessage = { id: messages.length + 1, text: input, sender: 'user', time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) };
-    setMessages([...messages, newMessage]);
+
+    // Add user message
+    const userMessage = {
+      id: messages.length + 1,
+      text: input,
+      sender: 'user',
+      time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+    };
+
+    setMessages((prev) => [...prev, userMessage]);
+    const currentInput = input;
     setInput('');
-    // Simulate AI response
-    setTimeout(() => {
-      setMessages((prev) => [...prev, { id: prev.length + 1, text: "I can help analyze that clause for you. Please upload the document or paste the text here.", sender: 'bot', time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) }]);
-    }, 1000);
+    setIsTyping(true);
+
+    try {
+      const response = await fetch('http://localhost:8000/chat', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ message: currentInput }),
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to get response');
+      }
+
+      const data = await response.json();
+
+      const botMessage = {
+        id: messages.length + 2,
+        text: data.response || "I apologize, but I couldn't process that request.",
+        sender: 'bot',
+        time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+      };
+
+      setMessages((prev) => [...prev, botMessage]);
+    } catch (error) {
+      console.error('Error sending message:', error);
+      const errorMessage = {
+        id: messages.length + 2,
+        text: "Sorry, I'm having trouble connecting to the server. Please ensure the backend is running.",
+        sender: 'bot',
+        time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+      };
+      setMessages((prev) => [...prev, errorMessage]);
+    } finally {
+      setIsTyping(false);
+    }
   };
 
   return (
@@ -34,6 +78,22 @@ export function ChatbotPage() {
             </div>
           </div>
         ))}
+        {isTyping && (
+          <div className="flex justify-start">
+            <div className="flex items-start max-w-[80%] flex-row">
+              <div className="flex-shrink-0 h-8 w-8 rounded-full flex items-center justify-center bg-gray-200 dark:bg-gray-700 text-gray-600 dark:text-gray-300 mr-2">
+                <Bot size={16} />
+              </div>
+              <div className="p-3 rounded-lg shadow-sm bg-white dark:bg-gray-800 text-gray-800 dark:text-gray-200 rounded-tl-none border border-gray-100 dark:border-gray-700">
+                <div className="flex gap-1">
+                  <span className="w-2 h-2 bg-gray-400 rounded-full animate-bounce"></span>
+                  <span className="w-2 h-2 bg-gray-400 rounded-full animate-bounce delay-100"></span>
+                  <span className="w-2 h-2 bg-gray-400 rounded-full animate-bounce delay-200"></span>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
 
       <div className="p-4 bg-white dark:bg-gray-800 border-t border-gray-200 dark:border-gray-800">
