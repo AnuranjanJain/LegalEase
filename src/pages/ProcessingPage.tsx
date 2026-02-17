@@ -1,4 +1,4 @@
-import { RefreshCcw, CheckCircle2, Clock } from 'lucide-react';
+import { RefreshCcw } from 'lucide-react';
 import { NavLink } from 'react-router-dom';
 
 export function ProcessingPage() {
@@ -28,7 +28,7 @@ export function ProcessingPage() {
               </div>
             </div>
           </div>
-          
+
           {/* Steps... */}
         </div>
 
