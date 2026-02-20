@@ -6,6 +6,7 @@ import { DashboardPage } from './pages/DashboardPage';
 import { DocumentsPage } from './pages/DocumentsPage';
 import { ChatbotPage } from './pages/ChatbotPage';
 import { ProfilePage } from './pages/ProfilePage';
+import { DocumentationPage } from './pages/DocumentationPage';
 import { ProcessingPage } from './pages/ProcessingPage';
 import { StorageService } from './services/storage';
 
@@ -22,6 +23,7 @@ function App() {
           <Route index element={<HomePage />} />
           <Route path="dashboard" element={<DashboardPage />} />
           <Route path="documents" element={<DocumentsPage />} />
+          <Route path="documentation" element={<DocumentationPage />} />
           <Route path="processing" element={<ProcessingPage />} />
           <Route path="chatbot" element={<ChatbotPage />} />
           <Route path="profile" element={<ProfilePage />} />

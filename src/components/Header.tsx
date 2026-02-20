@@ -29,6 +29,7 @@ export function Header() {
     { name: 'Home', path: '/' },
     { name: 'Dashboard', path: '/dashboard' },
     { name: 'Documents', path: '/documents' },
+    { name: 'Documentation', path: '/documentation' },
     { name: 'Chatbot', path: '/chatbot' },
     { name: 'Profile', path: '/profile' },
   ];
