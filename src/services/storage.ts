@@ -38,19 +38,28 @@ const STORAGE_KEYS = {
 
 export const StorageService = {
   getDocuments: (): Document[] => {
-    const docs = localStorage.getItem(STORAGE_KEYS.DOCUMENTS);
-    return docs ? JSON.parse(docs) : [];
+    try {
+      const docs = localStorage.getItem(STORAGE_KEYS.DOCUMENTS);
+      return docs ? JSON.parse(docs) : [];
+    } catch (error) {
+      console.error('Error reading documents from storage:', error);
+      return [];
+    }
   },
 
   saveDocument: (doc: Document) => {
-    const docs = StorageService.getDocuments();
-    const existingIndex = docs.findIndex(d => d.id === doc.id);
-    if (existingIndex !== -1) {
-      docs[existingIndex] = doc;
-    } else {
-      docs.unshift(doc);
+    try {
+      const docs = StorageService.getDocuments();
+      const existingIndex = docs.findIndex(d => d.id === doc.id);
+      if (existingIndex !== -1) {
+        docs[existingIndex] = doc;
+      } else {
+        docs.unshift(doc);
+      }
+      localStorage.setItem(STORAGE_KEYS.DOCUMENTS, JSON.stringify(docs));
+    } catch (error) {
+      console.error('Error saving document to storage:', error);
     }
-    localStorage.setItem(STORAGE_KEYS.DOCUMENTS, JSON.stringify(docs));
   },
 
   getDocument: (id: string): Document | undefined => {
@@ -70,12 +79,21 @@ export const StorageService = {
   },
 
   getProfile: (): UserProfile => {
-    const profile = localStorage.getItem(STORAGE_KEYS.PROFILE);
-    return profile ? JSON.parse(profile) : StorageService.initSampleProfile();
+    try {
+      const profile = localStorage.getItem(STORAGE_KEYS.PROFILE);
+      return profile ? JSON.parse(profile) : StorageService.initSampleProfile();
+    } catch (error) {
+      console.error('Error reading profile from storage:', error);
+      return StorageService.initSampleProfile();
+    }
   },
 
   saveProfile: (profile: UserProfile) => {
-    localStorage.setItem(STORAGE_KEYS.PROFILE, JSON.stringify(profile));
+    try {
+      localStorage.setItem(STORAGE_KEYS.PROFILE, JSON.stringify(profile));
+    } catch (error) {
+      console.error('Error saving profile to storage:', error);
+    }
   },
 
   initSampleProfile: (): UserProfile => {
