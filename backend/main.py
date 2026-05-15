@@ -38,6 +38,7 @@ if not BYTEZ_API_KEY:
     raise RuntimeError("BYTEZ_API_KEY is required")
 
 client = Bytez(BYTEZ_API_KEY)
+print("API KEY:", BYTEZ_API_KEY)
 
 class ChatRequest(BaseModel):
     message: str
@@ -66,13 +67,25 @@ async def chat(request: ChatRequest):
         output = model.run(messages)
         
         if hasattr(output, 'error') and output.error:
-             raise HTTPException(status_code=500, detail=f"Model error: {output.error}")
+            logger.error(f"Model error: {output.error}")
+
+          
+            return {
+              "response":
+              "AI chatbot service is currently unavailable. Please configure a valid API key."
+            }
 
         return {"response": output.output}
-
     except Exception as e:
-        logger.error(f"Error processing chat request: {str(e)}", exc_info=True)
-        raise HTTPException(status_code=500, detail="An error occurred while processing your request.")
+        logger.error(
+           f"Error processing chat request: {str(e)}",
+           exc_info=True
+        )
+
+        return {
+          "response":
+          "AI chatbot service is currently unavailable. Please configure a valid API key."
+        }
 
 @app.post("/upload")
 async def upload_document(file: UploadFile = File(...)):
