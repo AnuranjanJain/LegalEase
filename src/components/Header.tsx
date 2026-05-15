@@ -129,28 +129,48 @@ export function Header() {
           </div>
         </div>
 
+
+        {/* Mobile Backdrop Overlay */}
+        <div
+          className={`fixed top-16 left-0 w-full h-[calc(100vh-4rem)] z-40 bg-black/10 backdrop-blur-[2px] transition-all duration-300 md:hidden ${isMobileMenuOpen
+            ? 'opacity-100 visible'
+            : 'opacity-0 invisible'
+            }`}
+          onClick={() => setIsMobileMenuOpen(false)}
+        />
+
         {/* Mobile menu */}
-        {isMobileMenuOpen && (
-          <div className="md:hidden pb-4 pt-2 border-t border-gray-200 dark:border-gray-800 animate-slide-down origin-top">
-            <div className="flex flex-col space-y-1">
-              {navLinks.map((link) => (
-                <NavLink
-                  key={link.name}
-                  to={link.path}
-                  className={({ isActive }) =>
-                    `block px-3 py-2 rounded-md text-base font-medium transition-colors ${isActive
-                      ? 'bg-primary/10 text-primary'
-                      : 'text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 hover:text-gray-900 dark:hover:text-white'
-                    }`
-                  }
-                  onClick={() => setIsMobileMenuOpen(false)}
-                >
-                  {link.name}
-                </NavLink>
-              ))}
-            </div>
+
+        <div
+          className={`absolute top-16 left-0 w-full md:hidden z-50 overflow-hidden transition-all duration-300 ease-in-out border-b border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900 shadow-lg ${isMobileMenuOpen
+            ? 'max-h-96 opacity-100 py-3'
+            : 'max-h-0 opacity-0 py-0'
+            }`}
+        >
+          <div className="flex flex-col space-y-1 px-1">
+            {navLinks.map((link, index) => (
+              <NavLink
+                key={link.name}
+                to={link.path}
+                className={({ isActive }) =>
+                  `block px-3 py-2 rounded-md text-base font-medium transform transition-all duration-300 ${isActive
+                    ? 'bg-primary/10 text-primary'
+                    : 'text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 hover:text-gray-900 dark:hover:text-white'
+                  } ${isMobileMenuOpen
+                    ? 'translate-y-0 opacity-100'
+                    : '-translate-y-2 opacity-0'
+                  }`
+                }
+                style={{
+                  transitionDelay: `${index * 50}ms`,
+                }}
+                onClick={() => setIsMobileMenuOpen(false)}
+              >
+                {link.name}
+              </NavLink>
+            ))}
           </div>
-        )}
+        </div>
       </div>
     </header>
   );
