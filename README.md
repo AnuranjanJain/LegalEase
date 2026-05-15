@@ -1,6 +1,27 @@
 # LegalEase Website
 
 A comprehensive legal document analysis platform that combines AI-powered document processing, chatbot assistance, and user-friendly interfaces.
+## 🌐 Live Demo
+
+Check out the live project here:  
+👉 [visit Live Demo](https://legal-ease-silk.vercel.app)
+
+Explore the LegalEase platform to upload documents,view summaries,and interact with the AI chatbot interface.
+
+## 📸 Screenshots
+
+### 🏠 Homepage
+![Homepage](assets/homepage.png)
+
+### 🤖 AI Chatbot
+![AI Chatbot](assets/aichatbot.png)
+
+### 📄 Document Simplifier
+![Document Simplifier](assets/documentsimplifier.png)
+
+### ⚙️ Features Page
+![Features](assets/features.png)
+
 
 ## Project Structure
 
@@ -172,6 +193,99 @@ For questions or issues:
 2. Ensure files are served via HTTP (not file://)
 3. Verify Tailwind CSS is loading correctly
 4. Test with different browsers and devices
+
+## 🧑‍💻 How to Contribute
+
+Please follow the steps below to contribute to this project.
+ 
+## 🤝 Contributing Guide (For Beginners)
+
+We welcome contributions from beginners and open-source enthusiasts! Follow these steps to get started:
+
+### 1️⃣ Fork the Repository
+
+* Go to the project repository
+* Click on the **Fork** button (top right)
+* This creates a copy of the repository in your GitHub account
+
+---
+
+### 2️⃣ Clone the Repository
+
+Open your terminal and run:
+
+```bash
+git clone https://github.com/YOUR-USERNAME/LegalEase.git
+cd LegalEase
+```
+
+---
+
+### 3️⃣ Create a New Branch
+
+Always create a new branch before making changes:
+
+```bash
+git checkout -b your-branch-name
+```
+
+---
+
+### 4️⃣ Make Changes
+
+* Open the project in a code editor (e.g., VS Code)
+* Make your desired changes (e.g., improve README, fix UI, add features)
+
+---
+
+### 5️⃣ Stage and Commit Changes
+
+```bash
+git add .
+git commit -m "Describe your changes clearly"
+```
+
+---
+
+### 6️⃣ Push Changes to GitHub
+
+```bash
+git push origin your-branch-name
+```
+
+---
+
+### 7️⃣ Create a Pull Request (PR)
+
+* Go to your forked repository on GitHub
+* Click on **Compare & Pull Request**
+* Add a clear title and description
+* Submit the PR for review
+
+---
+
+### 8️⃣ Raising an Issue
+
+Before starting work:
+
+* Go to the **Issues** tab
+* Check if the issue already exists
+* If not, click **New Issue**
+* Clearly describe the problem or improvement
+
+---
+
+### ✅ Contribution Tips
+
+* Keep your PR small and focused
+* Follow proper commit message format
+* Avoid making unrelated changes
+* Be respectful in discussions
+
+---
+
+Thank you for contributing to LegalEase! 🚀
+
 
 ## License
 
