@@ -17,7 +17,7 @@ Explore the LegalEase platform to upload documents,view summaries,and interact w
 ![AI Chatbot](assets/aichatbot.png)
 
 ### 📄 Document Simplifier
-![Document Simplifier](assets/documentsimplifier.png)
+![Document Simplifier](assets/documentmodifier.png)
 
 ### ⚙️ Features Page
 ![Features](assets/features.png)
@@ -197,7 +197,7 @@ For questions or issues:
 ## 🧑‍💻 How to Contribute
 
 Please follow the steps below to contribute to this project.
- 
+
 ## 🤝 Contributing Guide (For Beginners)
 
 We welcome contributions from beginners and open-source enthusiasts! Follow these steps to get started:
