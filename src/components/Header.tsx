@@ -8,15 +8,30 @@ export function Header() {
   const [isUserMenuOpen, setIsUserMenuOpen] = useState(false);
   const userMenuRef = useRef<HTMLDivElement>(null);
   const { isDarkMode, toggleDarkMode } = useDarkMode();
+  const [isNotificationOpen, setIsNotificationOpen] = useState(false);
+  const notificationRef = useRef<HTMLDivElement>(null);
+
+  const toggleNotificationMenu = () =>
+  setIsNotificationOpen(!isNotificationOpen);
 
   const toggleMobileMenu = () => setIsMobileMenuOpen(!isMobileMenuOpen);
   const toggleUserMenu = () => setIsUserMenuOpen(!isUserMenuOpen);
 
   // Close user menu on outside click
   useEffect(() => {
-    function handleClickOutside(event: MouseEvent) {
-      if (userMenuRef.current && !userMenuRef.current.contains(event.target as Node)) {
+        function handleClickOutside(event: MouseEvent) {
+      if (
+        userMenuRef.current &&
+        !userMenuRef.current.contains(event.target as Node)
+      ) {
         setIsUserMenuOpen(false);
+      }
+
+      if (
+        notificationRef.current &&
+        !notificationRef.current.contains(event.target as Node)
+      ) {
+        setIsNotificationOpen(false);
       }
     }
     document.addEventListener('mousedown', handleClickOutside);
@@ -76,9 +91,73 @@ export function Header() {
               {isDarkMode ? <Sun size={20} /> : <Moon size={20} />}
             </button>
 
-            <button className="hidden sm:flex p-2 rounded-full text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-primary" aria-label="View notifications">
-              <Bell size={20} />
-            </button>
+            <div className="relative hidden sm:flex" ref={notificationRef}>
+  <button
+    onClick={toggleNotificationMenu}
+    className="p-2 rounded-full text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-primary relative"
+    aria-label="View notifications"
+  >
+    <Bell size={20} />
+
+    {/* Notification Dot */}
+    <span className="absolute top-1 right-1 h-2 w-2 rounded-full bg-red-500"></span>
+  </button>
+
+  {/* Notification Dropdown */}
+  {isNotificationOpen && (
+    <div className="absolute right-0 mt-12 w-80 rounded-xl shadow-xl bg-white dark:bg-gray-800 border border-gray-100 dark:border-gray-700 z-50 animate-slide-up overflow-hidden">
+      
+      {/* Header */}
+      <div className="px-4 py-3 border-b border-gray-100 dark:border-gray-700">
+        <h3 className="text-sm font-semibold text-gray-900 dark:text-white">
+          Notifications
+        </h3>
+      </div>
+
+        {/* Notifications */}
+        <div className="max-h-96 overflow-y-auto">
+
+          <div className="px-4 py-3 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors border-b border-gray-100 dark:border-gray-700">
+            <p className="text-sm font-medium text-gray-800 dark:text-gray-200">
+              Document Uploaded
+            </p>
+            <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+              Your legal document was uploaded successfully.
+            </p>
+          </div>
+
+          <div className="px-4 py-3 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors border-b border-gray-100 dark:border-gray-700">
+            <p className="text-sm font-medium text-gray-800 dark:text-gray-200">
+              Profile Updated
+            </p>
+            <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+              Your profile information has been updated.
+            </p>
+          </div>
+
+          <div className="px-4 py-3 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors">
+            <p className="text-sm font-medium text-gray-800 dark:text-gray-200">
+              Welcome to LegalEase
+            </p>
+            <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+              Explore dashboard features and documentation.
+            </p>
+          </div>
+
+        </div>
+
+        {/* Footer */}
+        <div className="px-4 py-2 border-t border-gray-100 dark:border-gray-700 text-center">
+          <button
+            className="text-sm text-primary hover:underline"
+            onClick={() => setIsNotificationOpen(false)}
+          >
+            Mark all as read
+          </button>
+        </div>
+      </div>
+    )}
+  </div>
 
             {/* Mobile Menu Button */}
             <button
