@@ -8,6 +8,7 @@ import { ChatbotPage } from './pages/ChatbotPage';
 import { ProfilePage } from './pages/ProfilePage';
 import { DocumentationPage } from './pages/DocumentationPage';
 import { ProcessingPage } from './pages/ProcessingPage';
+import { NotificationsPage } from './pages/NotificationsPage';
 import { StorageService } from './services/storage';
 
 function App() {
@@ -26,6 +27,7 @@ function App() {
           <Route path="documentation" element={<DocumentationPage />} />
           <Route path="processing" element={<ProcessingPage />} />
           <Route path="chatbot" element={<ChatbotPage />} />
+          <Route path="notifications" element={<NotificationsPage />} />
           <Route path="profile" element={<ProfilePage />} />
         </Route>
       </Routes>

@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect } from 'react';
-import { NavLink } from 'react-router-dom';
+import { NavLink, useNavigate } from 'react-router-dom';
 import { Menu, X, Bell, Moon, Sun, User, Settings } from 'lucide-react';
 import { useDarkMode } from '../hooks/useDarkMode';
 
@@ -7,6 +7,7 @@ export function Header() {
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [isUserMenuOpen, setIsUserMenuOpen] = useState(false);
   const userMenuRef = useRef<HTMLDivElement>(null);
+  const navigate = useNavigate();
   const { isDarkMode, toggleDarkMode } = useDarkMode();
 
   const toggleMobileMenu = () => setIsMobileMenuOpen(!isMobileMenuOpen);
@@ -76,7 +77,12 @@ export function Header() {
               {isDarkMode ? <Sun size={20} /> : <Moon size={20} />}
             </button>
 
-            <button className="hidden sm:flex p-2 rounded-full text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-primary" aria-label="View notifications">
+            <button
+              type="button"
+              onClick={() => navigate('/notifications')}
+              className="hidden sm:flex p-2 rounded-full text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+              aria-label="View notifications"
+            >
               <Bell size={20} />
             </button>
 
