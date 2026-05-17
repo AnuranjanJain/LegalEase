@@ -10,7 +10,6 @@ export function DashboardPage() {
     { label: 'Total Uploads', value: '128', icon: FileText, color: 'text-primary', bg: 'bg-primary/10' },
   ];
 
-  // Added 'type' property to each item to drive the data visualization module dynamically
   const recentDocs = [
     { title: 'Employment Contract - TechCorp', type: 'Employment', status: 'Completed', date: '2 hours ago' },
     { title: 'Lease Agreement 2024', type: 'Lease', status: 'Processing', date: '5 mins ago' },
