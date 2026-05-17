@@ -192,10 +192,10 @@ export function Header() {
                     <User size={18} />
                     <span>Your Profile</span>
                   </NavLink>
-                  <a href="#" className="flex items-center gap-3 px-4 py-2.5 text-sm text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 hover:text-primary transition-colors" onClick={() => setIsUserMenuOpen(false)}>
+                  <NavLink to="/settings" className="flex items-center gap-3 px-4 py-2.5 text-sm text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 hover:text-primary transition-colors" onClick={() => setIsUserMenuOpen(false)}>
                     <Settings size={18} />
                     <span>Settings</span>
-                  </a>
+                  </NavLink>
                   <div className="px-2 mt-2 pt-2 border-t border-gray-50 dark:border-gray-700">
                     <button className="flex items-center gap-3 w-full text-left px-2 py-2.5 text-sm text-red-500 font-medium hover:bg-red-50 dark:hover:bg-red-900/10 rounded-lg transition-colors" onClick={() => setIsUserMenuOpen(false)}>
                       <X size={18} />
