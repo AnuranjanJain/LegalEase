@@ -123,6 +123,60 @@ legal-ease-website/
    - PHP: `php -S localhost:8000`
 3. **Open Browser**: Navigate to `http://localhost:8000`
 
+## Configuration
+
+Follow these steps to configure environment variables required to run the project locally and in CI. Do not commit your real secrets.
+
+- **Create a Python virtualenv (recommended):**
+
+```bash
+python -m venv .venv
+source .venv/bin/activate
+pip install -r backend/requirements.txt
+```
+
+- **Create a frontend environment (Node):**
+
+```bash
+npm install
+```
+
+- **Create a local .env from the example:**
+
+```bash
+cp .env.example .env
+# Edit .env and replace placeholders with real values (DO NOT commit .env)
+```
+
+- **Important environment variables** (see `.env.example`):
+    - `BYTEZ_API_KEY` — required by the backend to access the Bytez SDK. Keep this secret.
+    - `FRONTEND_URL` — frontend origin used for CORS (default: `http://localhost:5173`).
+
+- **Run backend (development):**
+
+```bash
+# from the project root
+cd backend
+uvicorn main:app --reload --port 8000
+```
+
+- **Run frontend (development):**
+
+```bash
+# from the project root
+npm run dev
+```
+
+- **Running in CI / Production:**
+    - Provide secrets via your CI environment variables/secrets (do not store real secrets in the repository).
+    - Use the environment variables directly in your process manager (systemd, Docker, Kubernetes, etc.).
+
+**Security notes**
+
+- `.env` and other secret files are ignored by `.gitignore` by default. The repo includes `!.env.example` so the example can be committed while real secrets remain ignored.
+- Avoid printing secrets to stdout or logs. The backend no longer prints the API key at startup.
+
+
 ## File Organization
 
 ### HTML Files

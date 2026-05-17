@@ -4,3 +4,4 @@ bytez
 pydantic
 pymupdf
 python-multipart
+python-dotenv

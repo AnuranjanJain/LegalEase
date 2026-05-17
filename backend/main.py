@@ -38,7 +38,7 @@ if not BYTEZ_API_KEY:
     raise RuntimeError("BYTEZ_API_KEY is required")
 
 client = Bytez(BYTEZ_API_KEY)
-print("API KEY:", BYTEZ_API_KEY)
+logger.info("Bytez client initialized")
 
 class ChatRequest(BaseModel):
     message: str
