@@ -1,7 +1,6 @@
 import { Send, User, Bot, History, Paperclip, X, FileText, Sparkles, RefreshCcw } from 'lucide-react';
 import { api } from '../services/api';
-import { useRef } from 'react';
-import { useState } from 'react';
+import { useRef, useState, useEffect } from 'react';
 
 interface Message {
   id: number;
@@ -9,15 +8,41 @@ interface Message {
   sender: 'user' | 'bot';
   time: string;
 }
+const defaultMessages: Message[] = [
+  {
+    id: 1,
+    text: "Hello! I'm LegalEase AI. How can I help you understand your legal documents today?",
+    sender: 'bot',
+    time: '10:00 AM'
+  }
+];
 
 export function ChatbotPage() {
-  const [messages, setMessages] = useState<Message[]>([
-    { id: 1, text: "Hello! I'm LegalEase AI. How can I help you understand your legal documents today?", sender: 'bot', time: '10:00 AM' },
-  ]);
+  const [messages, setMessages] = useState<Message[]>(() => {
+    const savedMessages = localStorage.getItem('chatHistory');
+
+    return savedMessages
+      ? JSON.parse(savedMessages)
+      : defaultMessages;
+  });
+
+
   const [input, setInput] = useState('');
   const [isTyping, setIsTyping] = useState(false);
   const [uploadedDoc, setUploadedDoc] = useState<{ name: string; text: string } | null>(null);
   const [isUploading, setIsUploading] = useState(false);
+  useEffect(() => {
+  const savedMessages = localStorage.getItem('chatHistory');
+
+  if (savedMessages) {
+    setMessages(JSON.parse(savedMessages));
+  }
+}, []);
+useEffect(() => {
+  if (messages.length > 0) {
+    localStorage.setItem('chatHistory', JSON.stringify(messages));
+  }
+}, [messages]);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
 
