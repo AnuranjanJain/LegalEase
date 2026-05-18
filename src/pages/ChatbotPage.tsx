@@ -50,8 +50,9 @@ useEffect(() => {
     if (!input.trim()) return;
 
     // Add user message
+    const now = Date.now();
     const userMessage = {
-      id: messages.length + 1,
+      id: now,
       text: input,
       sender: 'user' as const,
       time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
@@ -69,7 +70,7 @@ useEffect(() => {
       });
 
       const botMessage = {
-        id: messages.length + 2,
+        id: now + 1,
         text: data.response || "I apologize, but I couldn't process that request.",
         sender: 'bot' as const,
         time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
@@ -79,7 +80,7 @@ useEffect(() => {
     } catch (error) {
       console.error('Error sending message:', error);
       const errorMessage = {
-        id: messages.length + 2,
+        id: now + 1,
         text: error instanceof Error ? error.message : "Sorry, I'm having trouble connecting to the server. Please ensure the backend is running.",
         sender: 'bot' as const,
         time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
