@@ -1,0 +1,24 @@
+name: GSSoC'26 Stale PR Cleanup
+
+on:
+  schedule:
+    - cron: '0 0 * * *' # Run daily at midnight
+
+permissions:
+  pull-requests: write
+
+jobs:
+  stale:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Mark and close stale GSSoC PRs
+        uses: actions/stale@v9
+        with:
+          repo-token: ${{ secrets.GITHUB_TOKEN }}
+          days-before-stale: 7
+          days-before-close: 3
+          stale-pr-message: 'This PR has been inactive for 7 days. Please update the PR to keep it open. It will be closed in 3 days if there is no further activity.'
+          close-pr-message: 'This PR has been automatically closed due to inactivity. If you wish to continue working on this, please comment and we can reopen it.'
+          stale-pr-label: 'stale'
+          any-of-labels: 'gssoc-pr'
+          exempt-pr-labels: 'do-not-close'

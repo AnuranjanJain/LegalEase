@@ -1,0 +1,50 @@
+name: GSSoC'26 Welcome Bot
+
+on:
+  pull_request_target:
+    types: [opened]
+
+permissions:
+  pull-requests: write
+
+jobs:
+  welcome:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check if first time contributor and welcome
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const { owner, repo } = context.repo;
+            const creator = context.payload.pull_request.user.login;
+            const prNumber = context.issue.number;
+            
+            // Check if it's their first PR
+            const { data: prs } = await github.rest.pulls.list({
+              owner,
+              repo,
+              state: 'all',
+              creator
+            });
+            
+            if (prs.length === 1) {
+              const body = `
+              👋 Welcome to **LegalEase**, @${creator}! 
+              
+              Thank you for making your first Pull Request! 🎉 We are thrilled to have you contributing as part of **GSSoC'26**.
+              
+              Here are a few tips for a successful PR:
+              - Make sure your PR description clearly explains what you've done.
+              - Link the issue you are fixing (e.g. \`Fixes #123\`).
+              - Ensure your code passes all checks.
+              
+              An admin will review your contribution soon. Happy coding! 🚀
+              `;
+              
+              await github.rest.issues.createComment({
+                owner,
+                repo,
+                issue_number: prNumber,
+                body
+              });
+            }
