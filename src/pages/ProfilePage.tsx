@@ -1,19 +1,19 @@
-import { User, Bell, Shield, Globe, Check } from 'lucide-react';
+import { User, Bell, Shield, Globe } from 'lucide-react';
 import { StorageService, UserProfile } from '../services/storage';
 import { useState } from 'react';
+import { useToast } from '../contexts/ToastContext';
 
 export function ProfilePage() {
   const [profile, setProfile] = useState<UserProfile>(StorageService.getProfile());
   const [isSaving, setIsSaving] = useState(false);
-  const [showSavedToast, setShowSavedToast] = useState(false);
+  const { showToast } = useToast();
 
   const handleSave = () => {
     setIsSaving(true);
     StorageService.saveProfile(profile);
     setTimeout(() => {
       setIsSaving(false);
-      setShowSavedToast(true);
-      setTimeout(() => setShowSavedToast(false), 3000);
+      showToast('Profile updated successfully!', 'success');
     }, 800);
   };
 
@@ -69,16 +69,11 @@ export function ProfilePage() {
 
         {/* Card Content */}
         <div className="flex-grow p-8 md:p-12">
-          <header className="mb-10 flex justify-between items-center">
+          <header className="mb-10">
             <div>
               <h1 className="text-2xl font-bold text-gray-900 dark:text-white">Profile Information</h1>
               <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">Update your personal details and public profile.</p>
             </div>
-            {showSavedToast && (
-              <div className="flex items-center gap-2 px-3 py-1.5 bg-green-50 dark:bg-green-900/20 text-green-600 dark:text-green-400 text-xs font-bold rounded-full animate-bounce">
-                <Check size={14} /> SAVED
-              </div>
-            )}
           </header>
 
           <div className="space-y-8">
