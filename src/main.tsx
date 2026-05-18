@@ -5,13 +5,16 @@ import './index.css'
 
 import { ErrorBoundary } from './components/ErrorBoundary.tsx'
 import { ToastProvider } from './contexts/ToastContext.tsx'
+import { NotificationProvider } from './contexts/NotificationContext.tsx'
 
 ReactDOM.createRoot(document.getElementById('root')!).render(
   <React.StrictMode>
     <ErrorBoundary>
-      <ToastProvider>
-        <App />
-      </ToastProvider>
+      <NotificationProvider>
+        <ToastProvider>
+          <App />
+        </ToastProvider>
+      </NotificationProvider>
     </ErrorBoundary>
   </React.StrictMode>,
 )
