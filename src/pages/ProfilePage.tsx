@@ -1,6 +1,6 @@
 import { User, Bell, Shield, Globe, Check, Eye, EyeOff, Trash2, FileText, Info } from 'lucide-react';
 import { StorageService, UserProfile } from '../services/storage';
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { useToast } from '../contexts/ToastContext';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useNotifications, AppNotification } from '../contexts/NotificationContext';
@@ -90,8 +90,8 @@ export function ProfilePage() {
   const { showToast } = useToast();
   const [profile, setProfile] = useState<UserProfile>(StorageService.getProfile());
   const [isSaving, setIsSaving] = useState(false);
-  const [section, setSection] = useState<Section>('profile');
-  const [langOpen, setLangOpen] = useState(false);
+  const { tab } = useParams<{ tab?: string }>();
+  const navigate = useNavigate();
 
   // Security state
   const [pwForm, setPwForm] = useState({ current: '', newPw: '', confirm: '' });
