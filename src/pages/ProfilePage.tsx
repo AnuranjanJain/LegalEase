@@ -87,12 +87,11 @@ const inputCls = 'w-full bg-gray-50 dark:bg-gray-800/50 border border-gray-100 d
 const readOnlyCls = 'w-full bg-gray-100 dark:bg-gray-800/80 border border-gray-100 dark:border-gray-700 rounded-xl px-4 py-3 text-gray-500 dark:text-gray-400 cursor-not-allowed outline-none';
 
 export function ProfilePage() {
-  const { tab } = useParams<{ tab?: string }>();
-  const navigate = useNavigate();
   const { showToast } = useToast();
-
   const [profile, setProfile] = useState<UserProfile>(StorageService.getProfile());
   const [isSaving, setIsSaving] = useState(false);
+  const [section, setSection] = useState<Section>('profile');
+  const [langOpen, setLangOpen] = useState(false);
 
   // Security state
   const [pwForm, setPwForm] = useState({ current: '', newPw: '', confirm: '' });
