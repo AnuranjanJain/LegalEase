@@ -1,7 +1,35 @@
+import { useState, useRef } from 'react';
 import { UploadCloud, FileText, Trash2, Eye } from 'lucide-react';
 
-
 export function DocumentsPage() {
+  const [isDragging, setIsDragging] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const handleDragOver = (e: React.DragEvent<HTMLDivElement>) => {
+    e.preventDefault();
+    setIsDragging(true);
+  };
+
+  const handleDragLeave = (e: React.DragEvent<HTMLDivElement>) => {
+    e.preventDefault();
+    setIsDragging(false);
+  };
+
+  const handleDrop = (e: React.DragEvent<HTMLDivElement>) => {
+    e.preventDefault();
+    setIsDragging(false);
+    if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
+      console.log('Files dropped:', e.dataTransfer.files);
+      // Handle the dropped files here
+    }
+  };
+
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (e.target.files && e.target.files.length > 0) {
+      console.log('File selected:', e.target.files);
+      // Handle the selected files here
+    }
+  };
   return (
     <div className="app-container py-8">
       <div className="flex justify-between items-center mb-8">
@@ -13,7 +41,25 @@ export function DocumentsPage() {
       </div>
 
       {/* Upload Area */}
-      <div className="mb-8 border-2 border-dashed border-gray-300 dark:border-gray-700 rounded-xl p-12 text-center hover:border-primary transition-colors bg-gray-50 dark:bg-gray-800/50 cursor-pointer">
+      <div 
+        className={`mb-8 border-2 border-dashed rounded-xl p-12 text-center transition-colors cursor-pointer ${
+          isDragging 
+            ? 'border-primary bg-primary/5 dark:bg-primary/10' 
+            : 'border-gray-300 dark:border-gray-700 hover:border-primary bg-gray-50 dark:bg-gray-800/50'
+        }`}
+        onDragOver={handleDragOver}
+        onDragLeave={handleDragLeave}
+        onDrop={handleDrop}
+        onClick={() => fileInputRef.current?.click()}
+      >
+        <input 
+          type="file" 
+          ref={fileInputRef} 
+          className="hidden" 
+          onChange={handleFileChange}
+          accept=".pdf,.doc,.docx,.txt"
+          multiple
+        />
         <div className="w-16 h-16 bg-primary/10 text-primary rounded-full flex items-center justify-center mx-auto mb-4">
           <UploadCloud size={32} />
         </div>
