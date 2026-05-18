@@ -1,6 +1,7 @@
 import { Send, User, Bot, History, Paperclip, X, FileText, Sparkles, RefreshCcw } from 'lucide-react';
 import { api } from '../services/api';
 import { useRef, useState, useEffect } from 'react';
+import { useToast } from '../contexts/ToastContext';
 
 interface Message {
   id: number;
@@ -31,6 +32,7 @@ export function ChatbotPage() {
   const [isTyping, setIsTyping] = useState(false);
   const [uploadedDoc, setUploadedDoc] = useState<{ name: string; text: string } | null>(null);
   const [isUploading, setIsUploading] = useState(false);
+  const { showToast } = useToast();
   useEffect(() => {
   const savedMessages = localStorage.getItem('chatHistory');
 
@@ -79,6 +81,7 @@ useEffect(() => {
       setMessages((prev: Message[]) => [...prev, botMessage]);
     } catch (error) {
       console.error('Error sending message:', error);
+      showToast('Failed to send message. Please try again.', 'error');
       const errorMessage = {
         id: now + 1,
         text: error instanceof Error ? error.message : "Sorry, I'm having trouble connecting to the server. Please ensure the backend is running.",
@@ -102,6 +105,7 @@ useEffect(() => {
     try {
       const data = await api.upload<{ filename: string; text: string }>('/upload', formData);
       setUploadedDoc({ name: data.filename, text: data.text });
+      showToast(`Document "${data.filename}" uploaded successfully!`, 'success');
 
       const systemMsg: Message = {
         id: Date.now(),
@@ -112,7 +116,7 @@ useEffect(() => {
       setMessages(prev => [...prev, systemMsg]);
     } catch (error) {
       console.error('Upload failed:', error);
-      alert('Failed to upload document.');
+      showToast('Failed to upload document. Please try again.', 'error');
     } finally {
       setIsUploading(false);
       if (fileInputRef.current) fileInputRef.current.value = '';
@@ -132,8 +136,10 @@ useEffect(() => {
         time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
       };
       setMessages(prev => [...prev, summaryMsg]);
+      showToast('Document summarized successfully!', 'success');
     } catch (error) {
       console.error('Summarization failed:', error);
+      showToast('Failed to summarize document. Please try again.', 'error');
     } finally {
       setIsTyping(false);
     }

@@ -33,12 +33,17 @@ app.add_middleware(
 
 # Initialize Bytez SDK
 BYTEZ_API_KEY = os.getenv("BYTEZ_API_KEY")
-if not BYTEZ_API_KEY:
-    logger.error("BYTEZ_API_KEY not found in environment variables")
-    raise RuntimeError("BYTEZ_API_KEY is required")
 
-client = Bytez(BYTEZ_API_KEY)
-logger.info("Bytez client initialized")
+client = None
+
+if BYTEZ_API_KEY:
+    try:
+        client = Bytez(BYTEZ_API_KEY)
+        logger.info("Bytez client initialized")
+    except Exception as e:
+        logger.error(f"Failed to initialize Bytez client: {e}")
+else:
+    logger.warning("BYTEZ_API_KEY not found. AI features will be disabled.")
 
 class ChatRequest(BaseModel):
     message: str
@@ -50,6 +55,11 @@ class SummarizeRequest(BaseModel):
 @app.post("/chat")
 async def chat(request: ChatRequest):
     try:
+        if client is None:
+            return {
+                "response": "AI service is currently unavailable because the API key is not configured."
+            }
+
         model = client.model("inference-net/Schematron-3B")
         
         # Build prompt with context if available
@@ -95,26 +105,49 @@ async def upload_document(file: UploadFile = File(...)):
 
         if file_extension == '.pdf':
             doc = fitz.open(stream=content, filetype="pdf")
+
             for page in doc:
                 extracted_text += page.get_text()
+
         elif file_extension in ['.jpg', '.jpeg', '.png']:
+
+            if client is None:
+                raise HTTPException(
+                    status_code=503,
+                    detail="OCR service unavailable because API key is not configured."
+                )
+
             # Use Bytez OCR for images
             ocr_model = client.model("DeepDiveDev/transformodocs-ocr")
-            # Convert to base64 if needed by the model
+
+            # Convert image to base64
             encoded_image = base64.b64encode(content).decode('utf-8')
-            output = ocr_model.run({"image": encoded_image})
-            extracted_text = output.output if hasattr(output, 'output') else str(output)
+
+            output = ocr_model.run({
+                "image": encoded_image
+            })
+
+            extracted_text = (
+                output.output
+                if hasattr(output, 'output')
+                else str(output)
+            )
+
         else:
             extracted_text = content.decode('utf-8')
 
         return {
             "filename": file.filename,
-            "text": extracted_text[:10000] # Limit context for now
+            "text": extracted_text[:10000]
         }
+
     except Exception as e:
         logger.error(f"Upload error: {e}", exc_info=True)
-        raise HTTPException(status_code=500, detail=f"Failed to process document: {str(e)}")
 
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to process document: {str(e)}"
+        )
 @app.post("/summarize")
 async def summarize(request: SummarizeRequest):
     try:
