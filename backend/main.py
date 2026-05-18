@@ -79,23 +79,22 @@ async def chat(request: ChatRequest):
         if hasattr(output, 'error') and output.error:
             logger.error(f"Model error: {output.error}")
 
-          
-            return {
-              "response":
-              "AI chatbot service is currently unavailable. Please configure a valid API key."
-            }
+            raise HTTPException(
+                status_code=503,
+                detail="AI chatbot service is currently unavailable."
+            )
 
         return {"response": output.output}
     except Exception as e:
         logger.error(
-           f"Error processing chat request: {str(e)}",
-           exc_info=True
+            f"Error processing chat request: {str(e)}",
+            exc_info=True
         )
 
-        return {
-          "response":
-          "AI chatbot service is currently unavailable. Please configure a valid API key."
-        }
+        raise HTTPException(
+            status_code=503,
+            detail="AI chatbot service is currently unavailable."
+        )
 
 @app.post("/upload")
 async def upload_document(file: UploadFile = File(...)):
