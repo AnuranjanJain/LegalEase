@@ -152,23 +152,47 @@ async def upload_document(file: UploadFile = File(...)):
 @app.post("/summarize")
 async def summarize(request: SummarizeRequest):
     try:
+        if client is None:
+            raise HTTPException(
+                status_code=503,
+                detail="Summarization service unavailable because API key is not configured."
+            )
+
         # Use a summarization model from Bytez
-        # Note: Adjusting model name if "inference-net/Schematron-3B" is better as a generalist
-        summary_model = client.model("Jnjnpx/fine-tuned-bert-extractive-summarization")
+        summary_model = client.model(
+            "Jnjnpx/fine-tuned-bert-extractive-summarization"
+        )
         
         output = summary_model.run(request.text[:512]) # Model specific limit usually
         
         return {"summary": output.output if hasattr(output, 'output') else str(output)}
     except Exception as e:
         logger.error(f"Summarization error: {e}", exc_info=True)
+
         # Fallback to general model if specialized summarizer fails
         try:
-             model = client.model("inference-net/Schematron-3B")
-             prompt = f"Summarize this legal text concisely:\n\n{request.text[:2000]}"
-             output = model.run([{"role": "user", "content": prompt}])
-             return {"summary": output.output}
-        except:
-             raise HTTPException(status_code=500, detail="Failed to generate summary.")
+            if client is None:
+                raise HTTPException(
+                    status_code=503,
+                    detail="Summarization service unavailable because API key is not configured."
+                )
+
+            model = client.model("inference-net/Schematron-3B")
+            prompt = (
+                f"Summarize this legal text concisely:\n\n"
+                f"{request.text[:2000]}"
+            )
+
+            output = model.run([
+                {
+                    "role": "user",
+                    "content": prompt
+                }
+            ])
+
+            return {"summary": output.output}
+        except Exception:
+            raise HTTPException(status_code=500, detail="Failed to generate summary.")
 
 if __name__ == "__main__":
     import uvicorn
