@@ -91,7 +91,7 @@ export function ProfilePage() {
   const initialProfile = useState(() => StorageService.getProfile())[0];
   const [profile, setProfile] = useState<UserProfile>(StorageService.getProfile());
   const [isSaving, setIsSaving] = useState(false);
-  const [showSavedToast, setShowSavedToast] = useState(false);
+  
   
   const { showToast } = useToast();
  
