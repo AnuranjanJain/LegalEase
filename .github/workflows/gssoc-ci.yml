@@ -1,0 +1,163 @@
+name: GSSoC'26 Master CI/CD
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, ready_for_review]
+    branches: [main]
+
+permissions:
+  contents: write
+  pull-requests: write
+  statuses: read
+  deployments: read
+  issues: write
+
+jobs:
+  check-gssoc:
+    runs-on: ubuntu-latest
+    outputs:
+      is_gssoc: ${{ steps.check.outputs.is_gssoc }}
+    steps:
+      - name: Check for GSSoC'26 label in linked issues
+        id: check
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const prBody = context.payload.pull_request.body || '';
+            const issueRegex = /(?:fix|fixes|fixed|close|closes|closed|resolve|resolves|resolved)\s+#(\d+)/gi;
+            let match;
+            let isGssoc = false;
+            
+            while ((match = issueRegex.exec(prBody)) !== null) {
+              const issueNumber = parseInt(match[1], 10);
+              try {
+                const { data: issue } = await github.rest.issues.get({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  issue_number: issueNumber
+                });
+                
+                const hasGssocLabel = issue.labels.some(label => 
+                  label.name === "GSSoC'26"
+                );
+                
+                if (hasGssocLabel) {
+                  isGssoc = true;
+                  break;
+                }
+              } catch (e) {
+                console.log(`Could not fetch issue #${issueNumber}: ${e.message}`);
+              }
+            }
+            core.setOutput('is_gssoc', isGssoc);
+
+  ci-and-deploy-check:
+    needs: check-gssoc
+    if: needs.check-gssoc.outputs.is_gssoc == 'true' && !github.event.pull_request.draft
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Use Node.js 18.x
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18.x'
+          cache: 'npm'
+
+      - name: Install Dependencies
+        run: npm ci
+
+      - name: Lint Code
+        run: npm run lint
+
+      - name: Build Project
+        run: npm run build
+
+      - name: Wait for Vercel Deployment
+        id: wait-vercel
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const { owner, repo } = context.repo;
+            const ref = context.payload.pull_request.head.sha;
+            
+            console.log(`Waiting for deployment status for ${ref}...`);
+            let deploymentUrl = null;
+            let status = null;
+            
+            for (let i = 0; i < 60; i++) {
+              await new Promise(r => setTimeout(r, 10000));
+              
+              const { data: statuses } = await github.rest.repos.listCommitStatusesForRef({
+                owner,
+                repo,
+                ref
+              });
+              
+              const vercelStatus = statuses.find(s => s.context.includes('Vercel') || s.description.includes('Vercel'));
+              
+              if (vercelStatus) {
+                status = vercelStatus.state;
+                if (status === 'success') {
+                  deploymentUrl = vercelStatus.target_url;
+                  break;
+                } else if (status === 'error' || status === 'failure') {
+                  core.setFailed('Vercel deployment failed');
+                  return;
+                }
+              }
+            }
+            
+            if (!deploymentUrl) {
+              core.warning('Could not find Vercel deployment URL within the timeout.');
+            }
+            
+            core.setOutput('deployment_url', deploymentUrl || 'Not available');
+
+      - name: Auto Merge and Comment
+        uses: actions/github-script@v7
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            const { owner, repo } = context.repo;
+            const prNumber = context.issue.number;
+            const deploymentUrl = '${{ steps.wait-vercel.outputs.deployment_url }}';
+            const user = context.payload.pull_request.user.login;
+            
+            const commentBody = `
+            🎉 **Thank you for your GSSoC'26 contribution, @${user}!** 🎉
+            
+            All checks have passed successfully!
+            
+            ✅ **Linting:** Passed
+            ✅ **Build:** Passed
+            ✅ **Preview Deployment:** ${deploymentUrl !== 'Not available' ? `[View Preview](${deploymentUrl})` : 'URL not found'}
+            
+            Merging this PR automatically as all checks passed! 🚀
+            `;
+            
+            await github.rest.issues.createComment({
+              owner,
+              repo,
+              issue_number: prNumber,
+              body: commentBody
+            });
+            
+            try {
+              await github.rest.pulls.merge({
+                owner,
+                repo,
+                pull_number: prNumber,
+                merge_method: 'squash'
+              });
+              console.log('PR merged successfully!');
+            } catch (e) {
+              console.log('Auto-merge failed. Error: ', e.message);
+              await github.rest.issues.createComment({
+                owner,
+                repo,
+                issue_number: prNumber,
+                body: "⚠️ Auto-merge failed. Ensure 'Allow auto-merge' is enabled in repo settings and 'Allow GitHub Actions to create and approve pull requests' is checked."
+              });
+            }
