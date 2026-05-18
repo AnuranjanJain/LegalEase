@@ -160,12 +160,24 @@ async def chat(request: Request, payload: ChatRequest):
             logger.error(f"Model error: {output.error}")
             raise HTTPException(status_code=502, detail="Upstream model error")
 
+            raise HTTPException(
+                status_code=503,
+                detail="AI chatbot service is currently unavailable."
+            )
+
         return {"response": output.output}
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"Error processing chat request: {str(e)}", exc_info=True)
-        raise HTTPException(status_code=502, detail="Failed to process chat request")
+        logger.error(
+            f"Error processing chat request: {str(e)}",
+            exc_info=True
+        )
+
+        raise HTTPException(
+            status_code=503,
+            detail="AI chatbot service is currently unavailable."
+        )
 
 @app.post("/upload")
 async def upload_document(request: Request, file: UploadFile = File(...)):
