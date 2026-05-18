@@ -123,6 +123,78 @@ legal-ease-website/
    - PHP: `php -S localhost:8000`
 3. **Open Browser**: Navigate to `http://localhost:8000`
 
+## Configuration
+
+Follow these steps to configure environment variables required to run the project locally and in CI. Do not commit your real secrets.
+
+- **Create a Python virtualenv (recommended):**
+
+```bash
+python -m venv .venv
+source .venv/bin/activate
+pip install -r backend/requirements.txt
+```
+
+- **Create a frontend environment (Node):**
+
+```bash
+npm install
+```
+
+- **Create a local .env from the example:**
+
+```bash
+cp .env.example .env
+# Edit .env and replace placeholders with real values (DO NOT commit .env)
+```
+
+- **Important environment variables** (see `.env.example`):
+    - `BYTEZ_API_KEY` — required by the backend to access the Bytez SDK. Keep this secret.
+    - `FRONTEND_URL` — frontend origin used for CORS (default: `http://localhost:5173`).
+    - `BYTEZ_API_KEY` — required by the backend to access the Bytez SDK. Keep this secret.
+    - `FRONTEND_URL` — frontend origin used for CORS (default: `http://localhost:5173`).
+    - `API_KEYS` — comma-separated list of valid API keys for server endpoints (recommended in production).
+    - `DEV_API_KEY` — developer API key allowed when `ALLOW_DEV` is enabled (default: `dev-token`).
+    - `ALLOW_DEV` — allow using `DEV_API_KEY` for local development (`true`/`false`, default `true`).
+    - `MAX_UPLOAD_SIZE` — maximum allowed upload size in bytes (default 26214400 = 25MB).
+    - `RATE_LIMIT_IP_CALLS`, `RATE_LIMIT_KEY_CALLS`, `RATE_LIMIT_PERIOD` — simple rate-limiting configuration (defaults: 60, 30, 60).
+
+- **Run backend (development):**
+
+```bash
+# from the project root
+cd backend
+uvicorn main:app --reload --port 8000
+
+Security notes (backend)
+- Authentication: backend endpoints (`/chat`, `/upload`, `/summarize`) require an API key in `Authorization: Bearer <key>` or `X-API-Key` header. Set `API_KEYS` or use `DEV_API_KEY` with `ALLOW_DEV` enabled for local development.
+- Upload limits: server enforces `MAX_UPLOAD_SIZE` and basic file-type validation (PDF, DOCX, text). Oversized uploads return HTTP 413.
+- Rate limiting: server applies per-IP and per-API-key rate limits; exceeding the limit returns HTTP 429.
+- Error codes: AI/service dependency failures return 5xx (503/502) rather than 200.
+- Health check: `/health` returns dependency status (useful for orchestration and monitoring).
+
+Logging and secrets
+- Do not commit real secrets. Use environment variables or your secret manager.
+- The server will log degraded status when AI dependencies are unavailable but will not print secret values.
+```
+
+- **Run frontend (development):**
+
+```bash
+# from the project root
+npm run dev
+```
+
+- **Running in CI / Production:**
+    - Provide secrets via your CI environment variables/secrets (do not store real secrets in the repository).
+    - Use the environment variables directly in your process manager (systemd, Docker, Kubernetes, etc.).
+
+**Security notes**
+
+- `.env` and other secret files are ignored by `.gitignore` by default. The repo includes `!.env.example` so the example can be committed while real secrets remain ignored.
+- Avoid printing secrets to stdout or logs. The backend no longer prints the API key at startup.
+
+
 ## File Organization
 
 ### HTML Files

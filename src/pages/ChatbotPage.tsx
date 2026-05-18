@@ -1,7 +1,7 @@
 import { Send, User, Bot, History, Paperclip, X, FileText, Sparkles, RefreshCcw } from 'lucide-react';
 import { api } from '../services/api';
-import { useRef } from 'react';
-import { useState } from 'react';
+import { useRef, useState, useEffect } from 'react';
+import { useToast } from '../contexts/ToastContext';
 
 interface Message {
   id: number;
@@ -9,15 +9,42 @@ interface Message {
   sender: 'user' | 'bot';
   time: string;
 }
+const defaultMessages: Message[] = [
+  {
+    id: 1,
+    text: "Hello! I'm LegalEase AI. How can I help you understand your legal documents today?",
+    sender: 'bot',
+    time: '10:00 AM'
+  }
+];
 
 export function ChatbotPage() {
-  const [messages, setMessages] = useState<Message[]>([
-    { id: 1, text: "Hello! I'm LegalEase AI. How can I help you understand your legal documents today?", sender: 'bot', time: '10:00 AM' },
-  ]);
+  const [messages, setMessages] = useState<Message[]>(() => {
+    const savedMessages = localStorage.getItem('chatHistory');
+
+    return savedMessages
+      ? JSON.parse(savedMessages)
+      : defaultMessages;
+  });
+
+
   const [input, setInput] = useState('');
   const [isTyping, setIsTyping] = useState(false);
   const [uploadedDoc, setUploadedDoc] = useState<{ name: string; text: string } | null>(null);
   const [isUploading, setIsUploading] = useState(false);
+  const { showToast } = useToast();
+  useEffect(() => {
+  const savedMessages = localStorage.getItem('chatHistory');
+
+  if (savedMessages) {
+    setMessages(JSON.parse(savedMessages));
+  }
+}, []);
+useEffect(() => {
+  if (messages.length > 0) {
+    localStorage.setItem('chatHistory', JSON.stringify(messages));
+  }
+}, [messages]);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -25,8 +52,9 @@ export function ChatbotPage() {
     if (!input.trim()) return;
 
     // Add user message
+    const now = Date.now();
     const userMessage = {
-      id: messages.length + 1,
+      id: now,
       text: input,
       sender: 'user' as const,
       time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
@@ -44,7 +72,7 @@ export function ChatbotPage() {
       });
 
       const botMessage = {
-        id: messages.length + 2,
+        id: now + 1,
         text: data.response || "I apologize, but I couldn't process that request.",
         sender: 'bot' as const,
         time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
@@ -53,8 +81,9 @@ export function ChatbotPage() {
       setMessages((prev: Message[]) => [...prev, botMessage]);
     } catch (error) {
       console.error('Error sending message:', error);
+      showToast('Failed to send message. Please try again.', 'error');
       const errorMessage = {
-        id: messages.length + 2,
+        id: now + 1,
         text: error instanceof Error ? error.message : "Sorry, I'm having trouble connecting to the server. Please ensure the backend is running.",
         sender: 'bot' as const,
         time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
@@ -76,6 +105,7 @@ export function ChatbotPage() {
     try {
       const data = await api.upload<{ filename: string; text: string }>('/upload', formData);
       setUploadedDoc({ name: data.filename, text: data.text });
+      showToast(`Document "${data.filename}" uploaded successfully!`, 'success');
 
       const systemMsg: Message = {
         id: Date.now(),
@@ -86,7 +116,7 @@ export function ChatbotPage() {
       setMessages(prev => [...prev, systemMsg]);
     } catch (error) {
       console.error('Upload failed:', error);
-      alert('Failed to upload document.');
+      showToast('Failed to upload document. Please try again.', 'error');
     } finally {
       setIsUploading(false);
       if (fileInputRef.current) fileInputRef.current.value = '';
@@ -106,8 +136,10 @@ export function ChatbotPage() {
         time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
       };
       setMessages(prev => [...prev, summaryMsg]);
+      showToast('Document summarized successfully!', 'success');
     } catch (error) {
       console.error('Summarization failed:', error);
+      showToast('Failed to summarize document. Please try again.', 'error');
     } finally {
       setIsTyping(false);
     }
