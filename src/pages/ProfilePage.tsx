@@ -1,4 +1,4 @@
-import { User, Bell, Shield, Globe, Check, Lock, MapPin } from 'lucide-react';
+import { User, Bell, Shield, Globe, Check } from 'lucide-react';
 import { StorageService, UserProfile } from '../services/storage';
 import { useState } from 'react';
 import { useToast } from '../contexts/ToastContext';
@@ -6,9 +6,9 @@ import { useToast } from '../contexts/ToastContext';
 type Section = 'profile' | 'security' | 'notifications' | 'language';
 
 export function ProfilePage() {
+  const { showToast } = useToast();
   const [profile, setProfile] = useState<UserProfile>(StorageService.getProfile());
   const [isSaving, setIsSaving] = useState(false);
-  const [showSavedToast, setShowSavedToast] = useState(false);
   const [section, setSection] = useState<Section>('profile');
   const [langOpen, setLangOpen] = useState(false);
 

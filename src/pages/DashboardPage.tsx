@@ -18,7 +18,7 @@ export function DashboardPage() {
 
   // --- FEATURE 1: Logic to parse data dynamically for Recharts ---
   const chartData = useMemo(() => {
-    const counts = {};
+    const counts: Record<string, number> = {};
     recentDocs.forEach((doc) => {
       const type = doc.type || 'Other';
       counts[type] = (counts[type] || 0) + 1;
@@ -139,7 +139,7 @@ export function DashboardPage() {
                       paddingAngle={4}
                       dataKey="value"
                     >
-                      {chartData.map((entry, index) => (
+                      {chartData.map((_entry, index) => (
                         <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} stroke="transparent" />
                       ))}
                     </Pie>
