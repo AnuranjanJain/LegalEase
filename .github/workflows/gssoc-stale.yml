@@ -20,5 +20,5 @@ jobs:
           stale-pr-message: 'This PR has been inactive for 7 days. Please update the PR to keep it open. It will be closed in 3 days if there is no further activity.'
           close-pr-message: 'This PR has been automatically closed due to inactivity. If you wish to continue working on this, please comment and we can reopen it.'
           stale-pr-label: 'stale'
-          any-of-labels: 'gssoc-pr'
+          any-of-labels: 'gssoc:approved'
           exempt-pr-labels: 'do-not-close'

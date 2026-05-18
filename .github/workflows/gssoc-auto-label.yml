@@ -43,7 +43,7 @@ jobs:
             }
             
             if (isGssoc) {
-              labelsToAdd.add('gssoc-pr');
+              labelsToAdd.add('gssoc:approved');
               const labels = Array.from(labelsToAdd);
               
               if (labels.length > 0) {
