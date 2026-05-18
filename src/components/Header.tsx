@@ -11,6 +11,24 @@ export function Header() {
   const [isNotificationOpen, setIsNotificationOpen] = useState(false);
   const notificationRef = useRef<HTMLDivElement>(null);
 
+  const [notifications, setNotifications] = useState([
+    {
+      id: 1,
+      title: 'Document Uploaded',
+      description: 'Your legal document was uploaded successfully.',
+    },
+    {
+      id: 2,
+      title: 'Profile Updated',
+      description: 'Your profile information has been updated.',
+    },
+    {
+      id: 3,
+      title: 'Welcome to LegalEase',
+      description: 'Explore dashboard features and documentation.',
+    }
+  ]);
+
   const toggleNotificationMenu = () =>
   setIsNotificationOpen(!isNotificationOpen);
 
@@ -100,7 +118,7 @@ export function Header() {
     <Bell size={20} />
 
     {/* Notification Dot */}
-    <span className="absolute top-1 right-1 h-2 w-2 rounded-full bg-red-500"></span>
+    {notifications.length > 0 && <span className="absolute top-1 right-1 h-2 w-2 rounded-full bg-red-500"></span>}
   </button>
 
   {/* Notification Dropdown */}
@@ -116,45 +134,35 @@ export function Header() {
 
         {/* Notifications */}
         <div className="max-h-96 overflow-y-auto">
-
-          <div className="px-4 py-3 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors border-b border-gray-100 dark:border-gray-700">
-            <p className="text-sm font-medium text-gray-800 dark:text-gray-200">
-              Document Uploaded
-            </p>
-            <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
-              Your legal document was uploaded successfully.
-            </p>
-          </div>
-
-          <div className="px-4 py-3 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors border-b border-gray-100 dark:border-gray-700">
-            <p className="text-sm font-medium text-gray-800 dark:text-gray-200">
-              Profile Updated
-            </p>
-            <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
-              Your profile information has been updated.
-            </p>
-          </div>
-
-          <div className="px-4 py-3 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors">
-            <p className="text-sm font-medium text-gray-800 dark:text-gray-200">
-              Welcome to LegalEase
-            </p>
-            <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
-              Explore dashboard features and documentation.
-            </p>
-          </div>
-
+          {notifications.length > 0 ? (
+            notifications.map((notification, index) => (
+              <div key={notification.id} className={`px-4 py-3 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors ${index !== notifications.length - 1 ? 'border-b border-gray-100 dark:border-gray-700' : ''}`}>
+                <p className="text-sm font-medium text-gray-800 dark:text-gray-200">
+                  {notification.title}
+                </p>
+                <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                  {notification.description}
+                </p>
+              </div>
+            ))
+          ) : (
+            <div className="px-4 py-8 text-center">
+              <p className="text-sm text-gray-500 dark:text-gray-400">No unread notifications</p>
+            </div>
+          )}
         </div>
 
         {/* Footer */}
-        <div className="px-4 py-2 border-t border-gray-100 dark:border-gray-700 text-center">
-          <button
-            className="text-sm text-primary hover:underline"
-            onClick={() => setIsNotificationOpen(false)}
-          >
-            Mark all as read
-          </button>
-        </div>
+        {notifications.length > 0 && (
+          <div className="px-4 py-2 border-t border-gray-100 dark:border-gray-700 text-center">
+            <button
+              className="text-sm text-primary hover:underline"
+              onClick={() => setNotifications([])}
+            >
+              Mark all as read
+            </button>
+          </div>
+        )}
       </div>
     )}
   </div>

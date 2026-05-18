@@ -1,6 +1,7 @@
 import { User, Bell, Shield, Globe, Check, Lock, MapPin } from 'lucide-react';
 import { StorageService, UserProfile } from '../services/storage';
 import { useState } from 'react';
+import { useToast } from '../contexts/ToastContext';
 
 type Section = 'profile' | 'security' | 'notifications' | 'language';
 
@@ -16,8 +17,7 @@ export function ProfilePage() {
     StorageService.saveProfile(profile);
     setTimeout(() => {
       setIsSaving(false);
-      setShowSavedToast(true);
-      setTimeout(() => setShowSavedToast(false), 3000);
+      showToast('Profile updated successfully!', 'success');
     }, 800);
   };
 
@@ -78,16 +78,11 @@ export function ProfilePage() {
 
         {/* Card Content */}
         <div className="flex-grow p-8 md:p-12">
-          <header className="mb-10 flex justify-between items-center">
+          <header className="mb-10">
             <div>
               <h1 className="text-2xl font-bold text-gray-900 dark:text-white">{section === 'profile' ? 'Profile Information' : section === 'security' ? 'Security Settings' : section === 'notifications' ? 'Notification Preferences' : 'Language & Region'}</h1>
               <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">{section === 'profile' ? 'Update your personal details and public profile.' : section === 'security' ? 'Manage password and two-factor authentication.' : section === 'notifications' ? 'Choose how you receive alerts and updates.' : 'Select your preferred language and region.'}</p>
             </div>
-            {showSavedToast && (
-              <div className="flex items-center gap-2 px-3 py-1.5 bg-green-50 dark:bg-green-900/20 text-green-600 dark:text-green-400 text-xs font-bold rounded-full animate-bounce">
-                <Check size={14} /> SAVED
-              </div>
-            )}
           </header>
           {/* Content: switch between sections */}
           {section === 'profile' && (
