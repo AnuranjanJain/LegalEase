@@ -1,13 +1,24 @@
-from fastapi import FastAPI, HTTPException, UploadFile, File
+from fastapi import FastAPI, HTTPException, UploadFile, File, Request
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
-from bytez import Bytez
 import os
 import logging
-import fitz  # PyMuPDF
 import base64
-from typing import Optional, List
+from typing import Optional
 from dotenv import load_dotenv
+
+# Optional imports (wrap in try/except so server can start without optional deps)
+try:
+    import fitz  # PyMuPDF
+except Exception:
+    fitz = None
+
+try:
+    from bytez import Bytez
+except Exception:
+    Bytez = None
+    # Bytez SDK not available or misconfigured; we'll degrade gracefully.
+import time
 
 # Configure logging
 logging.basicConfig(
@@ -34,142 +45,236 @@ app.add_middleware(
 # Initialize Bytez SDK
 BYTEZ_API_KEY = os.getenv("BYTEZ_API_KEY")
 
+# Initialize Bytez client if available and configured; otherwise degrade gracefully
 client = None
-
-if BYTEZ_API_KEY:
+if BYTEZ_API_KEY and Bytez is not None:
     try:
         client = Bytez(BYTEZ_API_KEY)
         logger.info("Bytez client initialized")
     except Exception as e:
         logger.error(f"Failed to initialize Bytez client: {e}")
+        client = None
 else:
-    logger.warning("BYTEZ_API_KEY not found. AI features will be disabled.")
+    logger.warning("BYTEZ_API_KEY not configured or Bytez SDK unavailable. AI features disabled.")
+
+# Configuration
+MAX_UPLOAD_SIZE = int(os.getenv("MAX_UPLOAD_SIZE", str(25 * 1024 * 1024)))  # 25 MB default
+MAX_MODEL_INPUT_CHARS = int(os.getenv("MAX_MODEL_INPUT_CHARS", "2000"))
+
+# Simple in-memory rate limiter (per-IP and per-key)
+class SimpleRateLimiter:
+    def __init__(self, calls: int, period: int):
+        self.calls = calls
+        self.period = period
+        self.storage = {}
+
+    def is_allowed(self, key: str) -> bool:
+        now = time.time()
+        window = now - self.period
+        arr = self.storage.get(key, [])
+        # prune
+        arr = [t for t in arr if t > window]
+        if len(arr) >= self.calls:
+            self.storage[key] = arr
+            return False
+        arr.append(now)
+        self.storage[key] = arr
+        return True
+
+# Defaults: 60 requests per minute per IP, 30 per minute per API key
+ip_limiter = SimpleRateLimiter(int(os.getenv("RATE_LIMIT_IP_CALLS", "60")), int(os.getenv("RATE_LIMIT_PERIOD", "60")))
+key_limiter = SimpleRateLimiter(int(os.getenv("RATE_LIMIT_KEY_CALLS", "30")), int(os.getenv("RATE_LIMIT_PERIOD", "60")))
+
+# API keys and dev mode
+API_KEYS = [k.strip() for k in os.getenv("API_KEYS", "").split(",") if k.strip()]
+DEV_API_KEY = os.getenv("DEV_API_KEY", "dev-token")
+ALLOW_DEV = os.getenv("ALLOW_DEV", "true").lower() in ("1", "true", "yes")
 
 class ChatRequest(BaseModel):
     message: str
     context: Optional[str] = None
 
+
 class SummarizeRequest(BaseModel):
     text: str
 
-@app.post("/chat")
-async def chat(request: ChatRequest):
+
+def _get_client_ip(request: Request) -> str:
     try:
-        if client is None:
-            return {
-                "response": "AI service is currently unavailable because the API key is not configured."
-            }
+        return request.client.host
+    except Exception:
+        return "unknown"
 
+
+def _validate_api_key(request: Request) -> str:
+    # Accept header `Authorization: Bearer <key>` or `X-API-Key`
+    auth = request.headers.get("authorization") or ""
+    api_key = ""
+    if auth.lower().startswith("bearer "):
+        api_key = auth.split(" ", 1)[1].strip()
+    else:
+        api_key = request.headers.get("x-api-key", "").strip()
+
+    if not api_key:
+        raise HTTPException(status_code=401, detail="Missing API key")
+
+    if API_KEYS and api_key not in API_KEYS:
+        if ALLOW_DEV and api_key == DEV_API_KEY:
+            return api_key
+        raise HTTPException(status_code=403, detail="Invalid API key")
+
+    return api_key
+
+@app.post("/chat")
+async def chat(request: Request, payload: ChatRequest):
+    # Auth
+    api_key = _validate_api_key(request)
+
+    # Rate limiting
+    ip = _get_client_ip(request)
+    if not ip_limiter.is_allowed(ip):
+        raise HTTPException(status_code=429, detail="Rate limit exceeded for IP")
+    if not key_limiter.is_allowed(api_key):
+        raise HTTPException(status_code=429, detail="Rate limit exceeded for API key")
+
+    if client is None:
+        raise HTTPException(status_code=503, detail="AI service unavailable")
+
+    try:
         model = client.model("inference-net/Schematron-3B")
-        
-        # Build prompt with context if available
-        prompt = request.message
-        if request.context:
-            prompt = f"Context from document:\n{request.context}\n\nUser Question: {request.message}"
 
-        messages = [
-            {
-                "role": "user",
-                "content": prompt
-            }
-        ]
-        
+        # Build prompt with context if available
+        prompt = payload.message
+        if payload.context:
+            prompt = f"Context from document:\n{payload.context}\n\nUser Question: {payload.message}"
+
+        # Truncate to model input limit
+        if len(prompt) > MAX_MODEL_INPUT_CHARS:
+            prompt = prompt[:MAX_MODEL_INPUT_CHARS]
+
+        messages = [{"role": "user", "content": prompt}]
+
         output = model.run(messages)
-        
+
         if hasattr(output, 'error') and output.error:
             logger.error(f"Model error: {output.error}")
-
-          
-            return {
-              "response":
-              "AI chatbot service is currently unavailable. Please configure a valid API key."
-            }
+            raise HTTPException(status_code=502, detail="Upstream model error")
 
         return {"response": output.output}
+    except HTTPException:
+        raise
     except Exception as e:
-        logger.error(
-           f"Error processing chat request: {str(e)}",
-           exc_info=True
-        )
-
-        return {
-          "response":
-          "AI chatbot service is currently unavailable. Please configure a valid API key."
-        }
+        logger.error(f"Error processing chat request: {str(e)}", exc_info=True)
+        raise HTTPException(status_code=502, detail="Failed to process chat request")
 
 @app.post("/upload")
-async def upload_document(file: UploadFile = File(...)):
+async def upload_document(request: Request, file: UploadFile = File(...)):
+    # Auth
+    api_key = _validate_api_key(request)
+
+    # Rate limiting
+    ip = _get_client_ip(request)
+    if not ip_limiter.is_allowed(ip):
+        raise HTTPException(status_code=429, detail="Rate limit exceeded for IP")
+    if not key_limiter.is_allowed(api_key):
+        raise HTTPException(status_code=429, detail="Rate limit exceeded for API key")
+
+    # Content-Length pre-check
+    try:
+        content_length = int(request.headers.get("content-length", "0"))
+    except Exception:
+        content_length = 0
+    if content_length and content_length > MAX_UPLOAD_SIZE:
+        raise HTTPException(status_code=413, detail="Uploaded file is too large")
+
     try:
         content = await file.read()
-        file_extension = os.path.splitext(file.filename)[1].lower()
+        if len(content) > MAX_UPLOAD_SIZE:
+            raise HTTPException(status_code=413, detail="Uploaded file is too large")
+
+        filename = file.filename or "unknown"
+        file_extension = os.path.splitext(filename)[1].lower()
         extracted_text = ""
 
-        if file_extension == '.pdf':
-            doc = fitz.open(stream=content, filetype="pdf")
+        # Validate by magic bytes / simple signatures
+        if file_extension == '.pdf' or content.startswith(b'%PDF-'):
+            if fitz is None:
+                raise HTTPException(status_code=503, detail="PDF processing not available")
+            try:
+                doc = fitz.open(stream=content, filetype="pdf")
+                for page in doc:
+                    extracted_text += page.get_text()
+            except Exception as e:
+                logger.error(f"PDF parse error: {e}")
+                raise HTTPException(status_code=400, detail="Invalid or corrupted PDF")
 
-            for page in doc:
-                extracted_text += page.get_text()
-
-        elif file_extension in ['.jpg', '.jpeg', '.png']:
-
-            if client is None:
-                raise HTTPException(
-                    status_code=503,
-                    detail="OCR service unavailable because API key is not configured."
-                )
-
-            # Use Bytez OCR for images
-            ocr_model = client.model("DeepDiveDev/transformodocs-ocr")
-
-            # Convert image to base64
-            encoded_image = base64.b64encode(content).decode('utf-8')
-
-            output = ocr_model.run({
-                "image": encoded_image
-            })
-
-            extracted_text = (
-                output.output
-                if hasattr(output, 'output')
-                else str(output)
-            )
+        elif file_extension in ['.docx'] or content.startswith(b'PK\x03\x04'):
+            # For docx we don't parse contents here; return placeholder
+            extracted_text = "[DOCX file uploaded]"
 
         else:
-            extracted_text = content.decode('utf-8')
+            # Treat as text; try decode
+            try:
+                extracted_text = content.decode('utf-8')
+            except Exception:
+                raise HTTPException(status_code=400, detail="Unsupported or binary file type")
 
-        return {
-            "filename": file.filename,
-            "text": extracted_text[:10000]
-        }
+        # Truncate extracted text to avoid sending huge payloads to models
+        extracted_text = extracted_text[:10000]
 
+        return {"filename": filename, "text": extracted_text}
+
+    except HTTPException:
+        raise
     except Exception as e:
         logger.error(f"Upload error: {e}", exc_info=True)
-
-        raise HTTPException(
-            status_code=500,
-            detail=f"Failed to process document: {str(e)}"
-        )
+        raise HTTPException(status_code=500, detail="Failed to process document")
 @app.post("/summarize")
-async def summarize(request: SummarizeRequest):
+async def summarize(request: Request, payload: SummarizeRequest):
+    # Auth
+    api_key = _validate_api_key(request)
+
+    # Rate limiting
+    ip = _get_client_ip(request)
+    if not ip_limiter.is_allowed(ip):
+        raise HTTPException(status_code=429, detail="Rate limit exceeded for IP")
+    if not key_limiter.is_allowed(api_key):
+        raise HTTPException(status_code=429, detail="Rate limit exceeded for API key")
+
+    if client is None:
+        raise HTTPException(status_code=503, detail="AI service unavailable")
+
     try:
         # Use a summarization model from Bytez
-        # Note: Adjusting model name if "inference-net/Schematron-3B" is better as a generalist
         summary_model = client.model("Jnjnpx/fine-tuned-bert-extractive-summarization")
-        
-        output = summary_model.run(request.text[:512]) # Model specific limit usually
-        
+        output = summary_model.run(payload.text[:512])
+        if hasattr(output, 'error') and output.error:
+            logger.error(f"Summarizer model error: {output.error}")
+            raise HTTPException(status_code=502, detail="Upstream summarization error")
         return {"summary": output.output if hasattr(output, 'output') else str(output)}
+    except HTTPException:
+        raise
     except Exception as e:
         logger.error(f"Summarization error: {e}", exc_info=True)
-        # Fallback to general model if specialized summarizer fails
+        # Fallback general model
         try:
-             model = client.model("inference-net/Schematron-3B")
-             prompt = f"Summarize this legal text concisely:\n\n{request.text[:2000]}"
-             output = model.run([{"role": "user", "content": prompt}])
-             return {"summary": output.output}
-        except:
-             raise HTTPException(status_code=500, detail="Failed to generate summary.")
+            model = client.model("inference-net/Schematron-3B")
+            prompt = f"Summarize this legal text concisely:\n\n{payload.text[:2000]}"
+            output = model.run([{"role": "user", "content": prompt}])
+            return {"summary": output.output}
+        except Exception:
+            raise HTTPException(status_code=502, detail="Failed to generate summary")
 
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run(app, host="0.0.0.0", port=8000)
+
+
+# Health endpoint
+@app.get("/health")
+async def health():
+    status = "ok"
+    details = {"bytez": bool(client)}
+    if not client:
+        status = "degraded"
+    return {"status": status, "details": details}
