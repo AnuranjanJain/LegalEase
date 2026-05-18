@@ -2,10 +2,13 @@ import { User, Bell, Shield, Globe, Check } from 'lucide-react';
 import { StorageService, UserProfile } from '../services/storage';
 import { useState } from 'react';
 
+
 export function ProfilePage() {
+  const initialProfile = useState(() => StorageService.getProfile())[0];
   const [profile, setProfile] = useState<UserProfile>(StorageService.getProfile());
   const [isSaving, setIsSaving] = useState(false);
   const [showSavedToast, setShowSavedToast] = useState(false);
+  
 
   const handleSave = () => {
     setIsSaving(true);
@@ -155,10 +158,9 @@ export function ProfilePage() {
             </div>
 
             <div className="pt-10 flex justify-end gap-4">
-              <button
-                onClick={() => setProfile(StorageService.getProfile())}
-                className="px-6 py-2.5 text-sm font-semibold text-gray-500 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white"
-              >
+          
+                <button onClick={() => setProfile(initialProfile)}>
+              
                 Reset
               </button>
               <button
