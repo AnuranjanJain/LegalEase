@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect } from 'react';
 import { NavLink } from 'react-router-dom';
-import { Menu, X, Bell, Moon, Sun, User, Settings } from 'lucide-react';
+import { Menu, X, Bell, Moon, Sun, User, Settings, LogOut, Sparkles } from 'lucide-react';
 import { useDarkMode } from '../hooks/useDarkMode';
 
 export function Header() {
@@ -12,85 +12,60 @@ export function Header() {
   const notificationRef = useRef<HTMLDivElement>(null);
 
   const [notifications, setNotifications] = useState([
-    {
-      id: 1,
-      title: 'Document Uploaded',
-      description: 'Your legal document was uploaded successfully.',
-    },
-    {
-      id: 2,
-      title: 'Profile Updated',
-      description: 'Your profile information has been updated.',
-    },
-    {
-      id: 3,
-      title: 'Welcome to LegalEase',
-      description: 'Explore dashboard features and documentation.',
-    }
+    { id: 1, title: 'Document Uploaded', description: 'Your legal document was uploaded successfully.' },
+    { id: 2, title: 'Profile Updated', description: 'Your profile information has been updated.' }
   ]);
 
-  const toggleNotificationMenu = () =>
-  setIsNotificationOpen(!isNotificationOpen);
-
+  const toggleNotificationMenu = () => setIsNotificationOpen(!isNotificationOpen);
   const toggleMobileMenu = () => setIsMobileMenuOpen(!isMobileMenuOpen);
   const toggleUserMenu = () => setIsUserMenuOpen(!isUserMenuOpen);
 
-  // Close user menu on outside click
   useEffect(() => {
-        function handleClickOutside(event: MouseEvent) {
-      if (
-        userMenuRef.current &&
-        !userMenuRef.current.contains(event.target as Node)
-      ) {
-        setIsUserMenuOpen(false);
-      }
-
-      if (
-        notificationRef.current &&
-        !notificationRef.current.contains(event.target as Node)
-      ) {
-        setIsNotificationOpen(false);
-      }
+    function handleClickOutside(event: MouseEvent) {
+      if (userMenuRef.current && !userMenuRef.current.contains(event.target as Node)) setIsUserMenuOpen(false);
+      if (notificationRef.current && !notificationRef.current.contains(event.target as Node)) setIsNotificationOpen(false);
     }
     document.addEventListener('mousedown', handleClickOutside);
-    return () => {
-      document.removeEventListener('mousedown', handleClickOutside);
-    };
+    return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
 
   const navLinks = [
     { name: 'Home', path: '/' },
     { name: 'Dashboard', path: '/dashboard' },
     { name: 'Documents', path: '/documents' },
-    { name: 'Documentation', path: '/documentation' },
     { name: 'Chatbot', path: '/chatbot' },
-    { name: 'Profile', path: '/profile' },
   ];
 
   return (
-    <header className="bg-white dark:bg-gray-900 border-b border-gray-200 dark:border-gray-800 sticky top-0 z-50">
-      <div className="app-container">
-        <div className="flex items-center justify-between h-16">
-          {/* Logo & Brand */}
-          <div className="flex items-center gap-4">
+    <>
+      {/* Spacer to prevent content from hiding under the fixed floating header */}
+      <div className="h-24 w-full bg-transparent"></div>
+
+      <header className="fixed top-6 left-0 right-0 z-50 flex justify-center px-4 sm:px-6 pointer-events-none">
+        {/* Floating Glass Pill */}
+        <div className="pointer-events-auto w-full max-w-6xl h-16 rounded-full bg-white/70 dark:bg-[#030303]/60 backdrop-blur-2xl border border-gray-200/50 dark:border-white/10 shadow-[0_8px_30px_rgb(0,0,0,0.04)] dark:shadow-[0_8px_30px_rgb(0,0,0,0.3)] flex items-center justify-between px-2 sm:px-4 transition-all duration-300">
+          
+          {/* Brand */}
+          <div className="flex items-center pl-2">
             <NavLink to="/" className="flex items-center gap-2 group">
-              <div className="text-primary transition-transform group-hover:scale-105">
-                <svg className="h-8 w-8" fill="none" viewBox="0 0 48 48" xmlns="http://www.w3.org/2000/svg">
-                  <path d="M44 11.2727C44 14.0109 39.8386 16.3957 33.69 17.6364C39.8386 18.877 44 21.2618 44 24C44 26.7382 39.8386 29.123 33.69 30.3636C39.8386 31.6043 44 33.9891 44 36.7273C44 40.7439 35.0457 44 24 44C12.9543 44 4 40.7439 4 36.7273C4 33.9891 8.16144 31.6043 14.31 30.3636C8.16144 29.123 4 26.7382 4 24C4 21.2618 8.16144 18.877 14.31 17.6364C8.16144 16.3957 4 14.0109 4 11.2727C4 7.25611 12.9543 4 24 4C35.0457 4 44 7.25611 44 11.2727Z" fill="currentColor"></path>
-                </svg>
+              <div className="w-8 h-8 rounded-full bg-blue-600/10 dark:bg-white/[0.05] border border-blue-600/20 dark:border-white/10 flex items-center justify-center text-blue-600 dark:text-white group-hover:scale-105 transition-all">
+                <Sparkles className="w-4 h-4" />
               </div>
-              <h1 className="text-xl font-bold text-gray-900 dark:text-white">LegalEase</h1>
+              <h1 className="text-lg font-medium tracking-tight text-gray-900 dark:text-white hidden sm:block">LegalEase</h1>
             </NavLink>
           </div>
 
-          {/* Desktop Navigation */}
-          <nav className="hidden md:flex items-center space-x-8">
+          {/* Center Navigation (Pill inside Pill) */}
+          <nav className="hidden md:flex items-center bg-gray-100/50 dark:bg-white/[0.03] rounded-full p-1 border border-transparent dark:border-white/5">
             {navLinks.map((link) => (
               <NavLink
                 key={link.name}
                 to={link.path}
                 className={({ isActive }) =>
-                  `text-sm font-medium transition-colors ${isActive ? 'text-primary' : 'text-gray-600 dark:text-gray-300 hover:text-primary dark:hover:text-primary'
+                  `px-5 py-1.5 rounded-full text-sm font-medium transition-all duration-300 ${
+                    isActive 
+                    ? 'bg-white dark:bg-white/10 text-blue-600 dark:text-white shadow-sm dark:shadow-none' 
+                    : 'text-gray-500 dark:text-white/50 hover:text-gray-900 dark:hover:text-white hover:bg-gray-200/50 dark:hover:bg-white/[0.02]'
                   }`
                 }
               >
@@ -100,165 +75,58 @@ export function Header() {
           </nav>
 
           {/* Actions */}
-          <div className="flex items-center gap-2 sm:gap-4">
-            <button
-              onClick={toggleDarkMode}
-              className="p-2 rounded-full text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-primary"
-              aria-label="Toggle dark mode"
-            >
-              {isDarkMode ? <Sun size={20} /> : <Moon size={20} />}
+          <div className="flex items-center gap-1 sm:gap-2 pr-1">
+            <button onClick={toggleDarkMode} className="p-2.5 rounded-full text-gray-500 dark:text-white/50 hover:bg-gray-100 dark:hover:bg-white/10 transition-all">
+              {isDarkMode ? <Sun size={18} /> : <Moon size={18} />}
             </button>
 
-            <div className="relative hidden sm:flex" ref={notificationRef}>
-  <button
-    onClick={toggleNotificationMenu}
-    className="p-2 rounded-full text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-primary relative"
-    aria-label="View notifications"
-  >
-    <Bell size={20} />
-
-    {/* Notification Dot */}
-    {notifications.length > 0 && <span className="absolute top-1 right-1 h-2 w-2 rounded-full bg-red-500"></span>}
-  </button>
-
-  {/* Notification Dropdown */}
-  {isNotificationOpen && (
-    <div className="absolute right-0 mt-12 w-80 rounded-xl shadow-xl bg-white dark:bg-gray-800 border border-gray-100 dark:border-gray-700 z-50 animate-slide-up overflow-hidden">
-      
-      {/* Header */}
-      <div className="px-4 py-3 border-b border-gray-100 dark:border-gray-700">
-        <h3 className="text-sm font-semibold text-gray-900 dark:text-white">
-          Notifications
-        </h3>
-      </div>
-
-        {/* Notifications */}
-        <div className="max-h-96 overflow-y-auto">
-          {notifications.length > 0 ? (
-            notifications.map((notification, index) => (
-              <div key={notification.id} className={`px-4 py-3 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors ${index !== notifications.length - 1 ? 'border-b border-gray-100 dark:border-gray-700' : ''}`}>
-                <p className="text-sm font-medium text-gray-800 dark:text-gray-200">
-                  {notification.title}
-                </p>
-                <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
-                  {notification.description}
-                </p>
-              </div>
-            ))
-          ) : (
-            <div className="px-4 py-8 text-center">
-              <p className="text-sm text-gray-500 dark:text-gray-400">No unread notifications</p>
-            </div>
-          )}
-        </div>
-
-        {/* Footer */}
-        {notifications.length > 0 && (
-          <div className="px-4 py-2 border-t border-gray-100 dark:border-gray-700 text-center">
-            <button
-              className="text-sm text-primary hover:underline"
-              onClick={() => setNotifications([])}
-            >
-              Mark all as read
-            </button>
-          </div>
-        )}
-      </div>
-    )}
-  </div>
-
-            {/* Mobile Menu Button */}
-            <button
-              onClick={toggleMobileMenu}
-              className="flex md:hidden p-2 rounded-full text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-primary"
-              aria-expanded={isMobileMenuOpen}
-              aria-label="Open main menu"
-            >
-              {isMobileMenuOpen ? <X size={24} /> : <Menu size={24} />}
-            </button>
-
-            {/* Profile Dropdown Container */}
-            <div className="relative ml-2" ref={userMenuRef}>
-              <button
-                onClick={toggleUserMenu}
-                className="flex items-center justify-center h-9 w-9 rounded-full bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-400 hover:text-primary hover:bg-primary/10 transition-all focus:outline-none focus-visible:ring-2 focus-visible:ring-primary"
-                aria-haspopup="true"
-                aria-expanded={isUserMenuOpen}
-                aria-label="Open user profile menu"
-              >
-                <User size={20} />
+            <div className="relative hidden sm:block" ref={notificationRef}>
+              <button onClick={toggleNotificationMenu} className={`p-2.5 rounded-full transition-all ${isNotificationOpen ? 'bg-gray-100 dark:bg-white/10 text-gray-900 dark:text-white' : 'text-gray-500 dark:text-white/50 hover:bg-gray-100 dark:hover:bg-white/10'}`}>
+                <Bell size={18} />
+                {notifications.length > 0 && <span className="absolute top-2 right-2.5 h-2 w-2 rounded-full bg-blue-500 border border-white dark:border-[#030303]"></span>}
               </button>
-
-              {/* Dropdown (Hidden by default) */}
-              {isUserMenuOpen && (
-                <div className="absolute right-0 mt-3 w-64 rounded-xl shadow-xl py-3 bg-white dark:bg-gray-800 ring-1 ring-black ring-opacity-5 focus:outline-none z-50 animate-slide-up origin-top-right border border-gray-100 dark:border-gray-700">
-                  <div className="px-4 py-3 border-b border-gray-50 dark:border-gray-700 mb-2">
-                    <p className="text-sm font-semibold text-gray-900 dark:text-white">Sarah Wilson</p>
-                    <p className="text-xs text-gray-500 dark:text-gray-400 truncate">sarah.w@example.com</p>
-                  </div>
-                  <NavLink to="/profile" className="flex items-center gap-3 px-4 py-2.5 text-sm text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 hover:text-primary transition-colors" onClick={() => setIsUserMenuOpen(false)}>
-                    <User size={18} />
-                    <span>Your Profile</span>
-                  </NavLink>
-                  <NavLink to="/settings" className="flex items-center gap-3 px-4 py-2.5 text-sm text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 hover:text-primary transition-colors" onClick={() => setIsUserMenuOpen(false)}>
-                    <Settings size={18} />
-                    <span>Settings</span>
-                  </NavLink>
-                  <div className="px-2 mt-2 pt-2 border-t border-gray-50 dark:border-gray-700">
-                    <button className="flex items-center gap-3 w-full text-left px-2 py-2.5 text-sm text-red-500 font-medium hover:bg-red-50 dark:hover:bg-red-900/10 rounded-lg transition-colors" onClick={() => setIsUserMenuOpen(false)}>
-                      <X size={18} />
-                      <span>Sign out</span>
-                    </button>
-                  </div>
+              {isNotificationOpen && (
+                <div className="absolute right-0 mt-4 w-80 rounded-3xl bg-white/90 dark:bg-[#0a0a0a]/90 backdrop-blur-3xl border border-gray-100 dark:border-white/10 shadow-2xl p-2 z-50 animate-in fade-in slide-in-from-top-4">
+                   <div className="px-4 py-3 border-b border-gray-100 dark:border-white/5"><h3 className="text-sm font-medium text-gray-900 dark:text-white">Notifications</h3></div>
+                   {/* Map notifications here... */}
                 </div>
               )}
             </div>
+
+            <div className="relative" ref={userMenuRef}>
+              <button onClick={toggleUserMenu} className="flex items-center justify-center h-9 w-9 rounded-full bg-blue-600 text-white hover:shadow-[0_0_15px_rgba(59,130,246,0.5)] transition-all ml-1">
+                <span className="text-sm font-medium">SW</span>
+              </button>
+              {isUserMenuOpen && (
+                <div className="absolute right-0 mt-4 w-60 rounded-3xl bg-white/90 dark:bg-[#0a0a0a]/90 backdrop-blur-3xl border border-gray-100 dark:border-white/10 shadow-2xl p-2 z-50 animate-in fade-in slide-in-from-top-4">
+                  <div className="px-4 py-3 border-b border-gray-100 dark:border-white/5 mb-2">
+                    <p className="text-sm font-medium text-gray-900 dark:text-white">Sarah Wilson</p>
+                    <p className="text-xs text-gray-500 dark:text-white/40">sarah.w@example.com</p>
+                  </div>
+                  <NavLink to="/profile" className="flex items-center gap-3 px-4 py-2.5 text-sm text-gray-600 dark:text-white/70 hover:bg-gray-100 dark:hover:bg-white/5 rounded-xl transition-colors"><User size={16} /> Profile</NavLink>
+                  <NavLink to="/settings" className="flex items-center gap-3 px-4 py-2.5 text-sm text-gray-600 dark:text-white/70 hover:bg-gray-100 dark:hover:bg-white/5 rounded-xl transition-colors"><Settings size={16} /> Settings</NavLink>
+                  <button className="flex items-center gap-3 w-full text-left px-4 py-2.5 mt-1 text-sm text-red-500 font-medium hover:bg-red-50 dark:hover:bg-red-500/10 rounded-xl transition-colors"><LogOut size={16} /> Sign out</button>
+                </div>
+              )}
+            </div>
+
+            <button onClick={toggleMobileMenu} className="md:hidden p-2 ml-1 rounded-full text-gray-500 dark:text-white/50 hover:bg-gray-100 dark:hover:bg-white/10">
+              {isMobileMenuOpen ? <X size={20} /> : <Menu size={20} />}
+            </button>
           </div>
         </div>
+      </header>
 
-
-        {/* Mobile Backdrop Overlay */}
-        <div
-          className={`fixed top-16 left-0 w-full h-[calc(100vh-4rem)] z-40 bg-black/10 backdrop-blur-[2px] transition-all duration-300 md:hidden ${isMobileMenuOpen
-            ? 'opacity-100 visible'
-            : 'opacity-0 invisible'
-            }`}
-          onClick={() => setIsMobileMenuOpen(false)}
-        />
-
-        {/* Mobile menu */}
-
-        <div
-          className={`absolute top-16 left-0 w-full md:hidden z-50 overflow-hidden transition-all duration-300 ease-in-out border-b border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900 shadow-lg ${isMobileMenuOpen
-            ? 'max-h-96 opacity-100 py-3'
-            : 'max-h-0 opacity-0 py-0'
-            }`}
-        >
-          <div className="flex flex-col space-y-1 px-1">
-            {navLinks.map((link, index) => (
-              <NavLink
-                key={link.name}
-                to={link.path}
-                className={({ isActive }) =>
-                  `block px-3 py-2 rounded-md text-base font-medium transform transition-all duration-300 ${isActive
-                    ? 'bg-primary/10 text-primary'
-                    : 'text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 hover:text-gray-900 dark:hover:text-white'
-                  } ${isMobileMenuOpen
-                    ? 'translate-y-0 opacity-100'
-                    : '-translate-y-2 opacity-0'
-                  }`
-                }
-                style={{
-                  transitionDelay: `${index * 50}ms`,
-                }}
-                onClick={() => setIsMobileMenuOpen(false)}
-              >
-                {link.name}
-              </NavLink>
-            ))}
-          </div>
+      {/* Full Screen Glass Mobile Menu */}
+      {isMobileMenuOpen && (
+        <div className="md:hidden fixed inset-0 z-40 bg-white/95 dark:bg-[#030303]/95 backdrop-blur-3xl animate-in fade-in flex flex-col items-center justify-center pt-20">
+          {navLinks.map((link) => (
+             <NavLink key={link.name} to={link.path} onClick={() => setIsMobileMenuOpen(false)} className="text-2xl font-medium text-gray-900 dark:text-white mb-6 hover:text-blue-600 transition-colors">
+               {link.name}
+             </NavLink>
+          ))}
         </div>
-      </div>
-    </header>
+      )}
+    </>
   );
 }
