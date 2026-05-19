@@ -18,33 +18,42 @@ const defaultMessages: Message[] = [
   }
 ];
 
-export function ChatbotPage() {
-  const [messages, setMessages] = useState<Message[]>(() => {
+const loadChatHistory = (): Message[] => {
+  try {
     const savedMessages = localStorage.getItem('chatHistory');
 
-    return savedMessages
-      ? JSON.parse(savedMessages)
-      : defaultMessages;
-  });
+    if (!savedMessages) {
+      return defaultMessages;
+    }
 
+    const parsed = JSON.parse(savedMessages);
+
+    return Array.isArray(parsed) ? parsed : defaultMessages;
+  } catch (error) {
+    console.error('Failed to parse chat history:', error);
+    localStorage.removeItem('chatHistory');
+    return defaultMessages;
+  }
+};
+
+export function ChatbotPage() {
+  const [messages, setMessages] = useState<Message[]>(loadChatHistory);
 
   const [input, setInput] = useState('');
+
   const [isTyping, setIsTyping] = useState(false);
   const [uploadedDoc, setUploadedDoc] = useState<{ name: string; text: string } | null>(null);
   const [isUploading, setIsUploading] = useState(false);
   const { showToast } = useToast();
   useEffect(() => {
-  const savedMessages = localStorage.getItem('chatHistory');
+    setMessages(loadChatHistory());
+  }, []);
+  useEffect(() => {
+    if (messages.length > 0) {
+      localStorage.setItem('chatHistory', JSON.stringify(messages));
+    }
+  }, [messages]);
 
-  if (savedMessages) {
-    setMessages(JSON.parse(savedMessages));
-  }
-}, []);
-useEffect(() => {
-  if (messages.length > 0) {
-    localStorage.setItem('chatHistory', JSON.stringify(messages));
-  }
-}, [messages]);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
 
