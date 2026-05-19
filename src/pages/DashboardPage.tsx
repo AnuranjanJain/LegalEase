@@ -11,7 +11,7 @@ export function DashboardPage() {
   ];
 
   const chartData = useMemo(() => {
-    const counts = {};
+    const counts: Record<string, number> = {};
     recentDocs.forEach((doc) => {
       const type = doc.type || 'Other';
       counts[type] = (counts[type] || 0) + 1;
@@ -104,54 +104,26 @@ export function DashboardPage() {
               ))}
             </div>
 
-            {/* Main Content Layout */}
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-              
-              {/* Intelligent Table (Spans 2 columns) */}
-              <div className="lg:col-span-2 bg-white/[0.02] backdrop-blur-xl border border-white/5 rounded-[2rem] p-6 flex flex-col h-full relative overflow-hidden">
-                <div className="flex justify-between items-center mb-6 px-2">
-                  <h2 className="text-lg font-medium text-white tracking-tight">Recent Activity</h2>
-                  <NavLink to="/documents" className="text-sm text-blue-400 hover:text-blue-300 flex items-center gap-1 transition-colors group">
-                    View all <ArrowUpRight className="w-4 h-4 group-hover:translate-x-0.5 group-hover:-translate-y-0.5 transition-transform" />
-                  </NavLink>
-                </div>
-                
-                <div className="flex-1 w-full overflow-x-auto">
-                  <table className="w-full text-left">
-                    <thead>
-                      <tr className="text-xs text-white/40 border-b border-white/5">
-                        <th className="pb-4 font-medium px-4">Document</th>
-                        <th className="pb-4 font-medium px-4">Category</th>
-                        <th className="pb-4 font-medium px-4">Status</th>
-                        <th className="pb-4 font-medium px-4 text-right">Time</th>
-                      </tr>
-                    </thead>
-                    <tbody className="text-sm">
-                      {recentDocs.map((doc, idx) => (
-                        <tr key={idx} className="border-b border-white/[0.03] hover:bg-white/[0.02] transition-colors group">
-                          <td className="py-4 px-4">
-                            <div className="flex items-center gap-4">
-                              <div className="w-10 h-10 rounded-xl bg-white/5 border border-white/10 flex items-center justify-center text-white/50 group-hover:border-blue-500/30 group-hover:text-blue-400 transition-colors">
-                                <FileText className="w-4 h-4" />
-                              </div>
-                              <div>
-                                <p className="text-white font-medium mb-0.5">{doc.title}</p>
-                                <p className="text-xs text-white/40">{doc.id}</p>
-                              </div>
-                            </div>
-                          </td>
-                          <td className="py-4 px-4 text-white/60">{doc.type}</td>
-                          <td className="py-4 px-4">
-                            <span className={`inline-flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-medium border backdrop-blur-sm
-                              ${doc.status === 'Completed' 
-                                ? 'bg-emerald-500/10 text-emerald-300 border-emerald-500/20' 
-                                : 'bg-blue-500/10 text-blue-300 border-blue-500/20'}`}>
-                              <span className={`w-1.5 h-1.5 rounded-full ${doc.status === 'Completed' ? 'bg-emerald-400 shadow-[0_0_8px_rgba(52,211,153,0.8)]' : 'bg-blue-400 animate-pulse'}`}></span>
-                              {doc.status}
-                            </span>
-                          </td>
-                          <td className="py-4 px-4 text-right text-white/40">{doc.date}</td>
-                        </tr>
+            {/* --- FEATURE 1: Integrated Recharts Document Type Distribution Module --- */}
+            <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 shadow-sm p-5 flex flex-col justify-between">
+              <div>
+                <h2 className="text-lg font-semibold text-gray-900 dark:text-white mb-1">Document Distribution</h2>
+                <p className="text-xs text-gray-500 dark:text-gray-400 mb-4">Breakdown of legal categories</p>
+              </div>
+              <div className="h-56 w-full relative flex items-center justify-center">
+                <ResponsiveContainer width="100%" height="100%">
+                  <PieChart>
+                    <Pie
+                      data={chartData}
+                      cx="50%"
+                      cy="45%"
+                      innerRadius={60}
+                      outerRadius={80}
+                      paddingAngle={4}
+                      dataKey="value"
+                    >
+                      {chartData.map((_entry, index) => (
+                        <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} stroke="transparent" />
                       ))}
                     </tbody>
                   </table>
