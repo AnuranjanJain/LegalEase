@@ -6,8 +6,10 @@ import os
 import logging
 import fitz  # PyMuPDF
 import base64
+from io import BytesIO
 from typing import Optional, List
 from dotenv import load_dotenv
+from docx import Document
 
 # Configure logging
 logging.basicConfig(
@@ -110,6 +112,13 @@ async def upload_document(file: UploadFile = File(...)):
             for page in doc:
                 extracted_text += page.get_text()
 
+        elif file_extension == '.docx':
+            doc = Document(BytesIO(content))
+
+            extracted_text = "\n".join(
+                para.text for para in doc.paragraphs if para.text.strip()
+            )
+
         elif file_extension in ['.jpg', '.jpeg', '.png']:
 
             if client is None:
@@ -134,13 +143,22 @@ async def upload_document(file: UploadFile = File(...)):
                 else str(output)
             )
 
-        else:
+        elif file_extension == '.txt':
             extracted_text = content.decode('utf-8')
+
+        else:
+            raise HTTPException(
+                status_code=400,
+                detail="Unsupported file type."
+            )
 
         return {
             "filename": file.filename,
             "text": extracted_text[:10000]
         }
+
+    except HTTPException:
+        raise
 
     except Exception as e:
         logger.error(f"Upload error: {e}", exc_info=True)
