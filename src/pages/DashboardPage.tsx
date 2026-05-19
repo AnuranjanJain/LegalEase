@@ -1,124 +1,107 @@
-import { useMemo } from 'react';
-import { FileText, Clock, CheckCircle, UploadCloud } from 'lucide-react';
+import React, { useMemo } from 'react';
+import { FileText, Clock, CheckCircle, UploadCloud, ArrowUpRight, Activity, Sparkles } from 'lucide-react';
 import { NavLink } from 'react-router-dom';
-import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip, Legend } from 'recharts';
+import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip } from 'recharts';
 
 export function DashboardPage() {
-  const stats = [
-    { label: 'Documents Processed', value: '24', icon: CheckCircle, color: 'text-green-600', bg: 'bg-green-100 dark:bg-green-900/30' },
-    { label: 'Pending Review', value: '3', icon: Clock, color: 'text-yellow-600', bg: 'bg-yellow-100 dark:bg-yellow-900/30' },
-    { label: 'Total Uploads', value: '128', icon: FileText, color: 'text-primary', bg: 'bg-primary/10' },
-  ];
-
   const recentDocs = [
-    { title: 'Employment Contract - TechCorp', type: 'Employment', status: 'Completed', date: '2 hours ago' },
-    { title: 'Lease Agreement 2024', type: 'Lease', status: 'Processing', date: '5 mins ago' },
-    { title: 'NDA - Startup Inc', type: 'NDA', status: 'Completed', date: 'Yesterday' },
+    { title: 'Employment Contract - TechCorp', type: 'Employment', status: 'Completed', date: '2 hours ago', id: 'DOC-8829' },
+    { title: 'Lease Agreement 2024', type: 'Lease', status: 'Processing', date: '5 mins ago', id: 'DOC-8830' },
+    { title: 'NDA - Startup Inc', type: 'NDA', status: 'Completed', date: 'Yesterday', id: 'DOC-8821' },
   ];
 
-  // --- FEATURE 1: Logic to parse data dynamically for Recharts ---
   const chartData = useMemo(() => {
     const counts: Record<string, number> = {};
     recentDocs.forEach((doc) => {
       const type = doc.type || 'Other';
       counts[type] = (counts[type] || 0) + 1;
     });
-
     return Object.keys(counts).map((key) => ({
       name: key,
       value: counts[key],
     }));
   }, [recentDocs]);
 
-  // Accessible UI color definitions matching Tailwind theme profiles
-  const COLORS = ['#3B82F6', '#10B981', '#F59E0B', '#EF4444'];
+  // Premium minimalist palette (Electric Blue, Emerald, Pure White, Slate)
+  const COLORS = ['#3b82f6', '#10b981', '#ffffff', '#334155'];
 
   const handleUploadTrigger = () => {
-    // Put code or navigation here to open file picker modal
     console.log("Trigger upload flow...");
   };
 
   return (
-    <div className="app-container py-8">
-      <h1 className="text-2xl font-bold text-gray-900 dark:text-white mb-6">Dashboard</h1>
+    <div className="w-full min-h-screen bg-[#030303] text-slate-200 p-6 md:p-10 font-sans relative overflow-hidden">
+      
+      {/* Ambient Background Glows */}
+      <div className="absolute top-[-10%] left-[-10%] w-[40%] h-[40%] bg-blue-600/20 rounded-full blur-[120px] pointer-events-none"></div>
+      <div className="absolute bottom-[-10%] right-[-10%] w-[30%] h-[30%] bg-emerald-600/10 rounded-full blur-[100px] pointer-events-none"></div>
 
-      {/* --- FEATURE 3: Empty State Engineering condition check --- */}
-      {recentDocs.length === 0 ? (
-        <div className="flex flex-col items-center justify-center p-12 text-center border-2 border-dashed border-gray-200 dark:border-gray-700 rounded-xl bg-gray-50 dark:bg-gray-800/50 min-h-[400px]">
-          <div className="p-4 bg-gray-100 dark:bg-gray-800 rounded-full text-gray-400 mb-4">
-            <UploadCloud size={40} />
+      <div className="relative z-10 max-w-7xl mx-auto">
+        {/* Header - Apple Style Typography */}
+        <div className="flex flex-col md:flex-row justify-between items-start md:items-end mb-10 gap-4">
+          <div>
+            <div className="flex items-center gap-2 mb-2">
+              <Sparkles className="w-4 h-4 text-blue-500" />
+              <span className="text-xs font-semibold uppercase tracking-widest text-blue-500">LegalEase Workspace</span>
+            </div>
+            <h1 className="text-4xl font-semibold text-white tracking-tight">Overview</h1>
           </div>
-          <h3 className="text-lg font-semibold text-gray-900 dark:text-white">No documents analyzed yet</h3>
-          <p className="mt-2 text-sm text-gray-500 dark:text-gray-400 max-w-sm">
-            Get started by uploading your first legal document (NDA, Lease, or Employment contract) to populate your analytics dashboard.
-          </p>
           <button
-            type="button"
             onClick={handleUploadTrigger}
-            className="mt-6 inline-flex items-center px-4 py-2 text-sm font-medium rounded-lg text-white bg-blue-600 hover:bg-blue-700 transition-colors shadow-sm"
+            className="group relative flex items-center gap-2 px-6 py-3 text-sm font-medium rounded-full text-white bg-white/5 border border-white/10 hover:bg-white/10 hover:border-white/20 transition-all duration-300 backdrop-blur-md overflow-hidden"
           >
-            Quick Upload
+            <div className="absolute inset-0 w-full h-full bg-gradient-to-r from-blue-500/0 via-blue-500/10 to-blue-500/0 -translate-x-full group-hover:animate-[shimmer_1.5s_infinite]"></div>
+            <UploadCloud className="w-4 h-4 relative z-10 text-blue-400 group-hover:text-blue-300 transition-colors" />
+            <span className="relative z-10">Upload Document</span>
           </button>
         </div>
-      ) : (
-        <>
-          {/* Stats Grid */}
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
-            {stats.map((stat) => (
-              <div key={stat.label} className="bg-white dark:bg-gray-800 p-6 rounded-xl border border-gray-200 dark:border-gray-700 shadow-sm flex items-center justify-between">
-                <div>
-                  <p className="text-sm font-medium text-gray-500 dark:text-gray-400">{stat.label}</p>
-                  <p className="text-3xl font-bold text-gray-900 dark:text-white mt-2">{stat.value}</p>
-                </div>
-                <div className={`p-3 rounded-lg ${stat.bg}`}>
-                  <stat.icon className={`h-6 w-6 ${stat.color}`} />
-                </div>
-              </div>
-            ))}
+
+        {recentDocs.length === 0 ? (
+          /* Premium Empty State */
+          <div className="flex flex-col items-center justify-center p-16 text-center border border-white/5 rounded-[2rem] bg-white/[0.02] backdrop-blur-xl shadow-2xl min-h-[500px] relative overflow-hidden">
+            <div className="absolute inset-0 bg-gradient-to-b from-white/[0.02] to-transparent pointer-events-none"></div>
+            <div className="p-5 bg-white/5 rounded-2xl mb-6 shadow-[0_0_30px_rgba(255,255,255,0.05)] border border-white/10">
+              <Activity className="w-10 h-10 text-white/60" />
+            </div>
+            <h3 className="text-2xl font-medium text-white mb-3 tracking-tight">Awaiting Documents</h3>
+            <p className="text-sm text-white/50 max-w-sm mb-8 leading-relaxed">
+              Your intelligence dashboard is ready. Upload your first legal contract to begin AI analysis.
+            </p>
+            <button
+              onClick={handleUploadTrigger}
+              className="px-6 py-3 text-sm font-medium rounded-full text-black bg-white hover:bg-gray-200 transition-colors shadow-[0_0_20px_rgba(255,255,255,0.2)]"
+            >
+              Initialize Upload
+            </button>
           </div>
-
-          {/* Core Content Layout Grid (Splits list and visual module cleanly) */}
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-            
-            {/* Recent Documents Table List (Occupies 2 columns on wide layouts) */}
-            <div className="lg:col-span-2 bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 shadow-sm overflow-hidden h-fit">
-              <div className="px-6 py-4 border-b border-gray-200 dark:border-gray-700 flex justify-between items-center">
-                <h2 className="text-lg font-semibold text-gray-900 dark:text-white">Recent Activity</h2>
-                <NavLink to="/documents" className="text-primary hover:text-primary/80 text-sm font-medium">View all</NavLink>
-              </div>
-              <div className="divide-y divide-gray-200 dark:divide-gray-700">
-                {recentDocs.map((doc, idx) => (
-                  <div key={idx} className="p-4 flex items-center justify-between hover:bg-gray-50 dark:hover:bg-gray-750 transition-colors">
-                    <div className="flex items-center gap-4">
-                      <div className="h-10 w-10 bg-gray-100 dark:bg-gray-700 rounded-lg flex items-center justify-center text-gray-500">
-                        <FileText size={20} />
-                      </div>
-                      <div>
-                        <p className="text-sm font-medium text-gray-900 dark:text-white">{doc.title}</p>
-                        <p className="text-xs text-gray-500 dark:text-gray-400">{doc.date}</p>
-                      </div>
-                    </div>
-
-                    {/* --- FEATURE 2: Integrated Health Score & Risk Indicators --- */}
-                    <div className="flex items-center space-x-2">
-                      {doc.status === 'Processing' ? (
-                        <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium bg-amber-50 text-amber-800 dark:bg-amber-950/30 dark:text-amber-400 border border-amber-200/50 dark:border-amber-900/50">
-                          <span className="relative flex h-2 w-2">
-                            <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-amber-400 opacity-75"></span>
-                            <span className="relative inline-flex rounded-full h-2 w-2 bg-amber-500"></span>
-                          </span>
-                          Processing
-                        </span>
-                      ) : (
-                        <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium bg-emerald-50 text-emerald-800 dark:bg-emerald-950/30 dark:text-emerald-400 border border-emerald-200/50 dark:border-emerald-900/50">
-                          <span className="h-2 w-2 rounded-full bg-emerald-500"></span>
-                          Completed
-                        </span>
-                      )}
+        ) : (
+          <>
+            {/* Glassmorphic Stats Grid */}
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+              {[
+                { label: 'Processed', value: '24', icon: CheckCircle, color: 'text-emerald-400', bg: 'bg-emerald-400/10', border: 'border-emerald-400/20' },
+                { label: 'Reviewing', value: '3', icon: Clock, color: 'text-amber-400', bg: 'bg-amber-400/10', border: 'border-amber-400/20' },
+                { label: 'Total Files', value: '128', icon: FileText, color: 'text-blue-400', bg: 'bg-blue-400/10', border: 'border-blue-400/20' }
+              ].map((stat, i) => (
+                <div 
+                  key={i} 
+                  className="relative p-6 rounded-[2rem] bg-white/[0.02] backdrop-blur-xl border border-white/5 hover:bg-white/[0.04] transition-all duration-500 group overflow-hidden"
+                >
+                  <div className="absolute top-0 left-0 w-full h-[1px] bg-gradient-to-r from-transparent via-white/10 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-500"></div>
+                  
+                  <div className="flex justify-between items-start mb-8">
+                    <div className={`p-3 rounded-2xl ${stat.bg} border ${stat.border}`}>
+                      <stat.icon className={`w-5 h-5 ${stat.color}`} />
                     </div>
                   </div>
-                ))}
-              </div>
+                  <div>
+                    <div className="flex items-baseline gap-2 mb-1">
+                      <h3 className="text-4xl font-semibold text-white tracking-tight">{stat.value}</h3>
+                    </div>
+                    <p className="text-sm font-medium text-white/50">{stat.label}</p>
+                  </div>
+                </div>
+              ))}
             </div>
 
             {/* --- FEATURE 1: Integrated Recharts Document Type Distribution Module --- */}
@@ -142,26 +125,65 @@ export function DashboardPage() {
                       {chartData.map((_entry, index) => (
                         <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} stroke="transparent" />
                       ))}
-                    </Pie>
-                    <Tooltip 
-                      contentStyle={{ background: '#1F2937', borderRadius: '8px', border: 'none', color: '#FFF', fontSize: '12px' }}
-                      itemStyle={{ color: '#FFF' }}
-                    />
-                    <Legend 
-                      verticalAlign="bottom" 
-                      height={36}
-                      iconType="circle"
-                      iconSize={8}
-                      wrapperStyle={{ fontSize: '12px', paddingTop: '10px' }}
-                    />
-                  </PieChart>
-                </ResponsiveContainer>
+                    </tbody>
+                  </table>
+                </div>
               </div>
-            </div>
 
-          </div>
-        </>
-      )}
+              {/* Minimalist Data Viz */}
+              <div className="bg-white/[0.02] backdrop-blur-xl border border-white/5 rounded-[2rem] p-6 flex flex-col h-full relative">
+                <div className="mb-8 px-2">
+                  <h2 className="text-lg font-medium text-white tracking-tight">Analysis Breakdown</h2>
+                  <p className="text-sm text-white/40 mt-1">Categorical distribution</p>
+                </div>
+                <div className="flex-1 w-full relative min-h-[220px] flex items-center justify-center">
+                  {/* Inner glow behind chart */}
+                  <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-32 h-32 bg-blue-500/20 rounded-full blur-[50px]"></div>
+                  
+                  <ResponsiveContainer width="100%" height="100%">
+                    <PieChart>
+                      <Pie
+                        data={chartData}
+                        cx="50%"
+                        cy="50%"
+                        innerRadius={70}
+                        outerRadius={90}
+                        paddingAngle={4}
+                        dataKey="value"
+                        stroke="none"
+                        cornerRadius={6}
+                      >
+                        {chartData.map((entry, index) => (
+                          <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
+                        ))}
+                      </Pie>
+                      <Tooltip 
+                        contentStyle={{ 
+                          background: 'rgba(10, 10, 10, 0.8)', 
+                          backdropFilter: 'blur(12px)',
+                          borderColor: 'rgba(255, 255, 255, 0.1)', 
+                          borderRadius: '16px', 
+                          color: '#fff',
+                          fontSize: '13px',
+                          boxShadow: '0 20px 40px -10px rgba(0, 0, 0, 0.5)'
+                        }}
+                        itemStyle={{ color: '#fff', fontWeight: 500 }}
+                      />
+                    </PieChart>
+                  </ResponsiveContainer>
+                  
+                  {/* Custom Center Label */}
+                  <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 text-center pointer-events-none">
+                    <span className="block text-3xl font-semibold text-white tracking-tight">{recentDocs.length}</span>
+                    <span className="block text-[10px] uppercase tracking-wider text-white/40 mt-1">Docs</span>
+                  </div>
+                </div>
+              </div>
+
+            </div>
+          </>
+        )}
+      </div>
     </div>
   );
 }
