@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect } from 'react';
 import { NavLink, useNavigate } from 'react-router-dom';
-import { Menu, X, Bell, Moon, Sun, User, Settings, FileText, Shield, Info } from 'lucide-react';
+import { Menu, X, Bell, Moon, Sun, User, Settings, FileText, Shield, Info, LogOut } from 'lucide-react';
 import { useDarkMode } from '../hooks/useDarkMode';
 import { useNotifications, AppNotification } from '../contexts/NotificationContext';
 
@@ -226,18 +226,7 @@ export function Header() {
             ))}
           </div>
         </div>
-      </header>
-
-      {/* Full Screen Glass Mobile Menu */}
-      {isMobileMenuOpen && (
-        <div className="md:hidden fixed inset-0 z-40 bg-white/95 dark:bg-[#030303]/95 backdrop-blur-3xl animate-in fade-in flex flex-col items-center justify-center pt-20">
-          {navLinks.map((link) => (
-             <NavLink key={link.name} to={link.path} onClick={() => setIsMobileMenuOpen(false)} className="text-2xl font-medium text-gray-900 dark:text-white mb-6 hover:text-blue-600 transition-colors">
-               {link.name}
-             </NavLink>
-          ))}
-        </div>
-      )}
-    </>
+      </div>
+    </header>
   );
 }
