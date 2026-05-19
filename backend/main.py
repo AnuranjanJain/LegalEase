@@ -6,8 +6,8 @@ import logging
 import base64
 from io import BytesIO
 from typing import Optional
+import time
 from dotenv import load_dotenv
-from docx import Document
 
 # Optional imports (wrap in try/except so server can start without optional deps)
 try:
@@ -16,11 +16,15 @@ except Exception:
     fitz = None
 
 try:
+    from docx import Document as DocxDocument  # type: ignore[import-untyped]
+except Exception:
+    DocxDocument = None  # type: ignore[assignment,misc]
+
+try:
     from bytez import Bytez  # pyright: ignore[reportMissingImports]
 except Exception:
     Bytez = None
     # Bytez SDK not available or misconfigured; we'll degrade gracefully.
-import time
 
 # Configure logging
 logging.basicConfig(
@@ -95,6 +99,7 @@ ALLOW_DEV = os.getenv("ALLOW_DEV", "true").lower() in ("1", "true", "yes")
 class ChatRequest(BaseModel):
     message: str
     context: Optional[str] = None
+    conversation_history: Optional[list[dict[str, str]]] = None
 
 
 class SummarizeRequest(BaseModel):
@@ -145,10 +150,18 @@ async def chat(request: Request, payload: ChatRequest):
     try:
         model = client.model("inference-net/Schematron-3B")
 
-        # Build prompt with context if available
-        prompt = payload.message
+        # Build prompt combining document context and/or conversation history
+        parts = []
         if payload.context:
-            prompt = f"Context from document:\n{payload.context}\n\nUser Question: {payload.message}"
+            parts.append(f"Context from document:\n{payload.context}")
+        if payload.conversation_history:
+            history_text = "\n".join([
+                f"{msg['role']}: {msg['content']}"
+                for msg in payload.conversation_history[-10:]
+            ])
+            parts.append(f"Previous conversation:\n{history_text}")
+        parts.append(f"Current question: {payload.message}")
+        prompt = "\n\n".join(parts)
 
         # Truncate to model input limit
         if len(prompt) > MAX_MODEL_INPUT_CHARS:
@@ -222,8 +235,10 @@ async def upload_document(request: Request, file: UploadFile = File(...)):
                 raise HTTPException(status_code=400, detail="Invalid or corrupted PDF")
 
         elif file_extension == '.docx':
+            if DocxDocument is None:
+                raise HTTPException(status_code=503, detail="DOCX processing not available")
             try:
-                doc = Document(BytesIO(content))
+                doc = DocxDocument(BytesIO(content))
 
                 extracted_text = "\n".join(
                     para.text
