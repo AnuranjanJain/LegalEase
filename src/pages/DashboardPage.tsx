@@ -4,7 +4,7 @@ import {
   ArrowRight, Shield, Zap, AlertTriangle, Play 
 } from 'lucide-react';
 import { NavLink } from 'react-router-dom';
-import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip, Legend } from 'recharts';
+import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip } from 'recharts';
 
 interface StatItem {
   label: string;
@@ -64,7 +64,6 @@ export function DashboardPage() {
       const type = doc.type || 'Other';
       counts[type] = (counts[type] || 0) + 1;
     });
-
     return Object.keys(counts).map((key) => ({
       name: key,
       value: counts[key],
