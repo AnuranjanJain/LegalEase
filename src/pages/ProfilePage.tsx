@@ -86,10 +86,16 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
 const inputCls = 'w-full bg-gray-50 dark:bg-gray-800/50 border border-gray-100 dark:border-gray-700 rounded-xl px-4 py-3 text-gray-900 dark:text-white focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all outline-none';
 const readOnlyCls = 'w-full bg-gray-100 dark:bg-gray-800/80 border border-gray-100 dark:border-gray-700 rounded-xl px-4 py-3 text-gray-500 dark:text-gray-400 cursor-not-allowed outline-none';
 
+
 export function ProfilePage() {
-  const { showToast } = useToast();
+  const initialProfile = useState(() => StorageService.getProfile())[0];
   const [profile, setProfile] = useState<UserProfile>(StorageService.getProfile());
   const [isSaving, setIsSaving] = useState(false);
+  
+  
+  const { showToast } = useToast();
+ 
+ 
   const { tab } = useParams<{ tab?: string }>();
   const navigate = useNavigate();
 
@@ -470,6 +476,26 @@ export function ProfilePage() {
             </>
           )}
 
+            <div className="pt-10 flex justify-end gap-4">
+          
+                <button onClick={() => setProfile(initialProfile)}>
+              
+                Reset
+              </button>
+              <button
+                onClick={handleSave}
+                disabled={isSaving}
+                className="px-8 py-2.5 bg-primary text-white rounded-xl font-bold hover:shadow-lg hover:shadow-primary/30 active:scale-95 transition-all disabled:opacity-70 flex items-center gap-2"
+              >
+                {isSaving ? (
+                  <>
+                    <div className="h-4 w-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                    Saving...
+                  </>
+                ) : 'Save Changes'}
+              </button>
+            </div>
+          </div>
         </div>
       </div>
     </div>
