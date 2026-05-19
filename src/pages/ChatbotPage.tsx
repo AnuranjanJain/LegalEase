@@ -210,7 +210,7 @@ useEffect(() => {
             ref={fileInputRef}
             onChange={handleFileUpload}
             className="hidden"
-            accept=".pdf,.jpg,.jpeg,.png,.txt"
+            accept=".pdf,.docx,.txt,.jpg,.jpeg,.png"
           />
           <button
             onClick={() => fileInputRef.current?.click()}
