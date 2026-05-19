@@ -5,3 +5,9 @@ pydantic
 pymupdf
 python-multipart
 python-dotenv
+# Security & testing dependencies
+slowapi
+limits
+pytest
+pytest-asyncio
+httpx
