@@ -43,9 +43,21 @@ useEffect(() => {
     localStorage.setItem('chatHistory', JSON.stringify(messages));
   }
 }, [messages]);
+  // Auto-Scroll Logic: Smoothly scroll to the bottom on every chat update
+useEffect(() => {
+  messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+}, [messages, isTyping]);
+
+// Keyboard Accessibility: Handle Enter vs Shift+Enter
+const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+  if (e.key === 'Enter' && !e.shiftKey) {
+    e.preventDefault();
+    handleSend();
+  }
+};
 
   const fileInputRef = useRef<HTMLInputElement>(null);
-
+  const messagesEndRef = useRef<HTMLDivElement | null>(null);
   const handleSend = async () => {
     if (!input.trim()) return;
 
@@ -171,7 +183,18 @@ useEffect(() => {
           </div>
         )}
       </div>
+       )}
+        
+        {/* 1. Element the auto-scroll engine snaps to */}
+        <div ref={messagesEndRef} />
+      </div>
 
+      {/* 2. Screen reader live region for accessibility */}
+      <div className="sr-only" aria-live="polite" aria-atomic="true">
+        {isTyping ? "LegalEase AI is writing an answer..." : ""}
+      </div>
+
+      <div className="p-4 bg-white dark:bg-gray-800 ...">
       <div className="p-4 bg-white dark:bg-gray-800 border-t border-gray-200 dark:border-gray-800">
         {uploadedDoc && (
           <div className="mb-3 flex items-center justify-between bg-primary/5 dark:bg-primary/10 p-2 rounded-lg border border-primary/20">
@@ -218,13 +241,26 @@ useEffect(() => {
             <History size={20} />
           </button>
           <div className="flex-1 relative">
-            <input
-              type="text"
-              className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent bg-gray-50 dark:bg-gray-700 text-gray-900 dark:text-white placeholder-gray-500 dark:placeholder-gray-400"
-              placeholder="Ask a legal question..."
+            {/* Dynamic Context Badge Indicator */}
+            {uploadedDoc && (
+              <span 
+                className="absolute right-3 top-2.5 bg-green-100 dark:bg-green-900/30 text-green-800 dark:text-green-300 text-[10px] font-semibold px-2 py-0.5 rounded-full flex items-center gap-1.5 border border-green-200 dark:border-green-800/50 animate-pulse z-10"
+                role="status"
+              >
+                <span className="w-1.5 h-1.5 bg-green-500 rounded-full"></span>
+                Active Document Context
+              </span>
+            )}
+
+            {/* Accessible Multi-line Text Area for Enter / Shift+Enter management */}
+            <textarea
+              className="w-full pl-4 pr-36 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent bg-gray-50 dark:bg-gray-700 text-gray-900 dark:text-white placeholder-gray-500 dark:placeholder-gray-400 resize-none max-h-32 min-h-[40px] block align-bottom leading-normal"
+              placeholder={uploadedDoc ? "Ask about this document..." : "Ask a legal question..."}
+              rows={1}
               value={input}
               onChange={(e) => setInput(e.target.value)}
-              onKeyDown={(e) => e.key === 'Enter' && handleSend()}
+              onKeyDown={handleKeyDown}
+              aria-label="Type your legal query"
             />
           </div>
           <button
