@@ -4,8 +4,10 @@ from pydantic import BaseModel
 import os
 import logging
 import base64
+from io import BytesIO
 from typing import Optional
 from dotenv import load_dotenv
+from docx import Document
 
 # Optional imports (wrap in try/except so server can start without optional deps)
 try:
@@ -14,7 +16,7 @@ except Exception:
     fitz = None
 
 try:
-    from bytez import Bytez
+    from bytez import Bytez  # pyright: ignore[reportMissingImports]
 except Exception:
     Bytez = None
     # Bytez SDK not available or misconfigured; we'll degrade gracefully.
@@ -158,7 +160,6 @@ async def chat(request: Request, payload: ChatRequest):
 
         if hasattr(output, 'error') and output.error:
             logger.error(f"Model error: {output.error}")
-            raise HTTPException(status_code=502, detail="Upstream model error")
 
             raise HTTPException(
                 status_code=503,
@@ -220,16 +221,29 @@ async def upload_document(request: Request, file: UploadFile = File(...)):
                 logger.error(f"PDF parse error: {e}")
                 raise HTTPException(status_code=400, detail="Invalid or corrupted PDF")
 
-        elif file_extension in ['.docx'] or content.startswith(b'PK\x03\x04'):
-            # For docx we don't parse contents here; return placeholder
-            extracted_text = "[DOCX file uploaded]"
+        elif file_extension == '.docx':
+            try:
+                doc = Document(BytesIO(content))
+
+                extracted_text = "\n".join(
+                    para.text
+                    for para in doc.paragraphs
+                    if para.text.strip()
+                )
+            except Exception:
+                raise HTTPException(
+                    status_code=400,
+                    detail="Invalid or corrupted DOCX file."
+                )
+
+        elif file_extension == '.txt':
+            extracted_text = content.decode('utf-8')
 
         else:
-            # Treat as text; try decode
-            try:
-                extracted_text = content.decode('utf-8')
-            except Exception:
-                raise HTTPException(status_code=400, detail="Unsupported or binary file type")
+            raise HTTPException(
+                status_code=400,
+                detail="Unsupported file type."
+            )
 
         # Truncate extracted text to avoid sending huge payloads to models
         extracted_text = extracted_text[:10000]
