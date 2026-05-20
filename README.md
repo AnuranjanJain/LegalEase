@@ -123,6 +123,132 @@ legal-ease-website/
    - PHP: `php -S localhost:8000`
 3. **Open Browser**: Navigate to `http://localhost:8000`
 
+## Testing
+
+This project includes comprehensive test suites for both backend and frontend to ensure code quality and prevent regressions.
+
+### Backend Testing (Python/FastAPI)
+
+The backend uses **pytest** as the testing framework with the following test structure:
+
+```bash
+backend/
+├── tests/
+│   ├── test_security.py       # Security and authentication tests
+│   ├── test_rate_limiter.py   # Rate limiting functionality tests
+│   ├── test_api_validation.py # API key validation tests
+│   ├── test_endpoints.py      # API endpoint tests
+│   └── test_integration.py    # Integration tests for user flows
+```
+
+#### Running Backend Tests
+
+```bash
+# Navigate to backend directory
+cd backend
+
+# Install test dependencies
+pip install -r requirements.txt
+
+# Run all tests
+pytest
+
+# Run tests with coverage
+pytest --cov=. --cov-report=html
+
+# Run only unit tests
+pytest -m unit
+
+# Run only integration tests
+pytest -m integration
+
+# Run tests with verbose output
+pytest -v
+```
+
+#### Test Coverage
+
+- **Unit Tests**: Test individual functions and classes in isolation
+  - Rate limiter functionality
+  - API key validation
+  - Request model validation
+  - Health endpoint
+
+- **Integration Tests**: Test complete user flows
+  - Document upload and summarization
+  - Document upload and chat interaction
+  - Multiple document uploads
+  - Error recovery scenarios
+
+- **Security Tests**: Verify security measures
+  - API key authentication
+  - File size limits
+  - Rate limiting
+  - Invalid file rejection
+
+### Frontend Testing (React/TypeScript)
+
+The frontend uses **Vitest** as the testing framework with React Testing Library:
+
+```bash
+src/
+├── test/
+│   ├── setup.ts              # Test configuration and mocks
+│   └── services/
+│       ├── storage.test.ts   # Storage service tests
+│       └── api.test.ts       # API service tests
+```
+
+#### Running Frontend Tests
+
+```bash
+# Install dependencies
+npm install
+
+# Run all tests
+npm test
+
+# Run tests in watch mode
+npm test -- --watch
+
+# Run tests with UI
+npm run test:ui
+
+# Run tests with coverage
+npm run test:coverage
+
+# Run tests for a specific file
+npm test -- storage.test.ts
+```
+
+#### Test Coverage
+
+- **Service Tests**: Test utility functions and services
+  - Storage service (localStorage operations)
+  - API service (HTTP requests)
+  - Error handling
+  - Data transformation
+
+### Test Configuration Files
+
+- **Backend**: `backend/pytest.ini` - Pytest configuration
+- **Frontend**: `vite.config.ts` - Vitest configuration
+- **Frontend Setup**: `src/test/setup.ts` - Test environment setup
+
+### CI/CD Integration
+
+Tests are automatically run on GitHub Actions for every pull request. See `.github/workflows/test.yml` for the CI configuration.
+
+### Writing New Tests
+
+When adding new features, please include:
+
+1. **Unit tests** for individual functions/components
+2. **Integration tests** for complete user flows
+3. **Edge case tests** for error scenarios
+
+Follow the existing test patterns and maintain test coverage above 80%.
+
 ## Configuration
 
 Follow these steps to configure environment variables required to run the project locally and in CI. Do not commit your real secrets.
