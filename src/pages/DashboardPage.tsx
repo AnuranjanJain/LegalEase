@@ -4,7 +4,7 @@ import {
   ArrowRight, Shield, Zap, AlertTriangle, Play 
 } from 'lucide-react';
 import { NavLink } from 'react-router-dom';
-import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip } from 'recharts';
+import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip, Legend } from 'recharts';
 
 interface StatItem {
   label: string;
