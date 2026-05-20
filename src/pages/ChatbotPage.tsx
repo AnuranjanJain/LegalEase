@@ -124,8 +124,6 @@ export function ChatbotPage() {
     setUploadedDoc(null);
   };
 
-  const fileInputRef = useRef<HTMLInputElement>(null);
-  const messagesEndRef = useRef<HTMLDivElement | null>(null);
   const handleSend = async () => {
     if (!input.trim()) return;
 
@@ -233,13 +231,6 @@ export function ChatbotPage() {
     }
   };
 
-  const clearHistory = () => {
-    if (window.confirm("Are you sure you want to clear chat history?")) {
-      setMessages(defaultMessages);
-      showToast('Chat history cleared.', 'info');
-    }
-  };
-
   return (
     <div className="flex flex-col h-[calc(100vh-64px)] bg-gray-50 dark:bg-gray-900 border-l border-gray-200 dark:border-gray-800 relative">
 
@@ -278,72 +269,55 @@ export function ChatbotPage() {
       )}
 
       {/* Message list */}
-      <div className="flex-1 overflow-y-auto p-4 space-y-4">
-        {messages.map((msg: ChatMessage) => (
-          <div key={msg.id} className={`flex ${msg.sender === 'user' ? 'justify-end' : 'justify-start'}`}>
-            <div className={`flex items-start max-w-[80%] ${msg.sender === 'user' ? 'flex-row-reverse' : 'flex-row'}`}>
-              <div className={`flex-shrink-0 h-8 w-8 rounded-full flex items-center justify-center ${msg.sender === 'user' ? 'bg-primary text-white ml-2' : 'bg-gray-200 dark:bg-gray-700 text-gray-600 dark:text-gray-300 mr-2'}`}>
-                {msg.sender === 'user' ? <User size={16} /> : <Bot size={16} />}
-              </div>
-              <div className={`p-3 rounded-lg shadow-sm ${msg.sender === 'user' ? 'bg-primary text-white rounded-tr-none' : 'bg-white dark:bg-gray-800 text-gray-800 dark:text-gray-200 rounded-tl-none border border-gray-100 dark:border-gray-700'}`}>
-                <p className="text-sm whitespace-pre-wrap">{msg.text}</p>
-                <p className={`text-xs mt-1 ${msg.sender === 'user' ? 'text-blue-100' : 'text-gray-400'}`}>{msg.time}</p>
+      <div className="flex-grow overflow-y-auto px-6 py-8 space-y-6 relative z-10">
+        {messages.map((msg: ChatMessage) => {
+          const isUser = msg.sender === 'user';
+          
+          return (
+            <div 
+              key={msg.id} 
+              className={`flex w-full ${isUser ? 'justify-end' : 'justify-start'} animate-slide-up`}
+            >
+              <div className={`flex items-start max-w-[80%] gap-3 ${isUser ? 'flex-row-reverse' : 'flex-row'}`}>
+                
+                {/* Glowing Avatar Circles */}
+                <div className={`flex-shrink-0 h-9 w-9 rounded-xl flex items-center justify-center shadow-md ${
+                  isUser 
+                    ? 'bg-gradient-to-tr from-primary to-indigo-600 text-white' 
+                    : 'bg-gradient-to-tr from-emerald-600 to-teal-500 text-white'
+                }`}>
+                  {isUser ? <User size={16} /> : <Bot size={16} />}
+                </div>
+
+                {/* Message Bubble Card */}
+                <div className={`p-4 rounded-2xl shadow-sm text-left leading-relaxed ${
+                  isUser 
+                    ? 'bg-primary text-white rounded-tr-none' 
+                    : 'bg-white/80 dark:bg-gray-900/60 backdrop-blur-md text-gray-900 dark:text-gray-150 rounded-tl-none border border-gray-150 dark:border-gray-800'
+                }`}>
+                  <p className="text-sm font-medium whitespace-pre-wrap">{msg.text}</p>
+                  <p className={`text-[9px] font-semibold mt-2 ${isUser ? 'text-blue-100 text-right' : 'text-gray-400 dark:text-gray-500'}`}>
+                    {msg.time}
+                  </p>
+                </div>
+
               </div>
             </div>
-          </div>
-        </header>
+          );
+        })}
 
-        {/* Message Feed Container */}
-        <div className="flex-grow overflow-y-auto px-6 py-8 space-y-6 relative z-10">
-          {messages.map((msg: Message) => {
-            const isUser = msg.sender === 'user';
-            
-            return (
-              <div 
-                key={msg.id} 
-                className={`flex w-full ${isUser ? 'justify-end' : 'justify-start'} animate-slide-up`}
-              >
-                <div className={`flex items-start max-w-[80%] gap-3 ${isUser ? 'flex-row-reverse' : 'flex-row'}`}>
-                  
-                  {/* Glowing Avatar Circles */}
-                  <div className={`flex-shrink-0 h-9 w-9 rounded-xl flex items-center justify-center shadow-md ${
-                    isUser 
-                      ? 'bg-gradient-to-tr from-primary-600 to-indigo-600 text-white' 
-                      : 'bg-gradient-to-tr from-emerald-600 to-teal-500 text-white'
-                  }`}>
-                    {isUser ? <User size={16} /> : <Bot size={16} />}
-                  </div>
-
-                  {/* Message Bubble Card */}
-                  <div className={`p-4 rounded-2xl shadow-sm text-left leading-relaxed ${
-                    isUser 
-                      ? 'bg-primary-600 text-white rounded-tr-none shadow-primary-500/10' 
-                      : 'bg-white/80 dark:bg-gray-900/60 backdrop-blur-md text-gray-900 dark:text-gray-150 rounded-tl-none border border-gray-150 dark:border-gray-800'
-                  }`}>
-                    <p className="text-sm font-medium whitespace-pre-line">{msg.text}</p>
-                    <p className={`text-[9px] font-semibold mt-2 ${isUser ? 'text-blue-200 text-right' : 'text-gray-400 dark:text-gray-500'}`}>
-                      {msg.time}
-                    </p>
-                  </div>
-
-                </div>
+        {/* Typing Loading Indicator */}
+        {isTyping && (
+          <div className="flex justify-start animate-pulse">
+            <div className="flex items-start max-w-[80%] gap-3">
+              <div className="flex-shrink-0 h-9 w-9 rounded-xl flex items-center justify-center bg-gradient-to-tr from-emerald-600 to-teal-500 text-white shadow-md">
+                <Bot size={16} />
               </div>
-            );
-          })}
-
-          {/* Typing Loading Indicator */}
-          {isTyping && (
-            <div className="flex justify-start animate-pulse">
-              <div className="flex items-start max-w-[80%] gap-3">
-                <div className="flex-shrink-0 h-9 w-9 rounded-xl flex items-center justify-center bg-gradient-to-tr from-emerald-600 to-teal-500 text-white shadow-md">
-                  <Bot size={16} />
-                </div>
-                <div className="p-4 rounded-2xl bg-white/80 dark:bg-gray-900/60 backdrop-blur-md text-gray-800 dark:text-gray-200 rounded-tl-none border border-gray-150 dark:border-gray-800">
-                  <div className="flex gap-1.5 items-center py-1">
-                    <span className="w-2.5 h-2.5 bg-emerald-500 rounded-full animate-bounce"></span>
-                    <span className="w-2.5 h-2.5 bg-emerald-500 rounded-full animate-bounce delay-150"></span>
-                    <span className="w-2.5 h-2.5 bg-emerald-500 rounded-full animate-bounce delay-300"></span>
-                  </div>
+              <div className="p-4 rounded-2xl bg-white/80 dark:bg-gray-900/60 backdrop-blur-md text-gray-800 dark:text-gray-200 rounded-tl-none border border-gray-150 dark:border-gray-800">
+                <div className="flex gap-1.5 items-center py-1">
+                  <span className="w-2.5 h-2.5 bg-emerald-500 rounded-full animate-bounce"></span>
+                  <span className="w-2.5 h-2.5 bg-emerald-500 rounded-full animate-bounce delay-150"></span>
+                  <span className="w-2.5 h-2.5 bg-emerald-500 rounded-full animate-bounce delay-300"></span>
                 </div>
               </div>
             </div>
@@ -351,18 +325,12 @@ export function ChatbotPage() {
         )}
         <div ref={messagesEndRef} />
       </div>
-       )}
-        
-        {/* 1. Element the auto-scroll engine snaps to */}
-        <div ref={messagesEndRef} />
-      </div>
 
-      {/* 2. Screen reader live region for accessibility */}
+      {/* Screen reader live region for accessibility */}
       <div className="sr-only" aria-live="polite" aria-atomic="true">
         {isTyping ? "LegalEase AI is writing an answer..." : ""}
       </div>
 
-      <div className="p-4 bg-white dark:bg-gray-800 ...">
       <div className="p-4 bg-white dark:bg-gray-800 border-t border-gray-200 dark:border-gray-800">
         {uploadedDoc && (
           <div className="mb-3 flex items-center justify-between bg-primary/5 dark:bg-primary/10 p-2 rounded-lg border border-primary/20">
@@ -456,8 +424,7 @@ export function ChatbotPage() {
             <Send size={20} />
           </button>
         </div>
-
-      </main>
+      </div>
     </div>
   );
 }
