@@ -180,13 +180,15 @@ export function ChatbotPage() {
     if (!file) return;
 
     setIsUploading(true);
+    showToast(`Uploading "${file.name}" to AI sandbox...`, 'info');
+    
     const formData = new FormData();
     formData.append('file', file);
 
     try {
       const data = await api.upload<{ filename: string; text: string }>('/upload', formData);
       setUploadedDoc({ name: data.filename, text: data.text });
-      showToast(`Document "${data.filename}" uploaded successfully!`, 'success');
+      showToast(`Document "${data.filename}" context integrated successfully!`, 'success');
 
       const systemMsg: ChatMessage = {
         id: crypto.randomUUID(),
@@ -195,10 +197,10 @@ export function ChatbotPage() {
         time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
         timestamp: new Date().toISOString(),
       };
-      setMessages(prev => [...prev, systemMsg]);
+      setMessages((prev) => [...prev, systemMsg]);
     } catch (error) {
       console.error('Upload failed:', error);
-      showToast('Failed to upload document. Please try again.', 'error');
+      showToast('Failed to process document context.', 'error');
     } finally {
       setIsUploading(false);
       if (fileInputRef.current) fileInputRef.current.value = '';
@@ -209,6 +211,7 @@ export function ChatbotPage() {
     if (!uploadedDoc) return;
 
     setIsTyping(true);
+    showToast('Analyzing and compiling summary...', 'info');
     try {
       const data = await api.post<{ summary: string }>('/summarize', { text: uploadedDoc.text });
       const summaryMsg: ChatMessage = {
@@ -218,13 +221,20 @@ export function ChatbotPage() {
         time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
         timestamp: new Date().toISOString(),
       };
-      setMessages(prev => [...prev, summaryMsg]);
-      showToast('Document summarized successfully!', 'success');
+      setMessages((prev) => [...prev, summaryMsg]);
+      showToast('Summary compiled successfully!', 'success');
     } catch (error) {
       console.error('Summarization failed:', error);
-      showToast('Failed to summarize document. Please try again.', 'error');
+      showToast('Failed to extract document summary.', 'error');
     } finally {
       setIsTyping(false);
+    }
+  };
+
+  const clearHistory = () => {
+    if (window.confirm("Are you sure you want to clear chat history?")) {
+      setMessages(defaultMessages);
+      showToast('Chat history cleared.', 'info');
     }
   };
 
@@ -279,18 +289,59 @@ export function ChatbotPage() {
               </div>
             </div>
           </div>
-        ))}
-        {isTyping && (
-          <div className="flex justify-start">
-            <div className="flex items-start max-w-[80%] flex-row">
-              <div className="flex-shrink-0 h-8 w-8 rounded-full flex items-center justify-center bg-gray-200 dark:bg-gray-700 text-gray-600 dark:text-gray-300 mr-2">
-                <Bot size={16} />
+        </header>
+
+        {/* Message Feed Container */}
+        <div className="flex-grow overflow-y-auto px-6 py-8 space-y-6 relative z-10">
+          {messages.map((msg: Message) => {
+            const isUser = msg.sender === 'user';
+            
+            return (
+              <div 
+                key={msg.id} 
+                className={`flex w-full ${isUser ? 'justify-end' : 'justify-start'} animate-slide-up`}
+              >
+                <div className={`flex items-start max-w-[80%] gap-3 ${isUser ? 'flex-row-reverse' : 'flex-row'}`}>
+                  
+                  {/* Glowing Avatar Circles */}
+                  <div className={`flex-shrink-0 h-9 w-9 rounded-xl flex items-center justify-center shadow-md ${
+                    isUser 
+                      ? 'bg-gradient-to-tr from-primary-600 to-indigo-600 text-white' 
+                      : 'bg-gradient-to-tr from-emerald-600 to-teal-500 text-white'
+                  }`}>
+                    {isUser ? <User size={16} /> : <Bot size={16} />}
+                  </div>
+
+                  {/* Message Bubble Card */}
+                  <div className={`p-4 rounded-2xl shadow-sm text-left leading-relaxed ${
+                    isUser 
+                      ? 'bg-primary-600 text-white rounded-tr-none shadow-primary-500/10' 
+                      : 'bg-white/80 dark:bg-gray-900/60 backdrop-blur-md text-gray-900 dark:text-gray-150 rounded-tl-none border border-gray-150 dark:border-gray-800'
+                  }`}>
+                    <p className="text-sm font-medium whitespace-pre-line">{msg.text}</p>
+                    <p className={`text-[9px] font-semibold mt-2 ${isUser ? 'text-blue-200 text-right' : 'text-gray-400 dark:text-gray-500'}`}>
+                      {msg.time}
+                    </p>
+                  </div>
+
+                </div>
               </div>
-              <div className="p-3 rounded-lg shadow-sm bg-white dark:bg-gray-800 text-gray-800 dark:text-gray-200 rounded-tl-none border border-gray-100 dark:border-gray-700">
-                <div className="flex gap-1">
-                  <span className="w-2 h-2 bg-gray-400 rounded-full animate-bounce"></span>
-                  <span className="w-2 h-2 bg-gray-400 rounded-full animate-bounce delay-100"></span>
-                  <span className="w-2 h-2 bg-gray-400 rounded-full animate-bounce delay-200"></span>
+            );
+          })}
+
+          {/* Typing Loading Indicator */}
+          {isTyping && (
+            <div className="flex justify-start animate-pulse">
+              <div className="flex items-start max-w-[80%] gap-3">
+                <div className="flex-shrink-0 h-9 w-9 rounded-xl flex items-center justify-center bg-gradient-to-tr from-emerald-600 to-teal-500 text-white shadow-md">
+                  <Bot size={16} />
+                </div>
+                <div className="p-4 rounded-2xl bg-white/80 dark:bg-gray-900/60 backdrop-blur-md text-gray-800 dark:text-gray-200 rounded-tl-none border border-gray-150 dark:border-gray-800">
+                  <div className="flex gap-1.5 items-center py-1">
+                    <span className="w-2.5 h-2.5 bg-emerald-500 rounded-full animate-bounce"></span>
+                    <span className="w-2.5 h-2.5 bg-emerald-500 rounded-full animate-bounce delay-150"></span>
+                    <span className="w-2.5 h-2.5 bg-emerald-500 rounded-full animate-bounce delay-300"></span>
+                  </div>
                 </div>
               </div>
             </div>
@@ -381,7 +432,8 @@ export function ChatbotPage() {
             <Send size={20} />
           </button>
         </div>
-      </div>
+
+      </main>
     </div>
   );
 }
