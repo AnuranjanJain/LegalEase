@@ -28,3 +28,11 @@ dist-ssr
 
 # Vite artifacts
 stats.html
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+backend/__pycache__/

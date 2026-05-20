@@ -1,102 +1,177 @@
-import { Send, User, Bot, History, Paperclip, X, FileText, Sparkles, RefreshCcw } from 'lucide-react';
+import { Send, User, Bot, Paperclip, X, FileText, Sparkles, RefreshCcw, PlusCircle, Trash2, History } from 'lucide-react';
 import { api } from '../services/api';
-import { useRef, useState, useEffect } from 'react';
+import { ChatStorageService, ChatMessage, ChatSessionMetadata } from '../services/storage';
+import { useRef, useState, useEffect, useCallback } from 'react';
+import { useToast } from '../contexts/ToastContext';
 
-interface Message {
-  id: number;
-  text: string;
-  sender: 'user' | 'bot';
-  time: string;
+const DEFAULT_GREETING: ChatMessage = {
+  id: 'default-greeting',
+  text: "Hello! I'm LegalEase AI. How can I help you understand your legal documents today?",
+  sender: 'bot',
+  time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+  timestamp: new Date().toISOString(),
+};
+
+const MAX_CONTEXT_MESSAGES = 10;
+
+function buildConversationHistory(msgs: ChatMessage[]) {
+  return msgs
+    .filter(m => m.id !== 'default-greeting')
+    .slice(-MAX_CONTEXT_MESSAGES)
+    .map(m => ({ role: m.sender === 'user' ? 'user' : 'assistant', content: m.text }));
 }
-const defaultMessages: Message[] = [
-  {
-    id: 1,
-    text: "Hello! I'm LegalEase AI. How can I help you understand your legal documents today?",
-    sender: 'bot',
-    time: '10:00 AM'
-  }
-];
 
 export function ChatbotPage() {
-  const [messages, setMessages] = useState<Message[]>(() => {
-    const savedMessages = localStorage.getItem('chatHistory');
-
-    return savedMessages
-      ? JSON.parse(savedMessages)
-      : defaultMessages;
-  });
-
-
+  const [messages, setMessages] = useState<ChatMessage[]>([DEFAULT_GREETING]);
+  const [activeSessionId, setActiveSessionId] = useState<string | null>(null);
+  const [sessions, setSessions] = useState<ChatSessionMetadata[]>([]);
   const [input, setInput] = useState('');
   const [isTyping, setIsTyping] = useState(false);
   const [uploadedDoc, setUploadedDoc] = useState<{ name: string; text: string } | null>(null);
   const [isUploading, setIsUploading] = useState(false);
+  const [showSessions, setShowSessions] = useState(false);
+  const { showToast } = useToast();
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const messagesEndRef = useRef<HTMLDivElement>(null);
+
+  // Migrate old chatHistory key and restore the active session on mount
   useEffect(() => {
-  const savedMessages = localStorage.getItem('chatHistory');
+    ChatStorageService.migrateOldChatHistory();
 
-  if (savedMessages) {
-    setMessages(JSON.parse(savedMessages));
-  }
-}, []);
-useEffect(() => {
-  if (messages.length > 0) {
-    localStorage.setItem('chatHistory', JSON.stringify(messages));
-  }
-}, [messages]);
-  // Auto-Scroll Logic: Smoothly scroll to the bottom on every chat update
-useEffect(() => {
-  messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-}, [messages, isTyping]);
+    const savedId = ChatStorageService.getActiveSessionId();
+    const allSessions = ChatStorageService.getSessions();
+    setSessions(allSessions);
 
-// Keyboard Accessibility: Handle Enter vs Shift+Enter
-const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
-  if (e.key === 'Enter' && !e.shiftKey) {
-    e.preventDefault();
-    handleSend();
-  }
-};
+    if (savedId) {
+      const sessionData = ChatStorageService.getSession(savedId);
+      if (sessionData) {
+        setActiveSessionId(savedId);
+        setMessages(sessionData.messages.length > 0 ? sessionData.messages : [DEFAULT_GREETING]);
+        setUploadedDoc(sessionData.documentContext ?? null);
+        return;
+      }
+    }
+
+    // No active session — create a fresh one
+    const newSession = ChatStorageService.createSession('New Conversation');
+    setActiveSessionId(newSession.id);
+    setSessions(ChatStorageService.getSessions());
+    setMessages([DEFAULT_GREETING]);
+  }, []);
+
+  // Persist the active session whenever messages or document context change
+  const persistSession = useCallback((msgs: ChatMessage[], docCtx: typeof uploadedDoc, sessionId: string | null) => {
+    if (!sessionId) return;
+    const firstUser = msgs.find(m => m.sender === 'user');
+    const title = firstUser
+      ? firstUser.text.substring(0, 50) + (firstUser.text.length > 50 ? '...' : '')
+      : 'New Conversation';
+    ChatStorageService.saveSession({
+      id: sessionId,
+      title,
+      messages: msgs,
+      documentContext: docCtx ?? undefined,
+    });
+    setSessions(ChatStorageService.getSessions());
+  }, []);
+
+  useEffect(() => {
+    if (activeSessionId) {
+      persistSession(messages, uploadedDoc, activeSessionId);
+    }
+  }, [messages, uploadedDoc, activeSessionId, persistSession]);
+
+  // Auto-scroll to latest message
+  useEffect(() => {
+    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+  }, [messages, isTyping]);
+
+  const handleNewConversation = () => {
+    const newSession = ChatStorageService.createSession('New Conversation');
+    setActiveSessionId(newSession.id);
+    setMessages([DEFAULT_GREETING]);
+    setUploadedDoc(null);
+    setSessions(ChatStorageService.getSessions());
+    setShowSessions(false);
+  };
+
+  const handleSwitchSession = (id: string) => {
+    const sessionData = ChatStorageService.getSession(id);
+    if (!sessionData) return;
+    ChatStorageService.setActiveSessionId(id);
+    setActiveSessionId(id);
+    setMessages(sessionData.messages.length > 0 ? sessionData.messages : [DEFAULT_GREETING]);
+    setUploadedDoc(sessionData.documentContext ?? null);
+    setShowSessions(false);
+  };
+
+  const handleDeleteSession = (id: string) => {
+    ChatStorageService.deleteSession(id);
+    const remaining = ChatStorageService.getSessions();
+    setSessions(remaining);
+
+    if (id === activeSessionId) {
+      if (remaining.length > 0) {
+        handleSwitchSession(remaining[0].id);
+      } else {
+        handleNewConversation();
+      }
+    }
+  };
+
+  const handleClearConversation = () => {
+    setMessages([DEFAULT_GREETING]);
+    setUploadedDoc(null);
+  };
 
   const fileInputRef = useRef<HTMLInputElement>(null);
   const messagesEndRef = useRef<HTMLDivElement | null>(null);
   const handleSend = async () => {
     if (!input.trim()) return;
 
-    // Add user message
-    const userMessage = {
-      id: messages.length + 1,
+    const userMessage: ChatMessage = {
+      id: crypto.randomUUID(),
       text: input,
-      sender: 'user' as const,
-      time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+      sender: 'user',
+      time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+      timestamp: new Date().toISOString(),
     };
 
-    setMessages((prev: Message[]) => [...prev, userMessage]);
+    const updatedMessages = [...messages, userMessage];
+    setMessages(updatedMessages);
     const currentInput = input;
     setInput('');
     setIsTyping(true);
 
     try {
-      const data = await api.post<{ response: string }>('/chat', {
-        message: currentInput,
-        context: uploadedDoc?.text
-      });
+      const conversationHistory = buildConversationHistory(updatedMessages);
+      const data = await api.post<{ response: string }>(
+        '/chat',
+        { message: currentInput, context: uploadedDoc?.text },
+        conversationHistory
+      );
 
-      const botMessage = {
-        id: messages.length + 2,
+      const botMessage: ChatMessage = {
+        id: crypto.randomUUID(),
         text: data.response || "I apologize, but I couldn't process that request.",
-        sender: 'bot' as const,
-        time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+        sender: 'bot',
+        time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+        timestamp: new Date().toISOString(),
       };
-
-      setMessages((prev: Message[]) => [...prev, botMessage]);
+      setMessages(prev => [...prev, botMessage]);
     } catch (error) {
       console.error('Error sending message:', error);
-      const errorMessage = {
-        id: messages.length + 2,
-        text: error instanceof Error ? error.message : "Sorry, I'm having trouble connecting to the server. Please ensure the backend is running.",
-        sender: 'bot' as const,
-        time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+      showToast('Failed to send message. Please try again.', 'error');
+      const errorMessage: ChatMessage = {
+        id: crypto.randomUUID(),
+        text: error instanceof Error
+          ? error.message
+          : "Sorry, I'm having trouble connecting to the server. Please ensure the backend is running.",
+        sender: 'bot',
+        time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+        timestamp: new Date().toISOString(),
       };
-      setMessages((prev: Message[]) => [...prev, errorMessage]);
+      setMessages(prev => [...prev, errorMessage]);
     } finally {
       setIsTyping(false);
     }
@@ -107,23 +182,27 @@ const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
     if (!file) return;
 
     setIsUploading(true);
+    showToast(`Uploading "${file.name}" to AI sandbox...`, 'info');
+    
     const formData = new FormData();
     formData.append('file', file);
 
     try {
       const data = await api.upload<{ filename: string; text: string }>('/upload', formData);
       setUploadedDoc({ name: data.filename, text: data.text });
+      showToast(`Document "${data.filename}" context integrated successfully!`, 'success');
 
-      const systemMsg: Message = {
-        id: Date.now(),
+      const systemMsg: ChatMessage = {
+        id: crypto.randomUUID(),
         text: `Successfully uploaded ${data.filename}. I now have context of this document.`,
         sender: 'bot',
-        time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+        time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+        timestamp: new Date().toISOString(),
       };
-      setMessages(prev => [...prev, systemMsg]);
+      setMessages((prev) => [...prev, systemMsg]);
     } catch (error) {
       console.error('Upload failed:', error);
-      alert('Failed to upload document.');
+      showToast('Failed to process document context.', 'error');
     } finally {
       setIsUploading(false);
       if (fileInputRef.current) fileInputRef.current.value = '';
@@ -134,54 +213,143 @@ const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
     if (!uploadedDoc) return;
 
     setIsTyping(true);
+    showToast('Analyzing and compiling summary...', 'info');
     try {
       const data = await api.post<{ summary: string }>('/summarize', { text: uploadedDoc.text });
-      const summaryMsg: Message = {
-        id: Date.now(),
+      const summaryMsg: ChatMessage = {
+        id: crypto.randomUUID(),
         text: `Summary of ${uploadedDoc.name}:\n\n${data.summary}`,
         sender: 'bot',
-        time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+        time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+        timestamp: new Date().toISOString(),
       };
-      setMessages(prev => [...prev, summaryMsg]);
+      setMessages((prev) => [...prev, summaryMsg]);
+      showToast('Summary compiled successfully!', 'success');
     } catch (error) {
       console.error('Summarization failed:', error);
+      showToast('Failed to extract document summary.', 'error');
     } finally {
       setIsTyping(false);
     }
   };
 
+  const clearHistory = () => {
+    if (window.confirm("Are you sure you want to clear chat history?")) {
+      setMessages(defaultMessages);
+      showToast('Chat history cleared.', 'info');
+    }
+  };
+
   return (
     <div className="flex flex-col h-[calc(100vh-64px)] bg-gray-50 dark:bg-gray-900 border-l border-gray-200 dark:border-gray-800 relative">
+
+      {/* Session panel */}
+      {showSessions && (
+        <div className="absolute top-0 left-0 right-0 z-10 bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 shadow-md max-h-64 overflow-y-auto">
+          <div className="flex items-center justify-between px-4 py-2 border-b border-gray-100 dark:border-gray-700">
+            <span className="text-sm font-semibold text-gray-700 dark:text-gray-300">Conversations</span>
+            <button onClick={() => setShowSessions(false)} className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-200">
+              <X size={16} />
+            </button>
+          </div>
+          {sessions.length === 0 && (
+            <p className="text-xs text-gray-400 px-4 py-3">No saved conversations.</p>
+          )}
+          {sessions.map(session => (
+            <div
+              key={session.id}
+              className={`flex items-center justify-between px-4 py-2 cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-700 ${session.id === activeSessionId ? 'bg-primary/5 dark:bg-primary/10' : ''}`}
+              onClick={() => handleSwitchSession(session.id)}
+            >
+              <div className="overflow-hidden">
+                <p className="text-sm font-medium text-gray-800 dark:text-gray-200 truncate">{session.title}</p>
+                <p className="text-xs text-gray-400">{session.messageCount} messages · {new Date(session.updatedAt).toLocaleDateString()}</p>
+              </div>
+              <button
+                onClick={e => { e.stopPropagation(); handleDeleteSession(session.id); }}
+                className="ml-2 flex-shrink-0 text-gray-300 hover:text-red-500 transition-colors"
+                title="Delete conversation"
+              >
+                <Trash2 size={14} />
+              </button>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* Message list */}
       <div className="flex-1 overflow-y-auto p-4 space-y-4">
-        {messages.map((msg: Message) => (
+        {messages.map((msg: ChatMessage) => (
           <div key={msg.id} className={`flex ${msg.sender === 'user' ? 'justify-end' : 'justify-start'}`}>
             <div className={`flex items-start max-w-[80%] ${msg.sender === 'user' ? 'flex-row-reverse' : 'flex-row'}`}>
               <div className={`flex-shrink-0 h-8 w-8 rounded-full flex items-center justify-center ${msg.sender === 'user' ? 'bg-primary text-white ml-2' : 'bg-gray-200 dark:bg-gray-700 text-gray-600 dark:text-gray-300 mr-2'}`}>
                 {msg.sender === 'user' ? <User size={16} /> : <Bot size={16} />}
               </div>
               <div className={`p-3 rounded-lg shadow-sm ${msg.sender === 'user' ? 'bg-primary text-white rounded-tr-none' : 'bg-white dark:bg-gray-800 text-gray-800 dark:text-gray-200 rounded-tl-none border border-gray-100 dark:border-gray-700'}`}>
-                <p className="text-sm">{msg.text}</p>
+                <p className="text-sm whitespace-pre-wrap">{msg.text}</p>
                 <p className={`text-xs mt-1 ${msg.sender === 'user' ? 'text-blue-100' : 'text-gray-400'}`}>{msg.time}</p>
               </div>
             </div>
           </div>
-        ))}
-        {isTyping && (
-          <div className="flex justify-start">
-            <div className="flex items-start max-w-[80%] flex-row">
-              <div className="flex-shrink-0 h-8 w-8 rounded-full flex items-center justify-center bg-gray-200 dark:bg-gray-700 text-gray-600 dark:text-gray-300 mr-2">
-                <Bot size={16} />
+        </header>
+
+        {/* Message Feed Container */}
+        <div className="flex-grow overflow-y-auto px-6 py-8 space-y-6 relative z-10">
+          {messages.map((msg: Message) => {
+            const isUser = msg.sender === 'user';
+            
+            return (
+              <div 
+                key={msg.id} 
+                className={`flex w-full ${isUser ? 'justify-end' : 'justify-start'} animate-slide-up`}
+              >
+                <div className={`flex items-start max-w-[80%] gap-3 ${isUser ? 'flex-row-reverse' : 'flex-row'}`}>
+                  
+                  {/* Glowing Avatar Circles */}
+                  <div className={`flex-shrink-0 h-9 w-9 rounded-xl flex items-center justify-center shadow-md ${
+                    isUser 
+                      ? 'bg-gradient-to-tr from-primary-600 to-indigo-600 text-white' 
+                      : 'bg-gradient-to-tr from-emerald-600 to-teal-500 text-white'
+                  }`}>
+                    {isUser ? <User size={16} /> : <Bot size={16} />}
+                  </div>
+
+                  {/* Message Bubble Card */}
+                  <div className={`p-4 rounded-2xl shadow-sm text-left leading-relaxed ${
+                    isUser 
+                      ? 'bg-primary-600 text-white rounded-tr-none shadow-primary-500/10' 
+                      : 'bg-white/80 dark:bg-gray-900/60 backdrop-blur-md text-gray-900 dark:text-gray-150 rounded-tl-none border border-gray-150 dark:border-gray-800'
+                  }`}>
+                    <p className="text-sm font-medium whitespace-pre-line">{msg.text}</p>
+                    <p className={`text-[9px] font-semibold mt-2 ${isUser ? 'text-blue-200 text-right' : 'text-gray-400 dark:text-gray-500'}`}>
+                      {msg.time}
+                    </p>
+                  </div>
+
+                </div>
               </div>
-              <div className="p-3 rounded-lg shadow-sm bg-white dark:bg-gray-800 text-gray-800 dark:text-gray-200 rounded-tl-none border border-gray-100 dark:border-gray-700">
-                <div className="flex gap-1">
-                  <span className="w-2 h-2 bg-gray-400 rounded-full animate-bounce"></span>
-                  <span className="w-2 h-2 bg-gray-400 rounded-full animate-bounce delay-100"></span>
-                  <span className="w-2 h-2 bg-gray-400 rounded-full animate-bounce delay-200"></span>
+            );
+          })}
+
+          {/* Typing Loading Indicator */}
+          {isTyping && (
+            <div className="flex justify-start animate-pulse">
+              <div className="flex items-start max-w-[80%] gap-3">
+                <div className="flex-shrink-0 h-9 w-9 rounded-xl flex items-center justify-center bg-gradient-to-tr from-emerald-600 to-teal-500 text-white shadow-md">
+                  <Bot size={16} />
+                </div>
+                <div className="p-4 rounded-2xl bg-white/80 dark:bg-gray-900/60 backdrop-blur-md text-gray-800 dark:text-gray-200 rounded-tl-none border border-gray-150 dark:border-gray-800">
+                  <div className="flex gap-1.5 items-center py-1">
+                    <span className="w-2.5 h-2.5 bg-emerald-500 rounded-full animate-bounce"></span>
+                    <span className="w-2.5 h-2.5 bg-emerald-500 rounded-full animate-bounce delay-150"></span>
+                    <span className="w-2.5 h-2.5 bg-emerald-500 rounded-full animate-bounce delay-300"></span>
+                  </div>
                 </div>
               </div>
             </div>
           </div>
         )}
+        <div ref={messagesEndRef} />
       </div>
        )}
         
@@ -210,10 +378,7 @@ const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
                 <Sparkles size={12} />
                 Summarize
               </button>
-              <button
-                onClick={() => setUploadedDoc(null)}
-                className="text-gray-400 hover:text-red-500 transition-colors"
-              >
+              <button onClick={() => setUploadedDoc(null)} className="text-gray-400 hover:text-red-500 transition-colors">
                 <X size={16} />
               </button>
             </div>
@@ -226,7 +391,7 @@ const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
             ref={fileInputRef}
             onChange={handleFileUpload}
             className="hidden"
-            accept=".pdf,.jpg,.jpeg,.png,.txt"
+            accept=".pdf,.docx,.txt"
           />
           <button
             onClick={() => fileInputRef.current?.click()}
@@ -237,9 +402,30 @@ const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
             {isUploading ? <RefreshCcw size={20} className="animate-spin" /> : <Paperclip size={20} />}
           </button>
 
-          <button className="p-2 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 transition-colors hidden sm:block" title="History">
+          <button
+            onClick={() => setShowSessions(prev => !prev)}
+            className={`p-2 transition-colors ${showSessions ? 'text-primary' : 'text-gray-400 hover:text-gray-600 dark:hover:text-gray-300'}`}
+            title="Conversation history"
+          >
             <History size={20} />
           </button>
+
+          <button
+            onClick={handleNewConversation}
+            className="p-2 text-gray-400 hover:text-primary dark:hover:text-primary transition-colors"
+            title="New conversation"
+          >
+            <PlusCircle size={20} />
+          </button>
+
+          <button
+            onClick={handleClearConversation}
+            className="p-2 text-gray-400 hover:text-red-500 transition-colors hidden sm:block"
+            title="Clear conversation"
+          >
+            <Trash2 size={20} />
+          </button>
+
           <div className="flex-1 relative">
             {/* Dynamic Context Badge Indicator */}
             {uploadedDoc && (
@@ -259,19 +445,19 @@ const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
               rows={1}
               value={input}
               onChange={(e) => setInput(e.target.value)}
-              onKeyDown={handleKeyDown}
-              aria-label="Type your legal query"
+              onKeyDown={(e) => e.key === 'Enter' && !isTyping && handleSend()}
             />
           </div>
           <button
             onClick={handleSend}
-            disabled={!input.trim()}
+            disabled={!input.trim() || isTyping}
             className="bg-primary text-white p-2 rounded-lg hover:bg-primary/90 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
           >
             <Send size={20} />
           </button>
         </div>
-      </div>
+
+      </main>
     </div>
   );
 }
