@@ -10,6 +10,7 @@ import { DocumentationPage } from './pages/DocumentationPage';
 import { ProcessingPage } from './pages/ProcessingPage';
 import { SettingsPage } from './pages/SettingsPage';
 import { StorageService } from './services/storage';
+import { NotFoundPage } from "./pages/NotFoundPage";
 
 function App() {
   useEffect(() => {
@@ -30,6 +31,7 @@ function App() {
           <Route path="profile" element={<ProfilePage />} />
           <Route path="settings" element={<SettingsPage />} />
         </Route>
+        <Route path="*" element={<NotFoundPage />} />
       </Routes>
     </Router>
   );
