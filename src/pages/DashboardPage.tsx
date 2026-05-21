@@ -25,9 +25,7 @@ export function DashboardPage() {
   // Premium minimalist palette (Electric Blue, Emerald, Pure White, Slate)
   const COLORS = ['#3b82f6', '#10b981', '#ffffff', '#334155'];
 
-  const handleUploadTrigger = () => {
-    console.log("Trigger upload flow...");
-  };
+  const handleUploadTrigger = () => {};
 
   return (
     <div className="w-full min-h-screen bg-[#030303] text-slate-200 p-6 md:p-10 font-sans relative overflow-hidden">
