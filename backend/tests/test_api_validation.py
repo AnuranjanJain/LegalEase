@@ -1,6 +1,7 @@
 import pytest
 from fastapi import HTTPException
 from backend.main import _validate_api_key, ChatRequest, SummarizeRequest
+import backend.main
 
 
 @pytest.mark.unit
@@ -12,20 +13,19 @@ def test_validate_api_key_with_bearer_token():
     request = Mock()
     request.headers = {"authorization": "Bearer test-api-key"}
     
-    # Set environment to allow dev mode
-    import os
-    os.environ["API_KEYS"] = "test-api-key"
-    os.environ["ALLOW_DEV"] = "false"
+    # Set backend configuration directly
+    orig_keys = backend.main.API_KEYS
+    orig_allow_dev = backend.main.ALLOW_DEV
+    backend.main.API_KEYS = ["test-api-key"]
+    backend.main.ALLOW_DEV = False
     
     try:
         result = _validate_api_key(request)
         assert result == "test-api-key"
     finally:
         # Clean up
-        if "API_KEYS" in os.environ:
-            del os.environ["API_KEYS"]
-        if "ALLOW_DEV" in os.environ:
-            del os.environ["ALLOW_DEV"]
+        backend.main.API_KEYS = orig_keys
+        backend.main.ALLOW_DEV = orig_allow_dev
 
 
 @pytest.mark.unit
@@ -36,18 +36,17 @@ def test_validate_api_key_with_x_api_key():
     request = Mock()
     request.headers = {"x-api-key": "test-api-key"}
     
-    import os
-    os.environ["API_KEYS"] = "test-api-key"
-    os.environ["ALLOW_DEV"] = "false"
+    orig_keys = backend.main.API_KEYS
+    orig_allow_dev = backend.main.ALLOW_DEV
+    backend.main.API_KEYS = ["test-api-key"]
+    backend.main.ALLOW_DEV = False
     
     try:
         result = _validate_api_key(request)
         assert result == "test-api-key"
     finally:
-        if "API_KEYS" in os.environ:
-            del os.environ["API_KEYS"]
-        if "ALLOW_DEV" in os.environ:
-            del os.environ["ALLOW_DEV"]
+        backend.main.API_KEYS = orig_keys
+        backend.main.ALLOW_DEV = orig_allow_dev
 
 
 @pytest.mark.unit
@@ -58,16 +57,15 @@ def test_validate_api_key_missing():
     request = Mock()
     request.headers = {}
     
-    import os
-    os.environ["ALLOW_DEV"] = "false"
+    orig_allow_dev = backend.main.ALLOW_DEV
+    backend.main.ALLOW_DEV = False
     
     try:
         with pytest.raises(HTTPException) as exc_info:
             _validate_api_key(request)
         assert exc_info.value.status_code == 401
     finally:
-        if "ALLOW_DEV" in os.environ:
-            del os.environ["ALLOW_DEV"]
+        backend.main.ALLOW_DEV = orig_allow_dev
 
 
 @pytest.mark.unit
@@ -78,19 +76,18 @@ def test_validate_api_key_invalid():
     request = Mock()
     request.headers = {"authorization": "Bearer invalid-key"}
     
-    import os
-    os.environ["API_KEYS"] = "valid-key"
-    os.environ["ALLOW_DEV"] = "false"
+    orig_keys = backend.main.API_KEYS
+    orig_allow_dev = backend.main.ALLOW_DEV
+    backend.main.API_KEYS = ["valid-key"]
+    backend.main.ALLOW_DEV = False
     
     try:
         with pytest.raises(HTTPException) as exc_info:
             _validate_api_key(request)
         assert exc_info.value.status_code == 403
     finally:
-        if "API_KEYS" in os.environ:
-            del os.environ["API_KEYS"]
-        if "ALLOW_DEV" in os.environ:
-            del os.environ["ALLOW_DEV"]
+        backend.main.API_KEYS = orig_keys
+        backend.main.ALLOW_DEV = orig_allow_dev
 
 
 @pytest.mark.unit
@@ -101,21 +98,21 @@ def test_validate_api_key_dev_mode():
     request = Mock()
     request.headers = {"x-api-key": "dev-token"}
     
-    import os
-    os.environ["API_KEYS"] = ""
-    os.environ["DEV_API_KEY"] = "dev-token"
-    os.environ["ALLOW_DEV"] = "true"
+    orig_keys = backend.main.API_KEYS
+    orig_dev_key = backend.main.DEV_API_KEY
+    orig_allow_dev = backend.main.ALLOW_DEV
+    
+    backend.main.API_KEYS = []
+    backend.main.DEV_API_KEY = "dev-token"
+    backend.main.ALLOW_DEV = True
     
     try:
         result = _validate_api_key(request)
         assert result == "dev-token"
     finally:
-        if "API_KEYS" in os.environ:
-            del os.environ["API_KEYS"]
-        if "DEV_API_KEY" in os.environ:
-            del os.environ["DEV_API_KEY"]
-        if "ALLOW_DEV" in os.environ:
-            del os.environ["ALLOW_DEV"]
+        backend.main.API_KEYS = orig_keys
+        backend.main.DEV_API_KEY = orig_dev_key
+        backend.main.ALLOW_DEV = orig_allow_dev
 
 
 @pytest.mark.unit

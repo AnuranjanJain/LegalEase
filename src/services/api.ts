@@ -20,7 +20,6 @@ export const api = {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
-                    Authorization: `Bearer ${getApiKey()}`,
                 },
                 body: JSON.stringify(requestData),
             });
@@ -40,11 +39,7 @@ export const api = {
 
     get: async <T>(endpoint: string): Promise<T> => {
         try {
-            const response = await fetch(`${API_BASE_URL}${endpoint}`, {
-                headers: {
-                    Authorization: `Bearer ${getApiKey()}`,
-                },
-            });
+            const response = await fetch(`${API_BASE_URL}${endpoint}`);
 
 
             if (!response.ok) {
@@ -62,9 +57,6 @@ export const api = {
         try {
             const response = await fetch(`${API_BASE_URL}${endpoint}`, {
                 method: 'POST',
-                headers: {
-                    Authorization: `Bearer ${getApiKey()}`,
-                },
                 body: formData,
             });
 
