@@ -94,7 +94,13 @@ key_limiter = SimpleRateLimiter(int(os.getenv("RATE_LIMIT_KEY_CALLS", "30")), in
 # API keys and dev mode
 API_KEYS = [k.strip() for k in os.getenv("API_KEYS", "").split(",") if k.strip()]
 DEV_API_KEY = os.getenv("DEV_API_KEY", "dev-token")
-ALLOW_DEV = os.getenv("ALLOW_DEV", "true").lower() in ("1", "true", "yes")
+ALLOW_DEV = os.getenv("ALLOW_DEV", "false").lower() in ("1", "true", "yes")
+
+if ALLOW_DEV:
+    logger.warning(
+        "Development API authentication is enabled. "
+        "Do not use in production."
+    )
 
 class ChatRequest(BaseModel):
     message: str
