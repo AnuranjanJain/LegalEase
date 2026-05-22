@@ -31,9 +31,38 @@ export interface UserProfile {
   };
 }
 
+export interface ChatMessage {
+  id: string;
+  text: string;
+  sender: 'user' | 'bot';
+  time: string;
+  timestamp?: string;
+}
+
+export interface ChatSessionMetadata {
+  id: string;
+  title: string;
+  createdAt: string;
+  updatedAt: string;
+  messageCount: number;
+}
+
+export interface ChatSessionData {
+  id: string;
+  title: string;
+  messages: ChatMessage[];
+  documentContext?: {
+    name: string;
+    text: string;
+  };
+}
+
 const STORAGE_KEYS = {
   DOCUMENTS: 'le_documents',
   PROFILE: 'le_profile',
+  CHAT_SESSIONS: 'le_chat_sessions',
+  CHAT_ACTIVE_ID: 'le_chat_active_id',
+  CHAT_SESSION_PREFIX: 'le_chat_session_',
 };
 
 export const StorageService = {
@@ -154,6 +183,152 @@ export const StorageService = {
         }
       ];
       localStorage.setItem(STORAGE_KEYS.DOCUMENTS, JSON.stringify(sampleDocs));
+    }
+  }
+};
+
+export const ChatStorageService = {
+  getSessions: (): ChatSessionMetadata[] => {
+    try {
+      const sessions = localStorage.getItem(STORAGE_KEYS.CHAT_SESSIONS);
+      return sessions ? JSON.parse(sessions) : [];
+    } catch (error) {
+      console.error('Error reading chat sessions from storage:', error);
+      return [];
+    }
+  },
+
+  saveSession: (sessionData: ChatSessionData) => {
+    try {
+      const sessionKey = STORAGE_KEYS.CHAT_SESSION_PREFIX + sessionData.id;
+      localStorage.setItem(sessionKey, JSON.stringify(sessionData));
+
+      const sessions = ChatStorageService.getSessions();
+      const metadata: ChatSessionMetadata = {
+        id: sessionData.id,
+        title: sessionData.title || 'New Conversation',
+        createdAt: sessionData.messages[0]?.timestamp || new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+        messageCount: sessionData.messages.length
+      };
+
+      const existingIndex = sessions.findIndex(s => s.id === sessionData.id);
+      if (existingIndex !== -1) {
+        sessions[existingIndex] = metadata;
+      } else {
+        sessions.unshift(metadata);
+      }
+      localStorage.setItem(STORAGE_KEYS.CHAT_SESSIONS, JSON.stringify(sessions));
+    } catch (error) {
+      console.error('Error saving chat session to storage:', error);
+    }
+  },
+
+  getSession: (id: string): ChatSessionData | null => {
+    try {
+      const sessionKey = STORAGE_KEYS.CHAT_SESSION_PREFIX + id;
+      const sessionData = localStorage.getItem(sessionKey);
+      return sessionData ? JSON.parse(sessionData) : null;
+    } catch (error) {
+      console.error('Error reading chat session from storage:', error);
+      return null;
+    }
+  },
+
+  createSession: (title: string = 'New Conversation'): ChatSessionData => {
+    const id = crypto.randomUUID();
+    const sessionData: ChatSessionData = {
+      id,
+      messages: [],
+      title
+    };
+    ChatStorageService.saveSession(sessionData);
+    ChatStorageService.setActiveSessionId(id);
+    return sessionData;
+  },
+
+  deleteSession: (id: string) => {
+    try {
+      const sessionKey = STORAGE_KEYS.CHAT_SESSION_PREFIX + id;
+      localStorage.removeItem(sessionKey);
+
+      const sessions = ChatStorageService.getSessions();
+      const filteredSessions = sessions.filter(s => s.id !== id);
+      localStorage.setItem(STORAGE_KEYS.CHAT_SESSIONS, JSON.stringify(filteredSessions));
+
+      const activeId = ChatStorageService.getActiveSessionId();
+      if (activeId === id) {
+        localStorage.removeItem(STORAGE_KEYS.CHAT_ACTIVE_ID);
+      }
+    } catch (error) {
+      console.error('Error deleting chat session from storage:', error);
+    }
+  },
+
+  getActiveSessionId: (): string | null => {
+    try {
+      return localStorage.getItem(STORAGE_KEYS.CHAT_ACTIVE_ID);
+    } catch (error) {
+      console.error('Error reading active session ID from storage:', error);
+      return null;
+    }
+  },
+
+  setActiveSessionId: (id: string) => {
+    try {
+      localStorage.setItem(STORAGE_KEYS.CHAT_ACTIVE_ID, id);
+    } catch (error) {
+      console.error('Error setting active session ID in storage:', error);
+    }
+  },
+
+  clearAllSessions: () => {
+    try {
+      const sessions = ChatStorageService.getSessions();
+      sessions.forEach(session => {
+        const sessionKey = STORAGE_KEYS.CHAT_SESSION_PREFIX + session.id;
+        localStorage.removeItem(sessionKey);
+      });
+      localStorage.removeItem(STORAGE_KEYS.CHAT_SESSIONS);
+      localStorage.removeItem(STORAGE_KEYS.CHAT_ACTIVE_ID);
+    } catch (error) {
+      console.error('Error clearing all chat sessions from storage:', error);
+    }
+  },
+
+  migrateOldChatHistory: () => {
+    try {
+      const oldHistory = localStorage.getItem('chatHistory');
+      if (oldHistory) {
+        const parsedHistory = JSON.parse(oldHistory);
+        if (!Array.isArray(parsedHistory)) {
+          localStorage.removeItem('chatHistory');
+          return;
+        }
+
+        const sessionId = crypto.randomUUID();
+        const firstUserMessage = parsedHistory.find((m: any) => m.sender === 'user');
+        const title = firstUserMessage
+          ? firstUserMessage.text.substring(0, 50) + (firstUserMessage.text.length > 50 ? '...' : '')
+          : 'Migrated Conversation';
+
+        const sessionData: ChatSessionData = {
+          id: sessionId,
+          messages: parsedHistory.map((m: any) => ({
+            ...m,
+            id: String(m.id),
+            timestamp: m.timestamp || new Date().toISOString()
+          })),
+          title
+        };
+
+        ChatStorageService.saveSession(sessionData);
+        ChatStorageService.setActiveSessionId(sessionId);
+        localStorage.removeItem('chatHistory');
+      }
+    } catch (error) {
+      console.error('Error migrating old chat history:', error);
+      localStorage.removeItem('chatHistory');
     }
   }
 };

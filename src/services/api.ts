@@ -13,15 +13,16 @@ const getApiKey = (): string => {
 };
 
 export const api = {
-    post: async <T>(endpoint: string, data: any): Promise<T> => {
+    post: async <T>(endpoint: string, data: any, conversationHistory?: Array<{role: string, content: string}>): Promise<T> => {
         try {
+            const requestData = conversationHistory ? { ...data, conversation_history: conversationHistory } : data;
             const response = await fetch(`${API_BASE_URL}${endpoint}`, {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
                     Authorization: `Bearer ${getApiKey()}`,
                 },
-                body: JSON.stringify(data),
+                body: JSON.stringify(requestData),
             });
 
 

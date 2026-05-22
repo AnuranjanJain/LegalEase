@@ -11,3 +11,5 @@ limits
 pytest
 pytest-asyncio
 httpx
+pytest-cov
+pytest-mock

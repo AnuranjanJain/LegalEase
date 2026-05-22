@@ -6,8 +6,8 @@ import logging
 import base64
 from io import BytesIO
 from typing import Optional
+import time
 from dotenv import load_dotenv
-from docx import Document
 
 # Optional imports (wrap in try/except so server can start without optional deps)
 try:
@@ -16,11 +16,15 @@ except Exception:
     fitz = None
 
 try:
+    from docx import Document as DocxDocument  # type: ignore[import-untyped]
+except Exception:
+    DocxDocument = None  # type: ignore[assignment,misc]
+
+try:
     from bytez import Bytez  # pyright: ignore[reportMissingImports]
 except Exception:
     Bytez = None
     # Bytez SDK not available or misconfigured; we'll degrade gracefully.
-import time
 
 # Configure logging
 logging.basicConfig(
@@ -95,6 +99,7 @@ ALLOW_DEV = os.getenv("ALLOW_DEV", "true").lower() in ("1", "true", "yes")
 class ChatRequest(BaseModel):
     message: str
     context: Optional[str] = None
+    conversation_history: Optional[list[dict[str, str]]] = None
 
 
 class SummarizeRequest(BaseModel):
@@ -145,10 +150,18 @@ async def chat(request: Request, payload: ChatRequest):
     try:
         model = client.model("inference-net/Schematron-3B")
 
-        # Build prompt with context if available
-        prompt = payload.message
+        # Build prompt combining document context and/or conversation history
+        parts = []
         if payload.context:
-            prompt = f"Context from document:\n{payload.context}\n\nUser Question: {payload.message}"
+            parts.append(f"Context from document:\n{payload.context}")
+        if payload.conversation_history:
+            history_text = "\n".join([
+                f"{msg['role']}: {msg['content']}"
+                for msg in payload.conversation_history[-10:]
+            ])
+            parts.append(f"Previous conversation:\n{history_text}")
+        parts.append(f"Current question: {payload.message}")
+        prompt = "\n\n".join(parts)
 
         # Truncate to model input limit
         if len(prompt) > MAX_MODEL_INPUT_CHARS:
@@ -222,8 +235,10 @@ async def upload_document(request: Request, file: UploadFile = File(...)):
                 raise HTTPException(status_code=400, detail="Invalid or corrupted PDF")
 
         elif file_extension == '.docx':
+            if DocxDocument is None:
+                raise HTTPException(status_code=503, detail="DOCX processing not available")
             try:
-                doc = Document(BytesIO(content))
+                doc = DocxDocument(BytesIO(content))
 
                 extracted_text = "\n".join(
                     para.text
@@ -271,17 +286,59 @@ async def summarize(request: Request, payload: SummarizeRequest):
         raise HTTPException(status_code=503, detail="AI service unavailable")
 
     try:
+        if client is None:
+            raise HTTPException(
+                status_code=503,
+                detail="Summarization service unavailable because API key is not configured."
+            )
+
         # Use a summarization model from Bytez
+<<<<<<< HEAD
+        summary_model = client.model(
+            "Jnjnpx/fine-tuned-bert-extractive-summarization"
+        )
+        
+        output = summary_model.run(request.text[:512]) # Model specific limit usually
+        
+=======
         summary_model = client.model("Jnjnpx/fine-tuned-bert-extractive-summarization")
         output = summary_model.run(payload.text[:512])
         if hasattr(output, 'error') and output.error:
             logger.error(f"Summarizer model error: {output.error}")
             raise HTTPException(status_code=502, detail="Upstream summarization error")
+>>>>>>> upstream/main
         return {"summary": output.output if hasattr(output, 'output') else str(output)}
     except HTTPException:
         raise
     except Exception as e:
         logger.error(f"Summarization error: {e}", exc_info=True)
+<<<<<<< HEAD
+
+        # Fallback to general model if specialized summarizer fails
+        try:
+            if client is None:
+                raise HTTPException(
+                    status_code=503,
+                    detail="Summarization service unavailable because API key is not configured."
+                )
+
+            model = client.model("inference-net/Schematron-3B")
+            prompt = (
+                f"Summarize this legal text concisely:\n\n"
+                f"{request.text[:2000]}"
+            )
+
+            output = model.run([
+                {
+                    "role": "user",
+                    "content": prompt
+                }
+            ])
+
+            return {"summary": output.output}
+        except Exception:
+            raise HTTPException(status_code=500, detail="Failed to generate summary.")
+=======
         # Fallback general model
         try:
             model = client.model("inference-net/Schematron-3B")
@@ -290,6 +347,7 @@ async def summarize(request: Request, payload: SummarizeRequest):
             return {"summary": output.output}
         except Exception:
             raise HTTPException(status_code=502, detail="Failed to generate summary")
+>>>>>>> upstream/main
 
 if __name__ == "__main__":
     import uvicorn
