@@ -1,15 +1,30 @@
 const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000';
 
+const getApiKey = (): string => {
+    try {
+        return (
+            localStorage.getItem('apiKey') ||
+            (import.meta.env.VITE_API_KEY as string | undefined) ||
+            'dev-token'
+        );
+    } catch {
+        return (import.meta.env.VITE_API_KEY as string | undefined) || 'dev-token';
+    }
+};
+
 export const api = {
-    post: async <T>(endpoint: string, data: any): Promise<T> => {
+    post: async <T>(endpoint: string, data: any, conversationHistory?: Array<{role: string, content: string}>): Promise<T> => {
         try {
+            const requestData = conversationHistory ? { ...data, conversation_history: conversationHistory } : data;
             const response = await fetch(`${API_BASE_URL}${endpoint}`, {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
+                    Authorization: `Bearer ${getApiKey()}`,
                 },
-                body: JSON.stringify(data),
+                body: JSON.stringify(requestData),
             });
+
 
             if (!response.ok) {
                 const errorData = await response.json().catch(() => ({}));
@@ -25,7 +40,12 @@ export const api = {
 
     get: async <T>(endpoint: string): Promise<T> => {
         try {
-            const response = await fetch(`${API_BASE_URL}${endpoint}`);
+            const response = await fetch(`${API_BASE_URL}${endpoint}`, {
+                headers: {
+                    Authorization: `Bearer ${getApiKey()}`,
+                },
+            });
+
 
             if (!response.ok) {
                 const errorData = await response.json().catch(() => ({}));
@@ -42,8 +62,12 @@ export const api = {
         try {
             const response = await fetch(`${API_BASE_URL}${endpoint}`, {
                 method: 'POST',
+                headers: {
+                    Authorization: `Bearer ${getApiKey()}`,
+                },
                 body: formData,
             });
+
 
             if (!response.ok) {
                 const errorData = await response.json().catch(() => ({}));
