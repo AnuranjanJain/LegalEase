@@ -1,9 +1,11 @@
 import { useState } from 'react';
 import { 
   ArrowRight, FileText, Shield, Zap, Scale, MessageSquare, 
-  AlertTriangle, Lock, Globe, FileSearch, CheckCircle2, ChevronDown 
+  AlertTriangle, Lock, Globe, FileSearch, CheckCircle2, ChevronDown,
+  Search, Activity, Handshake
 } from 'lucide-react';
 import { NavLink } from 'react-router-dom';
+import { motion } from 'framer-motion';
 
 interface DemoClause {
   title: string;
@@ -64,6 +66,66 @@ const FAQS: ReadonlyArray<FaqItem> = Object.freeze([
     a: "Yes. In the Settings dashboard, you can define risk thresholds, highlight specific concern categories (e.g. intellectual property, payment limits, indemnity cap ratios), and configure custom automated summary outputs."
   }
 ]);
+
+interface WorkflowStep {
+  title: string;
+  desc: string;
+  icon: React.ComponentType<any>;
+  gradient: string;
+  glowColor: string;
+  route: string;
+}
+
+const WORKFLOW_STEPS: ReadonlyArray<WorkflowStep> = [
+  {
+    title: "INGEST",
+    desc: "Secure PDF upload to isolated cloud vault.",
+    icon: Zap,
+    gradient: "from-red-500 via-orange-500 to-red-650",
+    glowColor: "rgba(239, 68, 68, 0.4)",
+    route: "/documents"
+  },
+  {
+    title: "STRUCTURAL PARSE",
+    desc: "AI detects clauses, headers, and parties.",
+    icon: Search,
+    gradient: "from-amber-500 via-orange-400 to-yellow-500",
+    glowColor: "rgba(245, 158, 11, 0.4)",
+    route: "/processing"
+  },
+  {
+    title: "RISK SCANNING",
+    desc: "Agent identifies 50+ legal red flags.",
+    icon: Shield,
+    gradient: "from-emerald-500 via-teal-500 to-emerald-650",
+    glowColor: "rgba(16, 185, 129, 0.4)",
+    route: "/dashboard"
+  },
+  {
+    title: "SIMPLIFICATION",
+    desc: "Legalese translated to plain human language.",
+    icon: FileText,
+    gradient: "from-blue-500 via-cyan-500 to-blue-650",
+    glowColor: "rgba(59, 130, 246, 0.4)",
+    route: "/chatbot"
+  },
+  {
+    title: "TRUST SCORING",
+    desc: "Safety metrics and risk ratings calculated.",
+    icon: Activity,
+    gradient: "from-indigo-500 via-purple-500 to-indigo-650",
+    glowColor: "rgba(99, 102, 241, 0.4)",
+    route: "/dashboard"
+  },
+  {
+    title: "CONSULTATION",
+    desc: "Interactive AI follow-up for deep clarity.",
+    icon: Handshake,
+    gradient: "from-fuchsia-500 via-pink-500 to-purple-600",
+    glowColor: "rgba(217, 70, 239, 0.4)",
+    route: "/chatbot"
+  }
+];
 
 export function HomePage() {
   const [activeDemoClause, setActiveDemoClause] = useState<'term' | 'indem' | 'ip'>('term');
@@ -234,6 +296,125 @@ export function HomePage() {
             <div className="p-4 bg-white dark:bg-gray-800 rounded-2xl border border-gray-150 dark:border-gray-700 shadow-sm hover:scale-105 transition-all">
               <span className="text-3xl font-extrabold text-blue-600 dark:text-blue-400 block">SOC-2</span>
               <span className="text-xs font-semibold text-gray-400 dark:text-gray-400 uppercase tracking-wider">Certified Secure</span>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {/* How Our Doc Intelligence Works (Animated workflow flow section) */}
+      <section className="py-24 px-4 sm:px-6 lg:px-8 bg-white dark:bg-[#080d16] text-gray-900 dark:text-white relative overflow-hidden border-y border-gray-200 dark:border-gray-900/60 transition-colors duration-500">
+        
+        {/* Soft background glow meshes */}
+        <div className="absolute inset-0 opacity-20 dark:opacity-30 pointer-events-none">
+          <div className="absolute top-1/2 left-1/4 -translate-y-1/2 w-96 h-96 bg-blue-100 dark:bg-blue-900/30 rounded-full filter blur-[100px] animate-pulse"></div>
+          <div className="absolute top-1/3 right-1/4 -translate-y-1/2 w-80 h-80 bg-purple-100 dark:bg-purple-900/15 rounded-full filter blur-[90px] animate-pulse" style={{ animationDelay: '2.5s' }}></div>
+        </div>
+
+        {/* Decorative Grid Lines */}
+        <div className="absolute inset-0 bg-[linear-gradient(to_right,#00000003_1px,transparent_1px),linear-gradient(to_bottom,#00000003_1px,transparent_1px)] dark:bg-[linear-gradient(to_right,#ffffff03_1px,transparent_1px),linear-gradient(to_bottom,#ffffff03_1px,transparent_1px)] bg-[size:40px_40px] [mask-image:radial-gradient(ellipse_60%_50%_at_50%_50%,#000_80%,transparent_100%)] pointer-events-none"></div>
+
+        <div className="app-container relative z-10">
+          <div className="text-center mb-20">
+            <motion.h2 
+              initial={{ opacity: 0, y: -20 }}
+              whileInView={{ opacity: 1, y: 0 }}
+              viewport={{ once: true }}
+              transition={{ duration: 0.6 }}
+              className="text-3xl sm:text-4xl md:text-5xl font-extrabold tracking-tight mb-4 text-gray-900 dark:text-white"
+            >
+              How Our <span className="bg-gradient-to-r from-blue-600 via-cyan-500 to-teal-500 dark:from-blue-400 dark:via-cyan-400 dark:to-teal-400 bg-clip-text text-transparent">Doc Intelligence</span> Works
+            </motion.h2>
+            <motion.p 
+              initial={{ opacity: 0 }}
+              whileInView={{ opacity: 1 }}
+              viewport={{ once: true }}
+              transition={{ duration: 0.6, delay: 0.2 }}
+              className="text-gray-500 dark:text-gray-400 text-sm sm:text-base max-w-2xl mx-auto leading-relaxed"
+            >
+              A multi-stage agentic workflow designed to turn complex legal text into actionable clarity.
+            </motion.p>
+          </div>
+
+          <div className="relative">
+            {/* SVG Connecting Flow Lines (Desktop Only) */}
+            <div className="absolute top-10 left-[8%] right-[8%] h-0.5 pointer-events-none hidden lg:block z-0">
+              <svg className="w-full h-4 overflow-visible" fill="none">
+                <path 
+                  d="M 0 8 Q 150 -12 300 8 T 600 8 T 900 8 T 1200 8" 
+                  stroke="url(#flow-gradient)" 
+                  strokeWidth="2" 
+                  strokeDasharray="6 6"
+                  className="opacity-30 dark:opacity-25"
+                />
+                <defs>
+                  <linearGradient id="flow-gradient" x1="0%" y1="0%" x2="100%" y2="0%">
+                    <stop offset="0%" stopColor="#ef4444" />
+                    <stop offset="20%" stopColor="#f59e0b" />
+                    <stop offset="40%" stopColor="#10b981" />
+                    <stop offset="60%" stopColor="#3b82f6" />
+                    <stop offset="80%" stopColor="#6366f1" />
+                    <stop offset="100%" stopColor="#ec4899" />
+                  </linearGradient>
+                </defs>
+              </svg>
+            </div>
+
+            {/* Grid container for cards */}
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-6 gap-8 relative z-10">
+              {WORKFLOW_STEPS.map((step, idx) => {
+                const IconComponent = step.icon;
+                return (
+                  <NavLink 
+                    key={idx}
+                    to={step.route}
+                    className="block group"
+                  >
+                    <motion.div 
+                      initial={{ opacity: 0, y: 30 }}
+                      whileInView={{ opacity: 1, y: 0 }}
+                      viewport={{ once: true }}
+                      transition={{ duration: 0.5, delay: idx * 0.1, type: "spring", stiffness: 100 }}
+                      whileHover={{ y: -8 }}
+                      className="relative flex flex-col items-center text-center cursor-pointer p-5 rounded-2xl bg-gray-50/60 dark:bg-slate-900/40 border border-gray-200/50 dark:border-white/5 backdrop-blur-sm hover:bg-white dark:hover:bg-slate-900/60 hover:border-gray-300/80 dark:hover:border-white/10 transition-all duration-300 shadow-[0_4px_20px_rgba(0,0,0,0.02)] dark:shadow-[0_4px_20px_rgba(0,0,0,0.3)] h-full"
+                    >
+                      
+                      {/* Hover Glowing Mesh behind card */}
+                      <div 
+                        className="absolute inset-0 rounded-2xl opacity-0 group-hover:opacity-60 dark:group-hover:opacity-100 transition-opacity duration-500 blur-xl pointer-events-none -z-10"
+                        style={{
+                          background: `radial-gradient(circle at center, ${step.glowColor} 0%, transparent 70%)`
+                        }}
+                      ></div>
+
+                      {/* Stage Icon Frame */}
+                      <div className="relative w-20 h-20 rounded-2xl flex items-center justify-center mb-6 z-10 transition-all duration-300">
+                        {/* Gradient border on active/hover */}
+                        <div className={`absolute inset-0 rounded-2xl p-[2px] bg-gradient-to-br ${step.gradient}`}>
+                          <div className="w-full h-full bg-white dark:bg-[#0d121e] rounded-2xl flex items-center justify-center">
+                            <IconComponent className="text-gray-800 dark:text-white w-7 h-7 group-hover:scale-110 transition-transform duration-300" />
+                          </div>
+                        </div>
+                        
+                        {/* Inner shadow glow on hover */}
+                        <div 
+                          className={`absolute inset-0 rounded-2xl bg-gradient-to-br ${step.gradient} opacity-0 group-hover:opacity-40 blur-md transition-opacity duration-300 -z-10`}
+                        ></div>
+                      </div>
+
+                      {/* Step Title */}
+                      <h3 className="text-xs sm:text-sm font-extrabold tracking-wider mb-2 text-gray-800 dark:text-white group-hover:text-primary-600 dark:group-hover:text-cyan-400 transition-colors duration-300 uppercase">
+                        {step.title}
+                      </h3>
+
+                      {/* Step Desc */}
+                      <p className="text-[11px] sm:text-xs text-gray-500 dark:text-gray-400 group-hover:text-gray-700 dark:group-hover:text-gray-300 transition-colors duration-300 leading-relaxed font-medium">
+                        {step.desc}
+                      </p>
+                      
+                    </motion.div>
+                  </NavLink>
+                );
+              })}
             </div>
           </div>
         </div>
