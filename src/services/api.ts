@@ -2,6 +2,10 @@ const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000';
 
 const getApiKey = (): string => {
     try {
+        const userToken = localStorage.getItem('le_auth_token');
+        if (userToken) {
+            return userToken;
+        }
         return (
             localStorage.getItem('apiKey') ||
             (import.meta.env.VITE_API_KEY as string | undefined) ||

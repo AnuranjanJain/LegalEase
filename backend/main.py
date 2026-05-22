@@ -7,6 +7,9 @@ import base64
 from io import BytesIO
 from typing import Optional
 import time
+import hashlib
+import secrets
+import json
 from dotenv import load_dotenv
 
 # Optional imports (wrap in try/except so server can start without optional deps)
@@ -96,6 +99,57 @@ API_KEYS = [k.strip() for k in os.getenv("API_KEYS", "").split(",") if k.strip()
 DEV_API_KEY = os.getenv("DEV_API_KEY", "dev-token")
 ALLOW_DEV = os.getenv("ALLOW_DEV", "true").lower() in ("1", "true", "yes")
 
+class UserRegister(BaseModel):
+    email: str
+    password: str
+    first_name: str
+    last_name: str
+
+class UserLogin(BaseModel):
+    email: str
+    password: str
+
+# Active sessions mapping token -> email
+ACTIVE_SESSIONS = {}
+
+USERS_FILE = os.path.join(os.path.dirname(__file__), "users.json")
+
+def load_users() -> dict:
+    if not os.path.exists(USERS_FILE):
+        return {}
+    try:
+        with open(USERS_FILE, "r") as f:
+            return json.load(f)
+    except Exception as e:
+        logger.error(f"Error loading users.json: {e}")
+        return {}
+
+def save_users(users: dict):
+    try:
+        with open(USERS_FILE, "w") as f:
+            json.dump(users, f, indent=4)
+    except Exception as e:
+        logger.error(f"Error saving users.json: {e}")
+
+def hash_password(password: str) -> tuple[str, str]:
+    salt = secrets.token_hex(16)
+    pwd_hash = hashlib.pbkdf2_hmac(
+        'sha256',
+        password.encode('utf-8'),
+        salt.encode('utf-8'),
+        100000
+    ).hex()
+    return pwd_hash, salt
+
+def verify_password(password: str, pwd_hash: str, salt: str) -> bool:
+    compare_hash = hashlib.pbkdf2_hmac(
+        'sha256',
+        password.encode('utf-8'),
+        salt.encode('utf-8'),
+        100000
+    ).hex()
+    return secrets.compare_digest(pwd_hash, compare_hash)
+
 class ChatRequest(BaseModel):
     message: str
     context: Optional[str] = None
@@ -124,6 +178,10 @@ def _validate_api_key(request: Request) -> str:
 
     if not api_key:
         raise HTTPException(status_code=401, detail="Missing API key")
+
+    # If the token is a valid active user session, accept it
+    if api_key in ACTIVE_SESSIONS:
+        return api_key
 
     if API_KEYS and api_key not in API_KEYS:
         if ALLOW_DEV and api_key == DEV_API_KEY:
@@ -299,6 +357,82 @@ async def summarize(request: Request, payload: SummarizeRequest):
         raise
     except Exception as e:
         logger.error(f"Summarization error: {e}", exc_info=True)
+
+@app.post("/auth/register")
+async def register(payload: UserRegister):
+    users = load_users()
+    email = payload.email.strip().lower()
+    if email in users:
+        raise HTTPException(status_code=400, detail="Email already registered")
+    
+    pwd_hash, salt = hash_password(payload.password)
+    users[email] = {
+        "email": email,
+        "first_name": payload.first_name.strip(),
+        "last_name": payload.last_name.strip(),
+        "password_hash": pwd_hash,
+        "salt": salt
+    }
+    save_users(users)
+    return {"status": "ok", "message": "User registered successfully"}
+
+@app.post("/auth/login")
+async def login(payload: UserLogin):
+    users = load_users()
+    email = payload.email.strip().lower()
+    if email not in users:
+        raise HTTPException(status_code=401, detail="Invalid email or password")
+    
+    user = users[email]
+    if not verify_password(payload.password, user["password_hash"], user["salt"]):
+        raise HTTPException(status_code=401, detail="Invalid email or password")
+    
+    token = secrets.token_hex(32)
+    ACTIVE_SESSIONS[token] = email
+    
+    return {
+        "token": token,
+        "user": {
+            "email": user["email"],
+            "firstName": user["first_name"],
+            "lastName": user["last_name"]
+        }
+    }
+
+@app.post("/auth/logout")
+async def logout(request: Request):
+    auth = request.headers.get("authorization") or ""
+    token = ""
+    if auth.lower().startswith("bearer "):
+        token = auth.split(" ", 1)[1].strip()
+    
+    if token in ACTIVE_SESSIONS:
+        del ACTIVE_SESSIONS[token]
+        return {"status": "ok", "message": "Logged out successfully"}
+    
+    raise HTTPException(status_code=401, detail="Invalid or missing session token")
+
+@app.get("/auth/me")
+async def get_me(request: Request):
+    auth = request.headers.get("authorization") or ""
+    token = ""
+    if auth.lower().startswith("bearer "):
+        token = auth.split(" ", 1)[1].strip()
+        
+    if not token or token not in ACTIVE_SESSIONS:
+        raise HTTPException(status_code=401, detail="Not authenticated")
+        
+    email = ACTIVE_SESSIONS[token]
+    users = load_users()
+    user = users.get(email)
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+        
+    return {
+        "email": user["email"],
+        "firstName": user["first_name"],
+        "lastName": user["last_name"]
+    }
 
 if __name__ == "__main__":
     import uvicorn

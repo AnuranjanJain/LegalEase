@@ -15,6 +15,9 @@ import { SecurityPage } from './pages/SecurityPage';
 import { StorageService } from './services/storage';
 import { NotFoundPage } from "./pages/NotFoundPage";
 import { ScrollToTop } from './components/ScrollToTop';
+import { ProtectedRoute } from './components/ProtectedRoute';
+import { LoginPage } from './pages/LoginPage';
+import { SignupPage } from './pages/SignupPage';
 
 function App() {
   useEffect(() => {
@@ -28,16 +31,24 @@ function App() {
       <Routes>
         <Route path="/" element={<Layout />}>
           <Route index element={<HomePage />} />
-          <Route path="dashboard" element={<DashboardPage />} />
-          <Route path="documents" element={<DocumentsPage />} />
+          
+          {/* Auth routes */}
+          <Route path="login" element={<LoginPage />} />
+          <Route path="signup" element={<SignupPage />} />
+          
+          {/* Public info routes */}
           <Route path="documentation" element={<DocumentationPage />} />
-          <Route path="processing" element={<ProcessingPage />} />
-          <Route path="chatbot" element={<ChatbotPage />} />
-          <Route path="profile" element={<ProfilePage />} />
-          <Route path="settings" element={<SettingsPage />} />
           <Route path="privacy" element={<PrivacyPage />} />
           <Route path="terms" element={<TermsPage />} />
-          <Route path="security" element={<SecurityPage />} />
+
+          {/* Protected routes */}
+          <Route path="dashboard" element={<ProtectedRoute><DashboardPage /></ProtectedRoute>} />
+          <Route path="documents" element={<ProtectedRoute><DocumentsPage /></ProtectedRoute>} />
+          <Route path="processing" element={<ProtectedRoute><ProcessingPage /></ProtectedRoute>} />
+          <Route path="chatbot" element={<ProtectedRoute><ChatbotPage /></ProtectedRoute>} />
+          <Route path="profile" element={<ProtectedRoute><ProfilePage /></ProtectedRoute>} />
+          <Route path="settings" element={<ProtectedRoute><SettingsPage /></ProtectedRoute>} />
+          <Route path="security" element={<ProtectedRoute><SecurityPage /></ProtectedRoute>} />
         </Route>
         <Route path="*" element={<NotFoundPage />} />
       </Routes>

@@ -3,6 +3,7 @@ import { NavLink, useNavigate } from 'react-router-dom';
 import { Menu, X, Bell, Moon, Sun, User, Settings, FileText, Shield, Info, LogOut } from 'lucide-react';
 import { useDarkMode } from '../hooks/useDarkMode';
 import { useNotifications, AppNotification } from '../contexts/NotificationContext';
+import { useAuth } from '../contexts/AuthContext';
 
 function timeAgo(date: Date): string {
   const diff = Math.floor((Date.now() - date.getTime()) / 1000);
@@ -26,7 +27,18 @@ export function Header() {
   const notificationRef = useRef<HTMLDivElement>(null);
   const { isDarkMode, toggleDarkMode } = useDarkMode();
   const { notifications, unreadCount, markAllRead, markRead } = useNotifications();
+  const { isAuthenticated, user, logout } = useAuth();
   const navigate = useNavigate();
+
+  const handleLogout = async () => {
+    try {
+      await logout();
+      setIsUserMenuOpen(false);
+      navigate('/');
+    } catch (err) {
+      console.error('Logout failed:', err);
+    }
+  };
 
   const toggleNotificationMenu = () => setIsNotificationOpen((s) => !s);
   const toggleMobileMenu = () => setIsMobileMenuOpen((s) => !s);
@@ -173,30 +185,49 @@ export function Header() {
               {isMobileMenuOpen ? <X size={24} /> : <Menu size={24} />}
             </button>
 
-            {/* Profile Dropdown */}
-            <div className="relative ml-2" ref={userMenuRef}>
-              <button
-                onClick={toggleUserMenu}
-                className="flex items-center justify-center h-9 w-9 rounded-full bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-400 hover:text-primary hover:bg-primary/10 transition-all focus:outline-none focus-visible:ring-2 focus-visible:ring-primary"
-                aria-haspopup="true"
-                aria-expanded={isUserMenuOpen}
-                aria-label="Open user profile menu"
-              >
-                <User size={20} />
-              </button>
+            {/* Profile Dropdown or Auth Actions */}
+            {isAuthenticated && user ? (
+              <div className="relative ml-2" ref={userMenuRef}>
+                <button
+                  onClick={toggleUserMenu}
+                  className="flex items-center justify-center h-9 w-9 rounded-full bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-400 hover:text-primary hover:bg-primary/10 transition-all focus:outline-none focus-visible:ring-2 focus-visible:ring-primary font-medium text-sm"
+                  aria-haspopup="true"
+                  aria-expanded={isUserMenuOpen}
+                  aria-label="Open user profile menu"
+                >
+                  {user.firstName ? user.firstName[0].toUpperCase() : <User size={20} />}
+                </button>
 
-              {isUserMenuOpen && (
-                <div className="absolute right-0 mt-4 w-60 rounded-3xl bg-white/90 dark:bg-[#0a0a0a]/90 backdrop-blur-3xl border border-gray-100 dark:border-white/10 shadow-2xl p-2 z-50 animate-in fade-in slide-in-from-top-4">
-                  <div className="px-4 py-3 border-b border-gray-100 dark:border-white/5 mb-2">
-                    <p className="text-sm font-medium text-gray-900 dark:text-white">Sarah Wilson</p>
-                    <p className="text-xs text-gray-500 dark:text-white/40">sarah.w@example.com</p>
+                {isUserMenuOpen && (
+                  <div className="absolute right-0 mt-4 w-60 rounded-3xl bg-white/90 dark:bg-[#0a0a0a]/90 backdrop-blur-3xl border border-gray-100 dark:border-white/10 shadow-2xl p-2 z-50 animate-in fade-in slide-in-from-top-4">
+                    <div className="px-4 py-3 border-b border-gray-100 dark:border-white/5 mb-2">
+                      <p className="text-sm font-medium text-gray-900 dark:text-white">
+                        {user.firstName} {user.lastName}
+                      </p>
+                      <p className="text-xs text-gray-500 dark:text-white/40">{user.email}</p>
+                    </div>
+                    <NavLink to="/profile" className="flex items-center gap-3 px-4 py-2.5 text-sm text-gray-600 dark:text-white/70 hover:bg-gray-100 dark:hover:bg-white/5 rounded-xl transition-colors" onClick={() => setIsUserMenuOpen(false)}><User size={16} /> Profile</NavLink>
+                    <NavLink to="/settings" className="flex items-center gap-3 px-4 py-2.5 text-sm text-gray-600 dark:text-white/70 hover:bg-gray-100 dark:hover:bg-white/5 rounded-xl transition-colors" onClick={() => setIsUserMenuOpen(false)}><Settings size={16} /> Settings</NavLink>
+                    <button onClick={handleLogout} className="flex items-center gap-3 w-full text-left px-4 py-2.5 mt-1 text-sm text-red-500 font-medium hover:bg-red-50 dark:hover:bg-red-500/10 rounded-xl transition-colors"><LogOut size={16} /> Sign out</button>
                   </div>
-                  <NavLink to="/profile" className="flex items-center gap-3 px-4 py-2.5 text-sm text-gray-600 dark:text-white/70 hover:bg-gray-100 dark:hover:bg-white/5 rounded-xl transition-colors"><User size={16} /> Profile</NavLink>
-                  <NavLink to="/settings" className="flex items-center gap-3 px-4 py-2.5 text-sm text-gray-600 dark:text-white/70 hover:bg-gray-100 dark:hover:bg-white/5 rounded-xl transition-colors"><Settings size={16} /> Settings</NavLink>
-                  <button className="flex items-center gap-3 w-full text-left px-4 py-2.5 mt-1 text-sm text-red-500 font-medium hover:bg-red-50 dark:hover:bg-red-500/10 rounded-xl transition-colors"><LogOut size={16} /> Sign out</button>
-                </div>
-              )}
-            </div>
+                )}
+              </div>
+            ) : (
+              <div className="flex items-center gap-2 ml-2">
+                <NavLink
+                  to="/login"
+                  className="px-4 py-2 text-sm font-medium text-gray-600 dark:text-gray-300 hover:text-primary dark:hover:text-primary transition-colors"
+                >
+                  Log In
+                </NavLink>
+                <NavLink
+                  to="/signup"
+                  className="px-4 py-2 text-sm font-semibold text-white bg-primary hover:bg-primary/95 rounded-full shadow-lg shadow-primary/10 hover:shadow-primary/20 transform hover:-translate-y-0.5 transition-all hidden sm:block"
+                >
+                  Sign Up
+                </NavLink>
+              </div>
+            )}
           </div>
         </div>
 
@@ -224,6 +255,25 @@ export function Header() {
                 {link.name}
               </NavLink>
             ))}
+
+            {!isAuthenticated && (
+              <div className="pt-4 pb-2 border-t border-gray-200 dark:border-gray-800 flex flex-col gap-2 px-3">
+                <NavLink
+                  to="/login"
+                  className="w-full text-center px-4 py-2.5 text-sm font-medium text-gray-700 dark:text-gray-200 bg-gray-100 dark:bg-gray-800 rounded-xl hover:bg-gray-200 dark:hover:bg-gray-750 transition-colors"
+                  onClick={() => setIsMobileMenuOpen(false)}
+                >
+                  Log In
+                </NavLink>
+                <NavLink
+                  to="/signup"
+                  className="w-full text-center px-4 py-2.5 text-sm font-semibold text-white bg-primary rounded-xl hover:bg-primary/90 transition-colors"
+                  onClick={() => setIsMobileMenuOpen(false)}
+                >
+                  Sign Up
+                </NavLink>
+              </div>
+            )}
           </div>
         </div>
       </div>
