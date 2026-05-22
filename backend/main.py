@@ -286,19 +286,27 @@ async def summarize(request: Request, payload: SummarizeRequest):
         raise HTTPException(status_code=503, detail="AI service unavailable")
 
     try:
-        if client is None:
-            raise HTTPException(
-                status_code=503,
-                detail="Summarization service unavailable because API key is not configured."
-            )
+        model = client.model("inference-net/Schematron-3B")
 
-        # Use a summarization model from Bytez
+        prompt = (
+            "Summarize the following legal text clearly and concisely:\n\n"
+            f"{payload.text[:2000]}"
+        )
+
+        messages = [{"role": "user", "content": prompt}]
+
+        output = model.run(messages)
+
+        if hasattr(output, 'error') and output.error:
+            logger.error(f"Summarization model error: {output.error}")
+            raise HTTPException(status_code=503, detail="Failed to generate summary.")
 
         return {"summary": output.output if hasattr(output, 'output') else str(output)}
     except HTTPException:
         raise
     except Exception as e:
         logger.error(f"Summarization error: {e}", exc_info=True)
+        raise HTTPException(status_code=503, detail="Failed to generate summary.")
 
 if __name__ == "__main__":
     import uvicorn
