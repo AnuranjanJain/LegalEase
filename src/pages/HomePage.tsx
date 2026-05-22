@@ -1,7 +1,8 @@
 import { useState } from 'react';
 import { 
   ArrowRight, FileText, Shield, Zap, Scale, MessageSquare, 
-  AlertTriangle, Lock, Globe, FileSearch, CheckCircle2, ChevronDown 
+  AlertTriangle, Lock, Globe, FileSearch, CheckCircle2, ChevronDown,
+  Briefcase, Rocket, UserCheck
 } from 'lucide-react';
 import { NavLink } from 'react-router-dom';
 
@@ -323,6 +324,96 @@ export function HomePage() {
               <h3 className="text-xl font-bold mb-3 text-gray-900 dark:text-white">Clause Version Comparison</h3>
               <p className="text-sm leading-relaxed text-gray-650 dark:text-gray-400">
                 Compare client markups against your master agreement templates in a side-by-side diff dashboard, highlighting deviations in legal language.
+              </p>
+            </div>
+
+          </div>
+        </div>
+      </section>
+
+      {/* Who Can Benefit Section (Theme Adaptive White Background) */}
+      <section className="py-24 px-4 sm:px-6 lg:px-8 bg-white dark:bg-gray-950 border-t border-gray-150 dark:border-gray-900">
+        <div className="app-container">
+          <div className="text-center mb-20">
+            <span className="text-xs font-extrabold uppercase tracking-widest text-primary-600 dark:text-primary-400 block mb-3">
+              Targeted Auditing
+            </span>
+            <h2 className="text-3xl sm:text-4xl font-extrabold text-gray-900 dark:text-white tracking-tight mb-4">
+              Who Can Benefit From LegalEase?
+            </h2>
+            <div className="h-1.5 w-20 bg-primary-600 mx-auto rounded-full mb-6"></div>
+            <p className="text-gray-650 dark:text-gray-450 max-w-2xl mx-auto text-base">
+              Our intelligent legal parsing engine provides specialized security, risk analysis, and contract transparency for every legal stakeholder.
+            </p>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-8">
+            
+            {/* Card 1: Law Firms & Legal Teams */}
+            <div 
+              id="benefit-card-lawyers"
+              className="group relative p-8 rounded-2xl bg-white dark:bg-gray-900 border border-blue-500/10 dark:border-blue-500/5 shadow-sm hover:shadow-[0_15px_30px_-5px_rgba(59,130,246,0.12)] hover:border-blue-500/40 dark:hover:border-blue-500/40 hover:-translate-y-1.5 hover:scale-[1.02] transition-all duration-300 overflow-hidden text-left"
+            >
+              <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-blue-500 to-indigo-500 opacity-0 group-hover:opacity-100 transition-opacity duration-300"></div>
+              <div className="w-12 h-12 bg-blue-50 dark:bg-blue-900/20 rounded-xl flex items-center justify-center mb-6 text-blue-600 dark:text-blue-400 group-hover:scale-110 transition-transform duration-300">
+                <Scale size={22} />
+              </div>
+              <h3 className="text-xl font-bold mb-3 text-gray-900 dark:text-white group-hover:text-blue-600 dark:group-hover:text-blue-400 transition-colors">
+                Law Firms & Teams
+              </h3>
+              <p className="text-sm leading-relaxed text-gray-605 dark:text-gray-400">
+                Automate due diligence, rapidly audit compliance across massive portfolios, and flag high-liability clauses in seconds instead of hours.
+              </p>
+            </div>
+
+            {/* Card 2: In-House Counsel */}
+            <div 
+              id="benefit-card-inhouse"
+              className="group relative p-8 rounded-2xl bg-white dark:bg-gray-900 border border-emerald-500/10 dark:border-emerald-500/5 shadow-sm hover:shadow-[0_15px_30px_-5px_rgba(16,185,129,0.12)] hover:border-emerald-500/40 dark:hover:border-emerald-500/40 hover:-translate-y-1.5 hover:scale-[1.02] transition-all duration-300 overflow-hidden text-left"
+            >
+              <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-emerald-500 to-teal-500 opacity-0 group-hover:opacity-100 transition-opacity duration-300"></div>
+              <div className="w-12 h-12 bg-emerald-50 dark:bg-emerald-900/20 rounded-xl flex items-center justify-center mb-6 text-emerald-600 dark:text-emerald-400 group-hover:scale-110 transition-transform duration-300">
+                <Briefcase size={22} />
+              </div>
+              <h3 className="text-xl font-bold mb-3 text-gray-900 dark:text-white group-hover:text-emerald-600 dark:group-hover:text-emerald-400 transition-colors">
+                In-House Counsel
+              </h3>
+              <p className="text-sm leading-relaxed text-gray-655 dark:text-gray-400">
+                Standardize contract terms, ensure enterprise-wide compliance, and accelerate internal sales/procurement deal cycles with automated risk scores.
+              </p>
+            </div>
+
+            {/* Card 3: Startups & SMBs */}
+            <div 
+              id="benefit-card-startups"
+              className="group relative p-8 rounded-2xl bg-white dark:bg-gray-900 border border-purple-500/10 dark:border-purple-500/5 shadow-sm hover:shadow-[0_15px_30px_-5px_rgba(168,85,247,0.12)] hover:border-purple-500/40 dark:hover:border-purple-500/40 hover:-translate-y-1.5 hover:scale-[1.02] transition-all duration-300 overflow-hidden text-left"
+            >
+              <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-purple-500 to-pink-500 opacity-0 group-hover:opacity-100 transition-opacity duration-300"></div>
+              <div className="w-12 h-12 bg-purple-50 dark:bg-purple-900/20 rounded-xl flex items-center justify-center mb-6 text-purple-600 dark:text-purple-400 group-hover:scale-110 transition-transform duration-300">
+                <Rocket size={22} />
+              </div>
+              <h3 className="text-xl font-bold mb-3 text-gray-900 dark:text-white group-hover:text-purple-600 dark:group-hover:text-purple-400 transition-colors">
+                Startups & SMBs
+              </h3>
+              <p className="text-sm leading-relaxed text-gray-655 dark:text-gray-400">
+                Fast-track investment term sheets, vendor service agreements, and partner contracts without early-stage high legal consultation costs.
+              </p>
+            </div>
+
+            {/* Card 4: Freelancers & Consultants */}
+            <div 
+              id="benefit-card-freelancers"
+              className="group relative p-8 rounded-2xl bg-white dark:bg-gray-900 border border-amber-500/10 dark:border-amber-500/5 shadow-sm hover:shadow-[0_15px_30px_-5px_rgba(245,158,11,0.12)] hover:border-amber-500/40 dark:hover:border-amber-500/40 hover:-translate-y-1.5 hover:scale-[1.02] transition-all duration-300 overflow-hidden text-left"
+            >
+              <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-amber-500 to-orange-500 opacity-0 group-hover:opacity-100 transition-opacity duration-300"></div>
+              <div className="w-12 h-12 bg-amber-50 dark:bg-amber-900/20 rounded-xl flex items-center justify-center mb-6 text-amber-600 dark:text-amber-400 group-hover:scale-110 transition-transform duration-300">
+                <UserCheck size={22} />
+              </div>
+              <h3 className="text-xl font-bold mb-3 text-gray-900 dark:text-white group-hover:text-amber-600 dark:group-hover:text-amber-400 transition-colors">
+                Freelancers & Solos
+              </h3>
+              <p className="text-sm leading-relaxed text-gray-655 dark:text-gray-400">
+                Demystify complex client NDAs, protect your intellectual property rights, and clearly audit payment and termination clauses before signing.
               </p>
             </div>
 
