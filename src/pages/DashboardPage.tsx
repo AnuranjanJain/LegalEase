@@ -71,7 +71,6 @@ export function DashboardPage() {
   }, []);
 
   const handleQuickIngest = () => {
-    console.log("Triggering document ingest flow...");
   };
 
   return (
