@@ -26,6 +26,7 @@ export function ChatbotPage() {
   const [activeSessionId, setActiveSessionId] = useState<string | null>(null);
   const [sessions, setSessions] = useState<ChatSessionMetadata[]>([]);
   const [input, setInput] = useState('');
+
   const [isTyping, setIsTyping] = useState(false);
   const [uploadedDoc, setUploadedDoc] = useState<{ name: string; text: string } | null>(null);
   const [isUploading, setIsUploading] = useState(false);
