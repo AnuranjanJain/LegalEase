@@ -9,6 +9,9 @@ from typing import Optional
 import time
 from dotenv import load_dotenv
 
+from database import engine, Base
+from routers import auth_routes
+
 # Optional imports (wrap in try/except so server can start without optional deps)
 try:
     import fitz  # PyMuPDF
@@ -37,6 +40,12 @@ logger = logging.getLogger(__name__)
 load_dotenv()
 
 app = FastAPI()
+
+# Create database tables
+Base.metadata.create_all(bind=engine)
+
+# Include authentication router
+app.include_router(auth_routes.router)
 
 # Enable CORS for frontend communication
 FRONTEND_URL = os.getenv("FRONTEND_URL", "http://localhost:5173")
