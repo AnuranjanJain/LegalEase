@@ -292,7 +292,6 @@ async def summarize(request: Request, payload: SummarizeRequest):
             "Summarize the following legal text clearly and concisely:\n\n"
             f"{payload.text[:2000]}"
         )
-
         messages = [{"role": "user", "content": prompt}]
 
         output = model.run(messages)
@@ -319,7 +318,6 @@ async def summarize(request: Request, payload: SummarizeRequest):
             raise
         except Exception:
             raise HTTPException(status_code=503, detail="Failed to generate summary.")
-
 
 if __name__ == "__main__":
     import uvicorn
