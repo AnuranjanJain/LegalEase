@@ -306,10 +306,6 @@ async def summarize(request: Request, payload: SummarizeRequest):
         except Exception:
             raise HTTPException(status_code=503, detail="Failed to generate summary")
 
-if __name__ == "__main__":
-    import uvicorn
-    uvicorn.run(app, host="0.0.0.0", port=8000)
-
 
 # Health endpoint
 @app.get("/health")
@@ -319,3 +315,8 @@ async def health():
     if not client:
         status = "degraded"
     return {"status": status, "details": details}
+
+
+if __name__ == "__main__":
+    import uvicorn
+    uvicorn.run(app, host="0.0.0.0", port=8000)
