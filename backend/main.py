@@ -286,19 +286,25 @@ async def summarize(request: Request, payload: SummarizeRequest):
         raise HTTPException(status_code=503, detail="AI service unavailable")
 
     try:
-        if client is None:
-            raise HTTPException(
-                status_code=503,
-                detail="Summarization service unavailable because API key is not configured."
-            )
-
         # Use a summarization model from Bytez
-
+        summary_model = client.model("Jnjnpx/fine-tuned-bert-extractive-summarization")
+        output = summary_model.run(payload.text[:512])
+        if hasattr(output, 'error') and output.error:
+            logger.error(f"Summarizer model error: {output.error}")
+            raise HTTPException(status_code=503, detail="Upstream summarization error")
         return {"summary": output.output if hasattr(output, 'output') else str(output)}
     except HTTPException:
         raise
     except Exception as e:
         logger.error(f"Summarization error: {e}", exc_info=True)
+        # Fallback general model
+        try:
+            model = client.model("inference-net/Schematron-3B")
+            prompt = f"Summarize this legal text concisely:\n\n{payload.text[:2000]}"
+            output = model.run([{"role": "user", "content": prompt}])
+            return {"summary": output.output}
+        except Exception:
+            raise HTTPException(status_code=503, detail="Failed to generate summary")
 
 
 # Health endpoint
