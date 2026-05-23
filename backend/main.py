@@ -293,53 +293,19 @@ async def summarize(request: Request, payload: SummarizeRequest):
             )
 
         # Use a summarization model from Bytez
-<<<<<<< HEAD
-        summary_model = client.model(
-            "Jnjnpx/fine-tuned-bert-extractive-summarization"
-        )
-        
-        output = summary_model.run(request.text[:512]) # Model specific limit usually
-        
-=======
         summary_model = client.model("Jnjnpx/fine-tuned-bert-extractive-summarization")
         output = summary_model.run(payload.text[:512])
         if hasattr(output, 'error') and output.error:
             logger.error(f"Summarizer model error: {output.error}")
             raise HTTPException(status_code=502, detail="Upstream summarization error")
->>>>>>> upstream/main
+
         return {"summary": output.output if hasattr(output, 'output') else str(output)}
     except HTTPException:
         raise
     except Exception as e:
         logger.error(f"Summarization error: {e}", exc_info=True)
-<<<<<<< HEAD
 
-        # Fallback to general model if specialized summarizer fails
-        try:
-            if client is None:
-                raise HTTPException(
-                    status_code=503,
-                    detail="Summarization service unavailable because API key is not configured."
-                )
-
-            model = client.model("inference-net/Schematron-3B")
-            prompt = (
-                f"Summarize this legal text concisely:\n\n"
-                f"{request.text[:2000]}"
-            )
-
-            output = model.run([
-                {
-                    "role": "user",
-                    "content": prompt
-                }
-            ])
-
-            return {"summary": output.output}
-        except Exception:
-            raise HTTPException(status_code=500, detail="Failed to generate summary.")
-=======
-        # Fallback general model
+        # Fallback to general model
         try:
             model = client.model("inference-net/Schematron-3B")
             prompt = f"Summarize this legal text concisely:\n\n{payload.text[:2000]}"
@@ -347,12 +313,6 @@ async def summarize(request: Request, payload: SummarizeRequest):
             return {"summary": output.output}
         except Exception:
             raise HTTPException(status_code=502, detail="Failed to generate summary")
->>>>>>> upstream/main
-
-if __name__ == "__main__":
-    import uvicorn
-    uvicorn.run(app, host="0.0.0.0", port=8000)
-
 
 # Health endpoint
 @app.get("/health")
@@ -362,3 +322,8 @@ async def health():
     if not client:
         status = "degraded"
     return {"status": status, "details": details}
+
+
+if __name__ == "__main__":
+    import uvicorn
+    uvicorn.run(app, host="0.0.0.0", port=8000)
