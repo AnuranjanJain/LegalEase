@@ -5,6 +5,9 @@ import {
 } from 'lucide-react';
 import { NavLink } from 'react-router-dom';
 import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip, Legend } from 'recharts';
+import { ShareButton } from '../components/ShareButton';
+import { WhatsAppShareModal } from '../components/WhatsAppShareModal';
+import { Document } from '../services/storage';
 
 interface StatItem {
   label: string;
@@ -44,6 +47,7 @@ const CHART_COLORS = Object.freeze(['#3B82F6', '#10B981', '#F59E0B', '#8B5CF6'])
 export function DashboardPage() {
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedCategoryFilter, setSelectedCategoryFilter] = useState<'All' | 'NDA' | 'Lease' | 'Employment' | 'Other'>('All');
+  const [shareDoc, setShareDoc] = useState<Document | null>(null);
 
   // Dynamic Search & Category Filtering mapped cleanly from stable RECENT_DOCS
   const filteredDocs = useMemo(() => {
@@ -71,7 +75,6 @@ export function DashboardPage() {
   }, []);
 
   const handleQuickIngest = () => {
-    console.log("Triggering document ingest flow...");
   };
 
   return (
@@ -277,19 +280,34 @@ export function DashboardPage() {
                           </div>
 
                           {/* Action Button/Processing tags */}
-                          <div className="sm:self-center">
+                          <div className="sm:self-center flex items-center gap-1">
                             {isProcessing ? (
                               <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-bold bg-amber-500/10 text-amber-500 border border-amber-500/20 animate-pulse">
                                 Active Ingestion
                               </span>
                             ) : (
-                              <NavLink 
-                                to="/documents"
-                                className="inline-flex items-center justify-center p-1.5 rounded-lg border border-gray-200 dark:border-gray-800 text-gray-500 dark:text-gray-400 hover:text-primary-500 hover:border-primary-500/30 hover:bg-primary-500/5 transition-all"
-                                aria-label="Review AI Audit details"
-                              >
-                                <Play size={12} className="text-gray-400 hover:text-primary-500" />
-                              </NavLink>
+                              <>
+                                {/* WhatsApp share — build a lightweight Document shape from RECENT_DOCS */}
+                                <ShareButton
+                                  document={{
+                                    id: `dash_${doc.title.replace(/\s+/g, '_')}`,
+                                    name: doc.title,
+                                    type: 'pdf',
+                                    size: 0,
+                                    uploadDate: new Date().toISOString(),
+                                    status: 'processed',
+                                  }}
+                                  onShare={setShareDoc}
+                                  variant="icon"
+                                />
+                                <NavLink 
+                                  to="/documents"
+                                  className="inline-flex items-center justify-center p-1.5 rounded-lg border border-gray-200 dark:border-gray-800 text-gray-500 dark:text-gray-400 hover:text-primary-500 hover:border-primary-500/30 hover:bg-primary-500/5 transition-all"
+                                  aria-label="Review AI Audit details"
+                                >
+                                  <Play size={12} className="text-gray-400 hover:text-primary-500" />
+                                </NavLink>
+                              </>
                             )}
                           </div>
                         </div>
@@ -397,6 +415,12 @@ export function DashboardPage() {
         </div>
 
       </div>
+
+      {/* WhatsApp Share Modal */}
+      <WhatsAppShareModal
+        document={shareDoc}
+        onClose={() => setShareDoc(null)}
+      />
     </div>
   );
 }
