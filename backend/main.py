@@ -3,10 +3,8 @@ from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 import os
 import logging
-import base64
 from io import BytesIO
 from typing import Optional
-import time
 from dotenv import load_dotenv
 
 # Optional imports (wrap in try/except so server can start without optional deps)
@@ -26,6 +24,8 @@ except Exception:
     Bytez = None
     # Bytez SDK not available or misconfigured; we'll degrade gracefully.
 
+#Middleware import 
+from middleware.rate_limit import RateLimitMiddleware
 # Configure logging
 logging.basicConfig(
     level=logging.INFO,
@@ -47,6 +47,8 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+#Centralized rate-limit middleware
+app.add_middleware(RateLimitMiddleware)
 
 # Initialize Bytez SDK
 BYTEZ_API_KEY = os.getenv("BYTEZ_API_KEY")
@@ -67,30 +69,6 @@ else:
 MAX_UPLOAD_SIZE = int(os.getenv("MAX_UPLOAD_SIZE", str(25 * 1024 * 1024)))  # 25 MB default
 MAX_MODEL_INPUT_CHARS = int(os.getenv("MAX_MODEL_INPUT_CHARS", "2000"))
 
-# Simple in-memory rate limiter (per-IP and per-key)
-class SimpleRateLimiter:
-    def __init__(self, calls: int, period: int):
-        self.calls = calls
-        self.period = period
-        self.storage = {}
-
-    def is_allowed(self, key: str) -> bool:
-        now = time.time()
-        window = now - self.period
-        arr = self.storage.get(key, [])
-        # prune
-        arr = [t for t in arr if t > window]
-        if len(arr) >= self.calls:
-            self.storage[key] = arr
-            return False
-        arr.append(now)
-        self.storage[key] = arr
-        return True
-
-# Defaults: 60 requests per minute per IP, 30 per minute per API key
-ip_limiter = SimpleRateLimiter(int(os.getenv("RATE_LIMIT_IP_CALLS", "60")), int(os.getenv("RATE_LIMIT_PERIOD", "60")))
-key_limiter = SimpleRateLimiter(int(os.getenv("RATE_LIMIT_KEY_CALLS", "30")), int(os.getenv("RATE_LIMIT_PERIOD", "60")))
-
 # API keys and dev mode
 API_KEYS = [k.strip() for k in os.getenv("API_KEYS", "").split(",") if k.strip()]
 DEV_API_KEY = os.getenv("DEV_API_KEY", "dev-token")
@@ -104,14 +82,6 @@ class ChatRequest(BaseModel):
 
 class SummarizeRequest(BaseModel):
     text: str
-
-
-def _get_client_ip(request: Request) -> str:
-    try:
-        return request.client.host
-    except Exception:
-        return "unknown"
-
 
 def _validate_api_key(request: Request) -> str:
     # Accept header `Authorization: Bearer <key>` or `X-API-Key`
@@ -136,14 +106,6 @@ def _validate_api_key(request: Request) -> str:
 async def chat(request: Request, payload: ChatRequest):
     # Auth
     api_key = _validate_api_key(request)
-
-    # Rate limiting
-    ip = _get_client_ip(request)
-    if not ip_limiter.is_allowed(ip):
-        raise HTTPException(status_code=429, detail="Rate limit exceeded for IP")
-    if not key_limiter.is_allowed(api_key):
-        raise HTTPException(status_code=429, detail="Rate limit exceeded for API key")
-
     if client is None:
         raise HTTPException(status_code=503, detail="AI service unavailable")
 
@@ -197,14 +159,6 @@ async def chat(request: Request, payload: ChatRequest):
 async def upload_document(request: Request, file: UploadFile = File(...)):
     # Auth
     api_key = _validate_api_key(request)
-
-    # Rate limiting
-    ip = _get_client_ip(request)
-    if not ip_limiter.is_allowed(ip):
-        raise HTTPException(status_code=429, detail="Rate limit exceeded for IP")
-    if not key_limiter.is_allowed(api_key):
-        raise HTTPException(status_code=429, detail="Rate limit exceeded for API key")
-
     # Content-Length pre-check
     try:
         content_length = int(request.headers.get("content-length", "0"))
@@ -274,14 +228,6 @@ async def upload_document(request: Request, file: UploadFile = File(...)):
 async def summarize(request: Request, payload: SummarizeRequest):
     # Auth
     api_key = _validate_api_key(request)
-
-    # Rate limiting
-    ip = _get_client_ip(request)
-    if not ip_limiter.is_allowed(ip):
-        raise HTTPException(status_code=429, detail="Rate limit exceeded for IP")
-    if not key_limiter.is_allowed(api_key):
-        raise HTTPException(status_code=429, detail="Rate limit exceeded for API key")
-
     if client is None:
         raise HTTPException(status_code=503, detail="AI service unavailable")
 
