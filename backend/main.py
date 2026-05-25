@@ -48,12 +48,13 @@ Base.metadata.create_all(bind=engine)
 app.include_router(auth_routes.router)
 
 # Enable CORS for frontend communication
+raw_allowed_origins = os.getenv("ALLOWED_ORIGINS") or os.getenv(
+    "FRONTEND_URL",
+    "http://localhost:5173"
+)
 ALLOWED_ORIGINS = [
     origin.strip()
-    for origin in os.getenv(
-        "ALLOWED_ORIGINS",
-        "http://localhost:5173"
-    ).split(",")
+    for origin in raw_allowed_origins.split(",")
     if origin.strip()
 ]
 app.add_middleware(
