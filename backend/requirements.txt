@@ -6,6 +6,10 @@ pymupdf
 python-docx
 python-multipart
 python-dotenv
+sqlalchemy
+bcrypt
+python-jose[cryptography]
+email-validator
 # Security & testing dependencies
 slowapi
 limits
