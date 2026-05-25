@@ -83,6 +83,12 @@ API_KEYS = [k.strip() for k in os.getenv("API_KEYS", "").split(",") if k.strip()
 DEV_API_KEY = os.getenv("DEV_API_KEY", "dev-token")
 ALLOW_DEV = os.getenv("ALLOW_DEV", "false").lower() in ("1", "true", "yes")
 
+if not API_KEYS:
+    logger.warning(
+        "API_KEYS is not configured. "
+        "Authentication fallback behavior is active."
+    )
+
 if ALLOW_DEV:
     logger.warning(
         "Development API authentication is enabled. "
@@ -110,9 +116,16 @@ def _validate_api_key(request: Request) -> str:
     if not api_key:
         raise HTTPException(status_code=401, detail="Missing API key")
 
-    if API_KEYS and api_key not in API_KEYS:
-        if ALLOW_DEV and api_key == DEV_API_KEY:
-            return api_key
+    if ALLOW_DEV and api_key == DEV_API_KEY:
+        return api_key
+
+    if not API_KEYS:
+        raise HTTPException(
+            status_code=503,
+            detail="API authentication is not configured."
+        )
+
+    if api_key not in API_KEYS:
         raise HTTPException(status_code=403, detail="Invalid API key")
 
     return api_key
