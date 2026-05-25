@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { 
   ArrowRight, FileText, Shield, Zap, Scale, MessageSquare, 
   AlertTriangle, Lock, Globe, FileSearch, CheckCircle2, ChevronDown,
-  Search, Activity, Handshake
+ 
 } from 'lucide-react';
 import { NavLink } from 'react-router-dom';
 import { motion } from 'framer-motion';
@@ -511,18 +511,108 @@ export function HomePage() {
         </div>
       </section>
 
+      {/* Who Can Benefit Section (Theme Adaptive White Background) */}
+      <section className="py-24 px-4 sm:px-6 lg:px-8 bg-white dark:bg-gray-950 border-t border-gray-150 dark:border-gray-900">
+        <div className="app-container">
+          <div className="text-center mb-20">
+            <span className="text-xs font-extrabold uppercase tracking-widest text-primary-600 dark:text-primary-400 block mb-3">
+              Targeted Auditing
+            </span>
+            <h2 className="text-3xl sm:text-4xl font-extrabold text-gray-900 dark:text-white tracking-tight mb-4">
+              Who Can Benefit From LegalEase?
+            </h2>
+            <div className="h-1.5 w-20 bg-primary-600 mx-auto rounded-full mb-6"></div>
+            <p className="text-gray-650 dark:text-gray-450 max-w-2xl mx-auto text-base">
+              Our intelligent legal parsing engine provides specialized security, risk analysis, and contract transparency for every legal stakeholder.
+            </p>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-8">
+            
+            {/* Card 1: Law Firms & Legal Teams */}
+            <div 
+              id="benefit-card-lawyers"
+              className="group relative p-8 rounded-2xl bg-white dark:bg-gray-900 border border-blue-500/10 dark:border-blue-500/5 shadow-sm hover:shadow-[0_15px_30px_-5px_rgba(59,130,246,0.12)] hover:border-blue-500/40 dark:hover:border-blue-500/40 hover:-translate-y-1.5 hover:scale-[1.02] transition-all duration-300 overflow-hidden text-left"
+            >
+              <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-blue-500 to-indigo-500 opacity-0 group-hover:opacity-100 transition-opacity duration-300"></div>
+              <div className="w-12 h-12 bg-blue-50 dark:bg-blue-900/20 rounded-xl flex items-center justify-center mb-6 text-blue-600 dark:text-blue-400 group-hover:scale-110 transition-transform duration-300">
+                <Scale size={22} />
+              </div>
+              <h3 className="text-xl font-bold mb-3 text-gray-900 dark:text-white group-hover:text-blue-600 dark:group-hover:text-blue-400 transition-colors">
+                Law Firms & Teams
+              </h3>
+              <p className="text-sm leading-relaxed text-gray-605 dark:text-gray-400">
+                Automate due diligence, rapidly audit compliance across massive portfolios, and flag high-liability clauses in seconds instead of hours.
+              </p>
+            </div>
+
+            {/* Card 2: In-House Counsel */}
+            <div 
+              id="benefit-card-inhouse"
+              className="group relative p-8 rounded-2xl bg-white dark:bg-gray-900 border border-emerald-500/10 dark:border-emerald-500/5 shadow-sm hover:shadow-[0_15px_30px_-5px_rgba(16,185,129,0.12)] hover:border-emerald-500/40 dark:hover:border-emerald-500/40 hover:-translate-y-1.5 hover:scale-[1.02] transition-all duration-300 overflow-hidden text-left"
+            >
+              <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-emerald-500 to-teal-500 opacity-0 group-hover:opacity-100 transition-opacity duration-300"></div>
+              <div className="w-12 h-12 bg-emerald-50 dark:bg-emerald-900/20 rounded-xl flex items-center justify-center mb-6 text-emerald-600 dark:text-emerald-400 group-hover:scale-110 transition-transform duration-300">
+                <Briefcase size={22} />
+              </div>
+              <h3 className="text-xl font-bold mb-3 text-gray-900 dark:text-white group-hover:text-emerald-600 dark:group-hover:text-emerald-400 transition-colors">
+                In-House Counsel
+              </h3>
+              <p className="text-sm leading-relaxed text-gray-655 dark:text-gray-400">
+                Standardize contract terms, ensure enterprise-wide compliance, and accelerate internal sales/procurement deal cycles with automated risk scores.
+              </p>
+            </div>
+
+            {/* Card 3: Startups & SMBs */}
+            <div 
+              id="benefit-card-startups"
+              className="group relative p-8 rounded-2xl bg-white dark:bg-gray-900 border border-purple-500/10 dark:border-purple-500/5 shadow-sm hover:shadow-[0_15px_30px_-5px_rgba(168,85,247,0.12)] hover:border-purple-500/40 dark:hover:border-purple-500/40 hover:-translate-y-1.5 hover:scale-[1.02] transition-all duration-300 overflow-hidden text-left"
+            >
+              <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-purple-500 to-pink-500 opacity-0 group-hover:opacity-100 transition-opacity duration-300"></div>
+              <div className="w-12 h-12 bg-purple-50 dark:bg-purple-900/20 rounded-xl flex items-center justify-center mb-6 text-purple-600 dark:text-purple-400 group-hover:scale-110 transition-transform duration-300">
+                <Rocket size={22} />
+              </div>
+              <h3 className="text-xl font-bold mb-3 text-gray-900 dark:text-white group-hover:text-purple-600 dark:group-hover:text-purple-400 transition-colors">
+                Startups & SMBs
+              </h3>
+              <p className="text-sm leading-relaxed text-gray-655 dark:text-gray-400">
+                Fast-track investment term sheets, vendor service agreements, and partner contracts without early-stage high legal consultation costs.
+              </p>
+            </div>
+
+            {/* Card 4: Freelancers & Consultants */}
+            <div 
+              id="benefit-card-freelancers"
+              className="group relative p-8 rounded-2xl bg-white dark:bg-gray-900 border border-amber-500/10 dark:border-amber-500/5 shadow-sm hover:shadow-[0_15px_30px_-5px_rgba(245,158,11,0.12)] hover:border-amber-500/40 dark:hover:border-amber-500/40 hover:-translate-y-1.5 hover:scale-[1.02] transition-all duration-300 overflow-hidden text-left"
+            >
+              <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-amber-500 to-orange-500 opacity-0 group-hover:opacity-100 transition-opacity duration-300"></div>
+              <div className="w-12 h-12 bg-amber-50 dark:bg-amber-900/20 rounded-xl flex items-center justify-center mb-6 text-amber-600 dark:text-amber-400 group-hover:scale-110 transition-transform duration-300">
+                <UserCheck size={22} />
+              </div>
+              <h3 className="text-xl font-bold mb-3 text-gray-900 dark:text-white group-hover:text-amber-600 dark:group-hover:text-amber-400 transition-colors">
+                Freelancers & Solos
+              </h3>
+              <p className="text-sm leading-relaxed text-gray-655 dark:text-gray-400">
+                Demystify complex client NDAs, protect your intellectual property rights, and clearly audit payment and termination clauses before signing.
+              </p>
+            </div>
+
+          </div>
+        </div>
+      </section>
+
       {/* Security Focus Section */}
-      <section className="py-20 px-4 sm:px-6 lg:px-8 bg-gray-50 dark:bg-gray-955 text-gray-900 dark:text-white border-t border-gray-200 dark:border-gray-800/80">
+      <section className="py-20 px-4 sm:px-6 lg:px-8 bg-gray-50 dark:bg-gray-950 text-gray-900 dark:text-white border-t border-gray-200 dark:border-gray-800/80">
         <div className="app-container">
           <div className="grid grid-cols-1 lg:grid-cols-12 gap-12 items-center">
             
             {/* Left Graphics */}
             <div className="lg:col-span-5 relative flex justify-center">
               <div className="absolute w-72 h-72 bg-blue-500/5 dark:bg-blue-500/10 rounded-full filter blur-3xl"></div>
-              <div className="border border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900/50 rounded-2xl p-8 max-w-sm relative z-10 backdrop-blur-md text-left">
+              <div className="border border-gray-200 dark:border-gray-700/80 bg-white dark:bg-gray-900/80 rounded-2xl p-8 max-w-sm relative z-10 backdrop-blur-md text-left">
                 <Lock className="text-primary-600 dark:text-primary-400 h-10 w-10 mb-4" />
-                <h4 className="text-lg font-bold mb-2">Zero-Trust Audits</h4>
-                <p className="text-xs text-gray-550 dark:text-gray-450 leading-relaxed mb-4">
+                <h4 className="text-lg font-bold mb-2 text-gray-900 dark:text-white">Zero-Trust Audits</h4>
+                <p className="text-xs text-gray-600 dark:text-gray-400 leading-relaxed mb-4">
                   We leverage local sandbox extraction pipelines to analyze files. Your contracts never end up saved in generic cloud training corpora.
                 </p>
                 <div className="space-y-2">
@@ -545,22 +635,22 @@ export function HomePage() {
               <h2 className="text-3xl sm:text-4xl font-extrabold tracking-tight mb-6">
                 Your Privacy Is Our Legal Obligation
               </h2>
-              <p className="text-gray-650 dark:text-gray-400 leading-relaxed mb-8">
+              <p className="text-gray-600 dark:text-gray-300 leading-relaxed mb-8">
                 Unlike generic LLM platforms that scrape prompts to feed their neural network iterations, LegalEase enforces strict isolation protocols. Each workspace is sandboxed, safeguarding your firm’s litigation briefs and proprietary agreements from leakage.
               </p>
               <div className="grid grid-cols-2 gap-6">
                 <div className="flex items-start gap-3">
-                  <div className="p-2 bg-gray-100 dark:bg-gray-900 rounded-lg text-primary-650 dark:text-primary-400 mt-1"><Shield size={16} /></div>
+                  <div className="p-2 bg-gray-100 dark:bg-gray-900 rounded-lg text-primary-600 dark:text-primary-400 mt-1"><Shield size={16} /></div>
                   <div>
                     <h5 className="font-semibold text-sm mb-1 text-gray-900 dark:text-white">Full Compliance</h5>
-                    <p className="text-xs text-gray-500">Fully compliant with international GDPR and HIPAA regulations.</p>
+                    <p className="text-xs text-gray-500 dark:text-gray-400">Fully compliant with international GDPR and HIPAA regulations.</p>
                   </div>
                 </div>
                 <div className="flex items-start gap-3">
-                  <div className="p-2 bg-gray-100 dark:bg-gray-900 rounded-lg text-primary-650 dark:text-primary-400 mt-1"><Lock size={16} /></div>
+                  <div className="p-2 bg-gray-100 dark:bg-gray-900 rounded-lg text-primary-600 dark:text-primary-400 mt-1"><Lock size={16} /></div>
                   <div>
                     <h5 className="font-semibold text-sm mb-1 text-gray-900 dark:text-white">Multi-Factor Control</h5>
-                    <p className="text-xs text-gray-500">Secure user authentication limits file visibility strictly to designated team nodes.</p>
+                    <p className="text-xs text-gray-500 dark:text-gray-400">Secure user authentication limits file visibility strictly to designated team nodes.</p>
                   </div>
                 </div>
               </div>
@@ -575,7 +665,7 @@ export function HomePage() {
         <div className="app-container max-w-4xl">
           <div className="text-center mb-16">
             <h2 className="text-3xl font-extrabold text-gray-900 dark:text-white mb-4">Frequently Asked Questions</h2>
-            <p className="text-gray-650 dark:text-gray-450 max-w-xl mx-auto text-sm">
+            <p className="text-gray-600 dark:text-gray-400 max-w-xl mx-auto text-sm">
               Everything you need to know about LegalEase's underlying intelligence, billing safeguards, and data protection.
             </p>
           </div>
@@ -584,11 +674,11 @@ export function HomePage() {
             {FAQS.map((faq, index) => (
               <div 
                 key={index} 
-                className="bg-white dark:bg-gray-800 rounded-xl border border-gray-150 dark:border-gray-750 overflow-hidden transition-all duration-300 shadow-sm text-left"
+                className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 overflow-hidden transition-all duration-300 shadow-sm text-left"
               >
                 <button
                   onClick={() => setExpandedFaq(expandedFaq === index ? null : index)}
-                  className="w-full text-left px-6 py-5 flex items-center justify-between font-semibold text-gray-900 dark:text-white hover:bg-gray-50 dark:hover:bg-gray-705 transition-colors"
+                  className="w-full text-left px-6 py-5 flex items-center justify-between font-semibold text-gray-900 dark:text-white hover:bg-gray-50 dark:hover:bg-gray-700/60 transition-colors"
                 >
                   <span className="text-base">{faq.q}</span>
                   <ChevronDown 
@@ -597,7 +687,7 @@ export function HomePage() {
                   />
                 </button>
                 <div 
-                  className={`transition-all duration-300 overflow-hidden ${expandedFaq === index ? 'max-h-40 border-t border-gray-100 dark:border-gray-700 py-4 px-6 bg-gray-50/50 dark:bg-gray-850/50' : 'max-h-0 py-0'}`}
+                  className={`transition-all duration-300 overflow-hidden ${expandedFaq === index ? 'max-h-40 border-t border-gray-100 dark:border-gray-700 py-4 px-6 bg-gray-50/50 dark:bg-gray-900/40' : 'max-h-0 py-0'}`}
                 >
                   <p className="text-sm leading-relaxed text-gray-600 dark:text-gray-400">
                     {faq.a}

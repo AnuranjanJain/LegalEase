@@ -9,8 +9,15 @@ import { ProfilePage } from './pages/ProfilePage';
 import { DocumentationPage } from './pages/DocumentationPage';
 import { ProcessingPage } from './pages/ProcessingPage';
 import { SettingsPage } from './pages/SettingsPage';
+import { PrivacyPage } from './pages/PrivacyPage';
+import { TermsPage } from './pages/TermsPage';
+import { SecurityPage } from './pages/SecurityPage';
 import { StorageService } from './services/storage';
 import { NotFoundPage } from "./pages/NotFoundPage";
+import { ScrollToTop } from './components/ScrollToTop';
+import { AuthProvider } from './contexts/AuthContext';
+import { LoginPage } from './pages/Login';
+import { SignupPage } from './pages/Signup';
 
 function App() {
   useEffect(() => {
@@ -19,21 +26,29 @@ function App() {
   }, []);
 
   return (
-    <Router>
-      <Routes>
-        <Route path="/" element={<Layout />}>
-          <Route index element={<HomePage />} />
-          <Route path="dashboard" element={<DashboardPage />} />
-          <Route path="documents" element={<DocumentsPage />} />
-          <Route path="documentation" element={<DocumentationPage />} />
-          <Route path="processing" element={<ProcessingPage />} />
-          <Route path="chatbot" element={<ChatbotPage />} />
-          <Route path="profile" element={<ProfilePage />} />
-          <Route path="settings" element={<SettingsPage />} />
-        </Route>
-        <Route path="*" element={<NotFoundPage />} />
-      </Routes>
-    </Router>
+    <AuthProvider>
+      <Router>
+        <ScrollToTop />
+        <Routes>
+          <Route path="/login" element={<LoginPage />} />
+          <Route path="/signup" element={<SignupPage />} />
+          <Route path="/" element={<Layout />}>
+            <Route index element={<HomePage />} />
+            <Route path="dashboard" element={<DashboardPage />} />
+            <Route path="documents" element={<DocumentsPage />} />
+            <Route path="documentation" element={<DocumentationPage />} />
+            <Route path="processing" element={<ProcessingPage />} />
+            <Route path="chatbot" element={<ChatbotPage />} />
+            <Route path="profile" element={<ProfilePage />} />
+            <Route path="settings" element={<SettingsPage />} />
+            <Route path="privacy" element={<PrivacyPage />} />
+            <Route path="terms" element={<TermsPage />} />
+            <Route path="security" element={<SecurityPage />} />
+          </Route>
+          <Route path="*" element={<NotFoundPage />} />
+        </Routes>
+      </Router>
+    </AuthProvider>
   );
 }
 
