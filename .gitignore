@@ -36,3 +36,9 @@ __pycache__/
 *.so
 .Python
 backend/__pycache__/
+# Coverage reports
+coverage/
+backend/.coverage
+backend/coverage.xml
+backend/.flake8
+*.db

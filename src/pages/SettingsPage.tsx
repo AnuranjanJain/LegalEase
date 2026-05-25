@@ -1,11 +1,13 @@
 import { Bell, Palette, Shield, Globe, Trash2 } from 'lucide-react';
 import { useToast } from '../contexts/ToastContext';
+import { ChatStorageService } from '../services/storage';
 
 export function SettingsPage() {
   const { showToast } = useToast();
 
   const handleClearHistory = () => {
     if (window.confirm("Are you sure you want to delete all local chat history? This action is irreversible.")) {
+      ChatStorageService.clearAllSessions();
       localStorage.removeItem('chatHistory');
       showToast('Chat history cleared successfully.', 'success');
     }

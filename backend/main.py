@@ -4,12 +4,16 @@ from fastapi.responses import JSONResponse, StreamingResponse
 from pydantic import BaseModel
 import os
 import logging
-import base64
 from io import BytesIO
 from typing import Optional
+
 import time
 import uuid
+
 from dotenv import load_dotenv
+
+from database import engine, Base
+from routers import auth_routes
 
 # Optional imports (wrap in try/except so server can start without optional deps)
 try:
@@ -31,6 +35,8 @@ from backend.core.validation import (
 )
 from backend.services.ai_service import ai_service, correlation_id_var
 
+#Middleware import 
+from middleware.rate_limit import RateLimitMiddleware
 # Configure logging
 logging.basicConfig(
     level=logging.INFO,
@@ -42,6 +48,7 @@ logger = logging.getLogger(__name__)
 load_dotenv()
 
 app = FastAPI()
+
 
 # Exception Handlers to match standardized error contracts
 @app.exception_handler(ValidationError)
@@ -96,6 +103,13 @@ async def service_unavailable_exception_handler(request: Request, exc: ServiceUn
     )
 
 
+# Create database tables
+Base.metadata.create_all(bind=engine)
+
+# Include authentication router
+app.include_router(auth_routes.router)
+
+
 # Enable CORS for frontend communication
 FRONTEND_URL = os.getenv("FRONTEND_URL", "http://localhost:5173")
 app.add_middleware(
@@ -105,6 +119,8 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+#Centralized rate-limit middleware
+app.add_middleware(RateLimitMiddleware)
 
 
 # Correlation ID middleware to inject trace headers
@@ -122,6 +138,7 @@ async def correlation_id_middleware(request: Request, call_next):
 
 # Configuration
 MAX_UPLOAD_SIZE = int(os.getenv("MAX_UPLOAD_SIZE", str(25 * 1024 * 1024)))  # 25 MB default
+
 
 
 # Simple in-memory rate limiter (per-IP and per-key)
@@ -165,10 +182,18 @@ key_limiter = SimpleRateLimiter(
 )
 
 
+
+
 # API keys and dev mode
 API_KEYS = [k.strip() for k in os.getenv("API_KEYS", "").split(",") if k.strip()]
 DEV_API_KEY = os.getenv("DEV_API_KEY", "dev-token")
-ALLOW_DEV = os.getenv("ALLOW_DEV", "true").lower() in ("1", "true", "yes")
+ALLOW_DEV = os.getenv("ALLOW_DEV", "false").lower() in ("1", "true", "yes")
+
+if ALLOW_DEV:
+    logger.warning(
+        "Development API authentication is enabled. "
+        "Do not use in production."
+    )
 
 
 class ChatRequest(BaseModel):
@@ -180,14 +205,6 @@ class ChatRequest(BaseModel):
 
 class SummarizeRequest(BaseModel):
     text: str
-
-
-def _get_client_ip(request: Request) -> str:
-    try:
-        return request.client.host
-    except Exception:
-        return "unknown"
-
 
 def _validate_api_key(request: Request) -> str:
     # Accept header `Authorization: Bearer <key>` or `X-API-Key`
@@ -220,6 +237,7 @@ async def chat(request: Request, payload: ChatRequest):
     # Auth
     api_key = _validate_api_key(request)
 
+
     # Rate limiting
     ip = _get_client_ip(request)
     if not ip_limiter.is_allowed(ip):
@@ -230,6 +248,10 @@ async def chat(request: Request, payload: ChatRequest):
     # Sanitize inputs
     sanitized_message = sanitize_text(payload.message)
     sanitized_context = sanitize_text(payload.context) if payload.context else None
+
+    if client is None:
+        raise HTTPException(status_code=503, detail="AI service unavailable")
+
 
     # Early payload validation
     validate_chat_input(sanitized_message, sanitized_context)
@@ -267,14 +289,6 @@ async def chat(request: Request, payload: ChatRequest):
 async def upload_document(request: Request, file: UploadFile = File(...)):
     # Auth
     api_key = _validate_api_key(request)
-
-    # Rate limiting
-    ip = _get_client_ip(request)
-    if not ip_limiter.is_allowed(ip):
-        raise HTTPException(status_code=429, detail="Rate limit exceeded for IP")
-    if not key_limiter.is_allowed(api_key):
-        raise HTTPException(status_code=429, detail="Rate limit exceeded for API key")
-
     # Content-Length pre-check
     try:
         content_length = int(request.headers.get("content-length", "0"))
@@ -345,6 +359,7 @@ async def summarize(request: Request, payload: SummarizeRequest):
     # Auth
     api_key = _validate_api_key(request)
 
+
     # Rate limiting
     ip = _get_client_ip(request)
     if not ip_limiter.is_allowed(ip):
@@ -367,6 +382,62 @@ async def health():
     return ai_service.check_health()
 
 
+    if client is None:
+        raise HTTPException(status_code=503, detail="AI service unavailable")
+
+    try:
+        model = client.model("inference-net/Schematron-3B")
+
+        prompt = (
+            "Summarize the following legal text clearly and concisely:\n\n"
+            f"{payload.text[:2000]}"
+        )
+        messages = [{"role": "user", "content": prompt}]
+
+        output = model.run(messages)
+
+        if hasattr(output, 'error') and output.error:
+            logger.error(f"Summarization model error: {output.error}")
+            raise HTTPException(status_code=503, detail="Failed to generate summary.")
+        return {"summary": output.output if hasattr(output, 'output') else str(output)}
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Summarization error: {e}", exc_info=True)
+        try:
+            # Fallback to the upstream extractive summarizer if the primary path fails.
+            summary_model = client.model("Jnjnpx/fine-tuned-bert-extractive-summarization")
+            fallback_output = summary_model.run(payload.text[:512])
+
+            if hasattr(fallback_output, 'error') and fallback_output.error:
+                logger.error(f"Summarizer model error: {fallback_output.error}")
+                raise HTTPException(status_code=503, detail="Failed to generate summary.")
+
+            return {"summary": fallback_output.output if hasattr(fallback_output, 'output') else str(fallback_output)}
+        except HTTPException:
+            raise
+        except Exception:
+            raise HTTPException(status_code=503, detail="Failed to generate summary.")
+
+
+if __name__ == "__main__":
+    import uvicorn
+
+    uvicorn.run(app, host="0.0.0.0", port=8000)
+
+
+
+# Health endpoint
+@app.get("/health")
+async def health():
+    status = "ok"
+    details = {"bytez": bool(client)}
+    if not client:
+        status = "degraded"
+    return {"status": status, "details": details}
+
+
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run(app, host="0.0.0.0", port=8000)
+
