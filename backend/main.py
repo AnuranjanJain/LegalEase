@@ -111,14 +111,23 @@ app.include_router(auth_routes.router)
 
 
 # Enable CORS for frontend communication
-FRONTEND_URL = os.getenv("FRONTEND_URL", "http://localhost:5173")
+raw_allowed_origins = os.getenv("ALLOWED_ORIGINS") or os.getenv(
+    "FRONTEND_URL",
+    "http://localhost:5173"
+)
+ALLOWED_ORIGINS = [
+    origin.strip()
+    for origin in raw_allowed_origins.split(",")
+    if origin.strip()
+]
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[FRONTEND_URL],
+    allow_origins=ALLOWED_ORIGINS,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
+logger.info(f"Allowed frontend origins: {ALLOWED_ORIGINS}")
 #Centralized rate-limit middleware
 app.add_middleware(RateLimitMiddleware)
 
