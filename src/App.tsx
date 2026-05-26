@@ -18,7 +18,7 @@ import { ScrollToTop } from './components/ScrollToTop';
 import { AuthProvider } from './contexts/AuthContext';
 import { LoginPage } from './pages/Login';
 import { SignupPage } from './pages/Signup';
-
+import BackToTop from "./components/BackToTop";
 function App() {
   useEffect(() => {
     StorageService.initSampleData();
@@ -29,6 +29,7 @@ function App() {
     <AuthProvider>
       <Router>
         <ScrollToTop />
+        <BackToTop />
         <Routes>
           <Route path="/login" element={<LoginPage />} />
           <Route path="/signup" element={<SignupPage />} />
