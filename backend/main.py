@@ -198,6 +198,12 @@ API_KEYS = [k.strip() for k in os.getenv("API_KEYS", "").split(",") if k.strip()
 DEV_API_KEY = os.getenv("DEV_API_KEY", "dev-token")
 ALLOW_DEV = os.getenv("ALLOW_DEV", "false").lower() in ("1", "true", "yes")
 
+if not API_KEYS:
+    logger.warning(
+        "API_KEYS is not configured. "
+        "Authentication fallback behavior is active."
+    )
+
 if ALLOW_DEV:
     logger.warning(
         "Development API authentication is enabled. "
