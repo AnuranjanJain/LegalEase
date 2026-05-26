@@ -1,6 +1,6 @@
 import pytest
 from fastapi import status
-from httpx import AsyncClient
+from httpx import AsyncClient, ASGITransport
 from backend.main import app
 
 
@@ -13,7 +13,7 @@ async def test_complete_document_upload_and_summarize_flow():
     
     headers = {"x-api-key": "dev-token"}
     
-    async with AsyncClient(app=app, base_url="http://test") as ac:
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as ac:
         # Step 1: Upload a document
         content = b"This is a legal document about contract terms and conditions."
         files = {"file": ("contract.txt", content, "text/plain")}
@@ -48,7 +48,7 @@ async def test_document_upload_and_chat_flow():
     
     headers = {"x-api-key": "dev-token"}
     
-    async with AsyncClient(app=app, base_url="http://test") as ac:
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as ac:
         # Step 1: Upload a document
         content = b"This employment contract states that the employee will work 40 hours per week."
         files = {"file": ("employment.txt", content, "text/plain")}
@@ -79,7 +79,7 @@ async def test_document_upload_and_chat_flow():
 @pytest.mark.asyncio
 async def test_health_check_and_service_availability():
     """Test health check endpoint and verify service status"""
-    async with AsyncClient(app=app, base_url="http://test") as ac:
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as ac:
         response = await ac.get("/health")
         
         assert response.status_code == 200
@@ -102,7 +102,7 @@ async def test_multiple_document_uploads():
     
     headers = {"x-api-key": "dev-token"}
     
-    async with AsyncClient(app=app, base_url="http://test") as ac:
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as ac:
         documents = [
             ("doc1.txt", b"First document content"),
             ("doc2.txt", b"Second document content"),
@@ -130,7 +130,7 @@ async def test_error_recovery_flow():
     
     headers = {"x-api-key": "dev-token"}
     
-    async with AsyncClient(app=app, base_url="http://test") as ac:
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as ac:
         # Try to upload an invalid file
         invalid_content = b"\x00\x01\x02\x03"
         files = {"file": ("invalid.bin", invalid_content, "application/octet-stream")}
