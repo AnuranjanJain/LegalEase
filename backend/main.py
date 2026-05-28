@@ -1,4 +1,4 @@
-from fastapi import FastAPI, HTTPException, UploadFile, File, Request
+from fastapi import Depends, FastAPI, HTTPException, UploadFile, File, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, StreamingResponse
 from pydantic import BaseModel
@@ -12,8 +12,9 @@ import uuid
 
 from dotenv import load_dotenv
 
-from database import engine, Base
+from database import engine, Base, get_db
 from routers import auth_routes
+from auth import validate_token_or_api_key
 
 # Optional imports (wrap in try/except so server can start without optional deps)
 try:
@@ -235,7 +236,7 @@ def _validate_api_key(request: Request) -> str:
 
     # Read config dynamically to support testing environments setting env vars
     api_keys = [k.strip() for k in os.getenv("API_KEYS", "").split(",") if k.strip()]
-    allow_dev = os.getenv("ALLOW_DEV", "true").lower() in ("1", "true", "yes")
+    allow_dev = os.getenv("ALLOW_DEV", "false").lower() in ("1", "true", "yes")
     dev_api_key = os.getenv("DEV_API_KEY", "dev-token")
 
     if api_keys and api_key not in api_keys:
@@ -254,16 +255,12 @@ def _get_client_ip(request: Request) -> str:
 
 
 @app.post("/chat")
-async def chat(request: Request, payload: ChatRequest):
-    # Auth
-    api_key = _validate_api_key(request)
-
-
+async def chat(request: Request, payload: ChatRequest, identity: str = Depends(validate_token_or_api_key)):
     # Rate limiting
     ip = _get_client_ip(request)
     if not ip_limiter.is_allowed(ip):
         raise HTTPException(status_code=429, detail="Rate limit exceeded for IP")
-    if not key_limiter.is_allowed(api_key):
+    if not key_limiter.is_allowed(identity):
         raise HTTPException(status_code=429, detail="Rate limit exceeded for API key")
 
     # Sanitize inputs
@@ -303,9 +300,7 @@ async def chat(request: Request, payload: ChatRequest):
 
 
 @app.post("/upload")
-async def upload_document(request: Request, file: UploadFile = File(...)):
-    # Auth
-    api_key = _validate_api_key(request)
+async def upload_document(request: Request, file: UploadFile = File(...), identity: str = Depends(validate_token_or_api_key)):
     # Content-Length pre-check
     try:
         content_length = int(request.headers.get("content-length", "0"))
@@ -372,16 +367,12 @@ async def upload_document(request: Request, file: UploadFile = File(...)):
 
 
 @app.post("/summarize")
-async def summarize(request: Request, payload: SummarizeRequest):
-    # Auth
-    api_key = _validate_api_key(request)
-
-
+async def summarize(request: Request, payload: SummarizeRequest, identity: str = Depends(validate_token_or_api_key)):
     # Rate limiting
     ip = _get_client_ip(request)
     if not ip_limiter.is_allowed(ip):
         raise HTTPException(status_code=429, detail="Rate limit exceeded for IP")
-    if not key_limiter.is_allowed(api_key):
+    if not key_limiter.is_allowed(identity):
         raise HTTPException(status_code=429, detail="Rate limit exceeded for API key")
 
     # Sanitize input
