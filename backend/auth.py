@@ -1,5 +1,6 @@
 import logging
 import os
+import logging
 from datetime import datetime, timedelta
 from typing import Optional
 from fastapi import Depends, HTTPException, status
@@ -9,8 +10,8 @@ import bcrypt
 from sqlalchemy.orm import Session
 from dotenv import load_dotenv
 
-from database import get_db
-import models
+from backend.database import get_db
+from backend import models
 
 load_dotenv()
 
