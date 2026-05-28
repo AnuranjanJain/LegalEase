@@ -120,6 +120,9 @@ ALLOWED_ORIGINS = [
     for origin in raw_allowed_origins.split(",")
     if origin.strip()
 ]
+# Rate-limit middleware registered first so that CORSMiddleware
+# (added second) wraps it — ensuring 429 responses include CORS headers.
+app.add_middleware(RateLimitMiddleware)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=ALLOWED_ORIGINS,
@@ -128,8 +131,6 @@ app.add_middleware(
     allow_headers=["*"],
 )
 logger.info(f"Allowed frontend origins: {ALLOWED_ORIGINS}")
-#Centralized rate-limit middleware
-app.add_middleware(RateLimitMiddleware)
 
 
 # Correlation ID middleware to inject trace headers
@@ -258,14 +259,6 @@ async def chat(request: Request, payload: ChatRequest):
     # Auth
     api_key = _validate_api_key(request)
 
-
-    # Rate limiting
-    ip = _get_client_ip(request)
-    if not ip_limiter.is_allowed(ip):
-        raise HTTPException(status_code=429, detail="Rate limit exceeded for IP")
-    if not key_limiter.is_allowed(api_key):
-        raise HTTPException(status_code=429, detail="Rate limit exceeded for API key")
-
     # Sanitize inputs
     sanitized_message = sanitize_text(payload.message)
     sanitized_context = sanitize_text(payload.context) if payload.context else None
@@ -375,14 +368,6 @@ async def upload_document(request: Request, file: UploadFile = File(...)):
 async def summarize(request: Request, payload: SummarizeRequest):
     # Auth
     api_key = _validate_api_key(request)
-
-
-    # Rate limiting
-    ip = _get_client_ip(request)
-    if not ip_limiter.is_allowed(ip):
-        raise HTTPException(status_code=429, detail="Rate limit exceeded for IP")
-    if not key_limiter.is_allowed(api_key):
-        raise HTTPException(status_code=429, detail="Rate limit exceeded for API key")
 
     # Sanitize input
     sanitized_text = sanitize_text(payload.text)
