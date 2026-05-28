@@ -19,10 +19,11 @@ import { AuthProvider } from './contexts/AuthContext';
 import { LoginPage } from './pages/Login';
 import { SignupPage } from './pages/Signup';
 import BackToTop from "./components/BackToTop";
+
 function App() {
   useEffect(() => {
     StorageService.initSampleData();
-    StorageService.getProfile(); // Init sample profile if not exists
+    StorageService.getProfile();
   }, []);
 
   return (
@@ -41,6 +42,7 @@ function App() {
             <Route path="processing" element={<ProcessingPage />} />
             <Route path="chatbot" element={<ChatbotPage />} />
             <Route path="profile" element={<ProfilePage />} />
+            <Route path="profile/:tab" element={<ProfilePage />} />
             <Route path="settings" element={<SettingsPage />} />
             <Route path="privacy" element={<PrivacyPage />} />
             <Route path="terms" element={<TermsPage />} />
@@ -53,4 +55,4 @@ function App() {
   );
 }
 
-export default App;
+export default App; 
