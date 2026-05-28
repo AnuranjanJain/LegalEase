@@ -12,8 +12,8 @@ import uuid
 
 from dotenv import load_dotenv
 
-from database import engine, Base
-from routers import auth_routes
+from backend.database import engine, Base
+from backend.routers import auth_routes
 
 # Optional imports (wrap in try/except so server can start without optional deps)
 try:
@@ -36,7 +36,7 @@ from backend.core.validation import (
 from backend.services.ai_service import ai_service, correlation_id_var
 
 #Middleware import 
-from middleware.rate_limit import RateLimitMiddleware
+from backend.middleware.rate_limit import RateLimitMiddleware
 # Configure logging
 logging.basicConfig(
     level=logging.INFO,
@@ -186,7 +186,7 @@ ip_limiter = SimpleRateLimiter(
     env_calls_key="RATE_LIMIT_IP_CALLS", env_period_key="RATE_LIMIT_PERIOD"
 )
 key_limiter = SimpleRateLimiter(
-    calls=30, period=60,
+    calls=300, period=60,
     env_calls_key="RATE_LIMIT_KEY_CALLS", env_period_key="RATE_LIMIT_PERIOD"
 )
 
@@ -233,10 +233,9 @@ def _validate_api_key(request: Request) -> str:
     if not api_key:
         raise HTTPException(status_code=401, detail="Missing API key")
 
-    # Read config dynamically to support testing environments setting env vars
-    api_keys = [k.strip() for k in os.getenv("API_KEYS", "").split(",") if k.strip()]
-    allow_dev = os.getenv("ALLOW_DEV", "true").lower() in ("1", "true", "yes")
-    dev_api_key = os.getenv("DEV_API_KEY", "dev-token")
+    api_keys = API_KEYS
+    allow_dev = ALLOW_DEV
+    dev_api_key = DEV_API_KEY
 
     if api_keys and api_key not in api_keys:
         if allow_dev and api_key == dev_api_key:
