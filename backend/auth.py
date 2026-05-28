@@ -1,3 +1,4 @@
+import logging
 import os
 from datetime import datetime, timedelta
 from typing import Optional
@@ -13,17 +14,28 @@ import models
 
 load_dotenv()
 
-# Require JWT_SECRET_KEY to be set in environment
+logger = logging.getLogger(__name__)
+
 SECRET_KEY = os.getenv("JWT_SECRET_KEY")
 if not SECRET_KEY:
-    # In production, this prevents the app from starting without a secure key
-    raise ValueError("JWT_SECRET_KEY environment variable is not set! Please define it in your .env file or environment.")
+    logger.warning(
+        "JWT_SECRET_KEY is not configured. Authentication features are unavailable."
+    )
 
 ALGORITHM = "HS256"
 ACCESS_TOKEN_EXPIRE_HOURS = 24
 
 # Used for swagger token extraction and get_current_user dependency
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="auth/login")
+
+
+def _require_secret_key() -> str:
+    if not SECRET_KEY:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Authentication service unavailable.",
+        )
+    return SECRET_KEY
 
 def verify_password(plain_password: str, hashed_password: str) -> bool:
     return bcrypt.checkpw(
@@ -37,19 +49,21 @@ def get_password_hash(password: str) -> str:
     return hashed.decode("utf-8")
 
 def create_access_token(data: dict, expires_delta: Optional[timedelta] = None) -> str:
+    secret_key = _require_secret_key()
     to_encode = data.copy()
     expire = datetime.utcnow() + (expires_delta if expires_delta else timedelta(hours=ACCESS_TOKEN_EXPIRE_HOURS))
     to_encode.update({"exp": expire})
-    return jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
+    return jwt.encode(to_encode, secret_key, algorithm=ALGORITHM)
 
 def get_current_user(token: str = Depends(oauth2_scheme), db: Session = Depends(get_db)):
+    secret_key = _require_secret_key()
     credentials_exception = HTTPException(
         status_code=status.HTTP_401_UNAUTHORIZED,
         detail="Could not validate credentials",
         headers={"WWW-Authenticate": "Bearer"},
     )
     try:
-        payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
+        payload = jwt.decode(token, secret_key, algorithms=[ALGORITHM])
         email: str = payload.get("sub")
         if email is None:
             raise credentials_exception
