@@ -1,13 +1,13 @@
 import pytest
 from fastapi import status
-from httpx import AsyncClient
+from httpx import AsyncClient, ASGITransport
 from backend.main import app
 
 
 @pytest.mark.asyncio
 async def test_health_endpoint_ok():
     """Test health endpoint when services are available"""
-    async with AsyncClient(app=app, base_url="http://test") as ac:
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as ac:
         r = await ac.get("/health")
         assert r.status_code == 200
         data = r.json()
@@ -25,7 +25,7 @@ async def test_chat_endpoint_with_valid_key():
     headers = {"x-api-key": "dev-token"}
     payload = {"message": "Hello"}
     
-    async with AsyncClient(app=app, base_url="http://test") as ac:
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as ac:
         r = await ac.post("/chat", json=payload, headers=headers)
         # Will return 503 if Bytez client not initialized, but should not be auth error
         assert r.status_code in [200, 503]
@@ -46,7 +46,7 @@ async def test_chat_endpoint_with_context():
         "context": "Document context here"
     }
     
-    async with AsyncClient(app=app, base_url="http://test") as ac:
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as ac:
         r = await ac.post("/chat", json=payload, headers=headers)
         assert r.status_code in [200, 503]
     
@@ -63,7 +63,7 @@ async def test_summarize_endpoint_with_valid_key():
     headers = {"x-api-key": "dev-token"}
     payload = {"text": "This is a sample text to summarize."}
     
-    async with AsyncClient(app=app, base_url="http://test") as ac:
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as ac:
         r = await ac.post("/summarize", json=payload, headers=headers)
         assert r.status_code in [200, 503]
     
@@ -81,7 +81,7 @@ async def test_upload_endpoint_with_text_file():
     content = b"This is a sample text file content."
     files = {"file": ("sample.txt", content, "text/plain")}
     
-    async with AsyncClient(app=app, base_url="http://test") as ac:
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as ac:
         r = await ac.post("/upload", files=files, headers=headers)
         assert r.status_code == 200
         data = r.json()
@@ -104,7 +104,7 @@ async def test_upload_endpoint_with_pdf():
     content = b"%PDF-1.4\n%mock pdf content"
     files = {"file": ("sample.pdf", content, "application/pdf")}
     
-    async with AsyncClient(app=app, base_url="http://test") as ac:
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as ac:
         r = await ac.post("/upload", files=files, headers=headers)
         # Will return 503 if PyMuPDF not available, or 400 for invalid PDF
         assert r.status_code in [200, 503, 400]
@@ -117,22 +117,46 @@ async def test_upload_endpoint_with_pdf():
 async def test_upload_endpoint_with_docx():
     """Test upload endpoint with a DOCX file"""
     import os
+    from unittest.mock import patch, Mock
     os.environ["ALLOW_DEV"] = "true"
+    
+    from unittest.mock import Mock, patch
+    mock_doc = Mock()
+    mock_para = Mock()
+    mock_para.text = "Sample mock docx content."
+    mock_doc.paragraphs = [mock_para]
     
     headers = {"x-api-key": "dev-token"}
     # Mock DOCX content (starts with PK magic bytes)
     content = b"PK\x03\x04\x14\x00\x00\x00\x08\x00"
     files = {"file": ("sample.docx", content, "application/vnd.openxmlformats-officedocument.wordprocessingml.document")}
     
-    async with AsyncClient(app=app, base_url="http://test") as ac:
-        r = await ac.post("/upload", files=files, headers=headers)
-        assert r.status_code == 200
-        data = r.json()
-        assert "filename" in data
-        assert data["filename"] == "sample.docx"
+
+    with patch("backend.main.DocxDocument", return_value=mock_doc):
+        async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as ac:
+
+    # Mock DocxDocument to return a mock document with paragraphs
+    mock_doc = Mock()
+    mock_para = Mock()
+    mock_para.text = "This is mocked docx content"
+    mock_doc.paragraphs = [mock_para]
+    
+    with patch("backend.main.DocxDocument", return_value=mock_doc):
+        async with AsyncClient(app=app, base_url="http://test") as ac:
+
+            r = await ac.post("/upload", files=files, headers=headers)
+            assert r.status_code == 200
+            data = r.json()
+            assert "filename" in data
+            assert data["filename"] == "sample.docx"
+
+            assert "text" in data
+            assert data["text"] == "This is mocked docx content"
+
     
     if "ALLOW_DEV" in os.environ:
         del os.environ["ALLOW_DEV"]
+
 
 
 @pytest.mark.asyncio
@@ -146,7 +170,7 @@ async def test_upload_endpoint_unsupported_file():
     content = b"\x00\x01\x02\x03\x04\x05"
     files = {"file": ("sample.bin", content, "application/octet-stream")}
     
-    async with AsyncClient(app=app, base_url="http://test") as ac:
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as ac:
         r = await ac.post("/upload", files=files, headers=headers)
         assert r.status_code == 400
     
@@ -157,15 +181,17 @@ async def test_upload_endpoint_unsupported_file():
 @pytest.mark.asyncio
 async def test_rate_limiting_on_chat():
     """Test that rate limiting works on chat endpoint"""
-    import os
-    os.environ["ALLOW_DEV"] = "true"
-    os.environ["RATE_LIMIT_KEY_CALLS"] = "2"
-    os.environ["RATE_LIMIT_PERIOD"] = "60"
+    import backend.main
+    
+    # Patch the limiter directly
+    orig_limiter = backend.main.key_limiter
+    backend.main.key_limiter = backend.main.SimpleRateLimiter(2, 60)
     
     headers = {"x-api-key": "dev-token"}
     payload = {"message": "Hello"}
     
-    async with AsyncClient(app=app, base_url="http://test") as ac:
+
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as ac:
         # First two requests should succeed (or return 503 if AI unavailable)
         r1 = await ac.post("/chat", json=payload, headers=headers)
         r2 = await ac.post("/chat", json=payload, headers=headers)
@@ -180,3 +206,16 @@ async def test_rate_limiting_on_chat():
         del os.environ["RATE_LIMIT_KEY_CALLS"]
     if "RATE_LIMIT_PERIOD" in os.environ:
         del os.environ["RATE_LIMIT_PERIOD"]
+
+    try:
+        async with AsyncClient(app=app, base_url="http://test") as ac:
+            # First two requests should succeed (or return 503 if AI unavailable)
+            r1 = await ac.post("/chat", json=payload, headers=headers)
+            r2 = await ac.post("/chat", json=payload, headers=headers)
+            
+            # Third request should be rate limited
+            r3 = await ac.post("/chat", json=payload, headers=headers)
+            assert r3.status_code == 429
+    finally:
+        backend.main.key_limiter = orig_limiter
+

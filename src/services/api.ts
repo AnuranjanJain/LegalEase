@@ -1,5 +1,6 @@
 const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000';
 
+
 const getApiKey = (): string => {
     try {
         const userToken = localStorage.getItem('le_auth_token');
@@ -14,74 +15,77 @@ const getApiKey = (): string => {
     } catch {
         return (import.meta.env.VITE_API_KEY as string | undefined) || 'dev-token';
     }
+
+const getAuthHeaders = (): Record<string, string> => {
+  const token = localStorage.getItem('access_token');
+  return token ? { 'Authorization': `Bearer ${token}` } : {};
+
 };
 
 export const api = {
-    post: async <T>(endpoint: string, data: any, conversationHistory?: Array<{role: string, content: string}>): Promise<T> => {
-        try {
-            const requestData = conversationHistory ? { ...data, conversation_history: conversationHistory } : data;
-            const response = await fetch(`${API_BASE_URL}${endpoint}`, {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    Authorization: `Bearer ${getApiKey()}`,
-                },
-                body: JSON.stringify(requestData),
-            });
+  post: async <T>(endpoint: string, data: any, conversationHistory?: Array<{role: string, content: string}>): Promise<T> => {
+    try {
+      const requestData = conversationHistory ? { ...data, conversation_history: conversationHistory } : data;
+      const response = await fetch(`${API_BASE_URL}${endpoint}`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...getAuthHeaders(),
+        },
+        body: JSON.stringify(requestData),
+      });
 
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData.detail || `API error: ${response.status}`);
+      }
 
-            if (!response.ok) {
-                const errorData = await response.json().catch(() => ({}));
-                throw new Error(errorData.detail || `API error: ${response.status}`);
-            }
+      return response.json();
+    } catch (error) {
+      console.error(`API POST error [${endpoint}]:`, error);
+      throw error;
+    }
+  },
 
-            return response.json();
-        } catch (error) {
-            console.error(`API POST error [${endpoint}]:`, error);
-            throw error;
-        }
-    },
+  get: async <T>(endpoint: string): Promise<T> => {
+    try {
+      const response = await fetch(`${API_BASE_URL}${endpoint}`, {
+        headers: {
+          ...getAuthHeaders(),
+        },
+      });
 
-    get: async <T>(endpoint: string): Promise<T> => {
-        try {
-            const response = await fetch(`${API_BASE_URL}${endpoint}`, {
-                headers: {
-                    Authorization: `Bearer ${getApiKey()}`,
-                },
-            });
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData.detail || `API error: ${response.status}`);
+      }
 
+      return response.json();
+    } catch (error) {
+      console.error(`API GET error [${endpoint}]:`, error);
+      throw error;
+    }
+  },
 
-            if (!response.ok) {
-                const errorData = await response.json().catch(() => ({}));
-                throw new Error(errorData.detail || `API error: ${response.status}`);
-            }
+  upload: async <T>(endpoint: string, formData: FormData): Promise<T> => {
+    try {
+      const response = await fetch(`${API_BASE_URL}${endpoint}`, {
+        method: 'POST',
+        headers: {
+          ...getAuthHeaders(),
+        },
+        body: formData,
+      });
 
-            return response.json();
-        } catch (error) {
-            console.error(`API GET error [${endpoint}]:`, error);
-            throw error;
-        }
-    },
-    upload: async <T>(endpoint: string, formData: FormData): Promise<T> => {
-        try {
-            const response = await fetch(`${API_BASE_URL}${endpoint}`, {
-                method: 'POST',
-                headers: {
-                    Authorization: `Bearer ${getApiKey()}`,
-                },
-                body: formData,
-            });
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData.detail || `Upload error: ${response.status}`);
+      }
 
-
-            if (!response.ok) {
-                const errorData = await response.json().catch(() => ({}));
-                throw new Error(errorData.detail || `Upload error: ${response.status}`);
-            }
-
-            return response.json();
-        } catch (error) {
-            console.error(`API Upload error [${endpoint}]:`, error);
-            throw error;
-        }
-    },
+      return response.json();
+    } catch (error) {
+      console.error(`API Upload error [${endpoint}]:`, error);
+      throw error;
+    }
+  },
 };

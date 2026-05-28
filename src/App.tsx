@@ -15,9 +15,16 @@ import { SecurityPage } from './pages/SecurityPage';
 import { StorageService } from './services/storage';
 import { NotFoundPage } from "./pages/NotFoundPage";
 import { ScrollToTop } from './components/ScrollToTop';
+
 import { ProtectedRoute } from './components/ProtectedRoute';
 import { LoginPage } from './pages/LoginPage';
 import { SignupPage } from './pages/SignupPage';
+
+
+import { AuthProvider } from './contexts/AuthContext';
+import { LoginPage } from './pages/Login';
+import { SignupPage } from './pages/Signup';
+import BackToTop from "./components/BackToTop";
 
 function App() {
   useEffect(() => {
@@ -26,6 +33,7 @@ function App() {
   }, []);
 
   return (
+
     <Router>
       <ScrollToTop />
       <Routes>
@@ -53,6 +61,32 @@ function App() {
         <Route path="*" element={<NotFoundPage />} />
       </Routes>
     </Router>
+
+    <AuthProvider>
+      <Router>
+        <ScrollToTop />
+        <BackToTop />
+        <Routes>
+          <Route path="/login" element={<LoginPage />} />
+          <Route path="/signup" element={<SignupPage />} />
+          <Route path="/" element={<Layout />}>
+            <Route index element={<HomePage />} />
+            <Route path="dashboard" element={<DashboardPage />} />
+            <Route path="documents" element={<DocumentsPage />} />
+            <Route path="documentation" element={<DocumentationPage />} />
+            <Route path="processing" element={<ProcessingPage />} />
+            <Route path="chatbot" element={<ChatbotPage />} />
+            <Route path="profile" element={<ProfilePage />} />
+            <Route path="settings" element={<SettingsPage />} />
+            <Route path="privacy" element={<PrivacyPage />} />
+            <Route path="terms" element={<TermsPage />} />
+            <Route path="security" element={<SecurityPage />} />
+          </Route>
+          <Route path="*" element={<NotFoundPage />} />
+        </Routes>
+      </Router>
+    </AuthProvider>
+ 
   );
 }
 

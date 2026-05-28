@@ -349,16 +349,21 @@ export const ChatStorageService = {
     try {
       const oldHistory = localStorage.getItem('chatHistory');
       if (oldHistory) {
-        const messages = JSON.parse(oldHistory);
+        const parsedHistory = JSON.parse(oldHistory);
+        if (!Array.isArray(parsedHistory)) {
+          localStorage.removeItem('chatHistory');
+          return;
+        }
+
         const sessionId = crypto.randomUUID();
-        const firstUserMessage = messages.find((m: any) => m.sender === 'user');
+        const firstUserMessage = parsedHistory.find((m: any) => m.sender === 'user');
         const title = firstUserMessage
           ? firstUserMessage.text.substring(0, 50) + (firstUserMessage.text.length > 50 ? '...' : '')
           : 'Migrated Conversation';
 
         const sessionData: ChatSessionData = {
           id: sessionId,
-          messages: messages.map((m: any) => ({
+          messages: parsedHistory.map((m: any) => ({
             ...m,
             id: String(m.id),
             timestamp: m.timestamp || new Date().toISOString()
@@ -372,6 +377,7 @@ export const ChatStorageService = {
       }
     } catch (error) {
       console.error('Error migrating old chat history:', error);
+      localStorage.removeItem('chatHistory');
     }
   }
 };
