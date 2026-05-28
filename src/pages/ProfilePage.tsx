@@ -4,6 +4,8 @@ import { useState } from 'react';
 import { useToast } from '../contexts/ToastContext';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useNotifications, AppNotification } from '../contexts/NotificationContext';
+import { useAuth } from '../contexts/AuthContext';
+import { api } from '../services/api';
 
 type Section = 'profile' | 'security' | 'notifications' | 'language';
 
@@ -100,6 +102,7 @@ export function ProfilePage() {
   const [profile, setProfile] = useState<UserProfile>(StorageService.getProfile());
   const [isSaving, setIsSaving] = useState(false);
   const { showToast } = useToast();
+  const { logout } = useAuth();
   const { tab } = useParams<{ tab?: string }>();
   const navigate = useNavigate();
 
@@ -150,16 +153,27 @@ export function ProfilePage() {
     }, 800);
   };
 
-  const handleChangePassword = () => {
+  const handleChangePassword = async () => {
     if (!pwForm.current) { showToast('Enter your current password.', 'error'); return; }
     if (pwForm.newPw.length < 8) { showToast('New password must be at least 8 characters.', 'error'); return; }
     if (pwForm.newPw !== pwForm.confirm) { showToast('Passwords do not match.', 'error'); return; }
+
     setChangingPw(true);
-    setTimeout(() => {
-      setChangingPw(false);
+    try {
+      await api.post<{ detail: string }>('/auth/change-password', {
+        current_password: pwForm.current,
+        new_password: pwForm.newPw,
+      });
       setPwForm({ current: '', newPw: '', confirm: '' });
-      showToast('Password updated successfully!', 'success');
-    }, 1000);
+      showToast('Password updated. Please sign in again.', 'success');
+      logout();
+      navigate('/login');
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Failed to update password.';
+      showToast(message, 'error');
+    } finally {
+      setChangingPw(false);
+    }
   };
 
   const handleSaveNotifPrefs = () => {
