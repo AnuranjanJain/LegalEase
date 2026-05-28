@@ -8,13 +8,35 @@ interface AuthContextType {
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
+/**
+ * Decodes a JWT payload and checks whether the token has expired.
+ * Returns true if the token is still valid, false otherwise.
+ * Does not verify the signature — expiry check only.
+ */
+function isTokenValid(token: string): boolean {
+  try {
+    const parts = token.split('.');
+    if (parts.length !== 3) return false;
+
+    const payload = JSON.parse(atob(parts[1]));
+    if (typeof payload.exp !== 'number') return false;
+
+    return payload.exp * 1000 > Date.now();
+  } catch {
+    return false;
+  }
+}
+
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [isAuthenticated, setIsAuthenticated] = useState<boolean>(false);
 
   useEffect(() => {
     const token = localStorage.getItem('access_token');
-    if (token) {
+    if (token && isTokenValid(token)) {
       setIsAuthenticated(true);
+    } else if (token) {
+      localStorage.removeItem('access_token');
+      setIsAuthenticated(false);
     }
   }, []);
 
