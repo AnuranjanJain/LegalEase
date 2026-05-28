@@ -108,7 +108,7 @@ async def test_correlation_id_propagation():
 @pytest.mark.asyncio
 async def test_ai_service_stub_mode():
     """Test AI Service behaviors in Stub Mode"""
-    with patch.dict(os.environ, {"STUB_MODE": "true"}):
+    with patch.dict(os.environ, {"STUB_MODE": "true", "HEALTH_DEBUG": "true"}):
         # Re-initialize service settings for stub mode
         ai_service.__init__()
         
@@ -129,7 +129,7 @@ async def test_ai_service_stub_mode():
         assert health["details"]["stub_mode"] is True
         
         # Revert environment settings
-        with patch.dict(os.environ, {"STUB_MODE": "false"}):
+        with patch.dict(os.environ, {"STUB_MODE": "false", "HEALTH_DEBUG": "false"}):
             ai_service.__init__()
 
 
