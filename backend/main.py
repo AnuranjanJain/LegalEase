@@ -358,7 +358,7 @@ async def upload_document(request: Request, file: UploadFile = File(...)):
             extracted_text = content.decode('utf-8')
 
         # Truncate extracted text to avoid sending huge payloads to models
-        extracted_text = extracted_text[:10000]
+        extracted_text = extracted_text[:500000]
 
         return {"filename": filename, "text": extracted_text}
 

@@ -1,4 +1,5 @@
 import pytest
+import os
 from fastapi import status
 from httpx import AsyncClient, ASGITransport
 from backend.main import app
@@ -134,24 +135,13 @@ async def test_upload_endpoint_with_docx():
 
     with patch("backend.main.DocxDocument", return_value=mock_doc):
         async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as ac:
-
-    # Mock DocxDocument to return a mock document with paragraphs
-    mock_doc = Mock()
-    mock_para = Mock()
-    mock_para.text = "This is mocked docx content"
-    mock_doc.paragraphs = [mock_para]
-    
-    with patch("backend.main.DocxDocument", return_value=mock_doc):
-        async with AsyncClient(app=app, base_url="http://test") as ac:
-
             r = await ac.post("/upload", files=files, headers=headers)
             assert r.status_code == 200
             data = r.json()
             assert "filename" in data
             assert data["filename"] == "sample.docx"
-
             assert "text" in data
-            assert data["text"] == "This is mocked docx content"
+            assert data["text"] == "Sample mock docx content."
 
     
     if "ALLOW_DEV" in os.environ:
@@ -191,24 +181,8 @@ async def test_rate_limiting_on_chat():
     payload = {"message": "Hello"}
     
 
-    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as ac:
-        # First two requests should succeed (or return 503 if AI unavailable)
-        r1 = await ac.post("/chat", json=payload, headers=headers)
-        r2 = await ac.post("/chat", json=payload, headers=headers)
-        
-        # Third request should be rate limited
-        r3 = await ac.post("/chat", json=payload, headers=headers)
-        assert r3.status_code == 429
-    
-    if "ALLOW_DEV" in os.environ:
-        del os.environ["ALLOW_DEV"]
-    if "RATE_LIMIT_KEY_CALLS" in os.environ:
-        del os.environ["RATE_LIMIT_KEY_CALLS"]
-    if "RATE_LIMIT_PERIOD" in os.environ:
-        del os.environ["RATE_LIMIT_PERIOD"]
-
     try:
-        async with AsyncClient(app=app, base_url="http://test") as ac:
+        async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as ac:
             # First two requests should succeed (or return 503 if AI unavailable)
             r1 = await ac.post("/chat", json=payload, headers=headers)
             r2 = await ac.post("/chat", json=payload, headers=headers)
@@ -218,4 +192,11 @@ async def test_rate_limiting_on_chat():
             assert r3.status_code == 429
     finally:
         backend.main.key_limiter = orig_limiter
+        
+    if "ALLOW_DEV" in os.environ:
+        del os.environ["ALLOW_DEV"]
+    if "RATE_LIMIT_KEY_CALLS" in os.environ:
+        del os.environ["RATE_LIMIT_KEY_CALLS"]
+    if "RATE_LIMIT_PERIOD" in os.environ:
+        del os.environ["RATE_LIMIT_PERIOD"]
 
