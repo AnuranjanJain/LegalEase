@@ -6,6 +6,8 @@ export interface Document {
   uploadDate: string;
   processedDate?: string;
   status: 'processed' | 'processing';
+  extractedText?: string;
+  summary?: string;
 }
 
 export interface UserProfile {
@@ -104,6 +106,19 @@ export const StorageService = {
         docs[docIndex].processedDate = new Date().toISOString();
       }
       localStorage.setItem(STORAGE_KEYS.DOCUMENTS, JSON.stringify(docs));
+    }
+  },
+
+  updateDocument: (id: string, updates: Partial<Document>) => {
+    try {
+      const docs = StorageService.getDocuments();
+      const docIndex = docs.findIndex(d => d.id === id);
+      if (docIndex !== -1) {
+        docs[docIndex] = { ...docs[docIndex], ...updates };
+        localStorage.setItem(STORAGE_KEYS.DOCUMENTS, JSON.stringify(docs));
+      }
+    } catch (error) {
+      console.error('Error updating document in storage:', error);
     }
   },
 

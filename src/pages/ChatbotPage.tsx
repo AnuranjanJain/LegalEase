@@ -1,8 +1,10 @@
 import { Send, User, Bot, Paperclip, X, FileText, Sparkles, RefreshCcw, PlusCircle, Trash2, History } from 'lucide-react';
 import { api } from '../services/api';
-import { ChatStorageService, ChatMessage, ChatSessionMetadata } from '../services/storage';
+import { ChatStorageService, ChatMessage, ChatSessionMetadata, StorageService } from '../services/storage';
 import { useRef, useState, useEffect, useCallback } from 'react';
 import { useToast } from '../contexts/ToastContext';
+import { useDocumentProcessing } from '../contexts/DocumentProcessingContext';
+import { ProcessingStepper } from '../components/ProcessingStepper';
 
 const DEFAULT_GREETING: ChatMessage = {
   id: 'default-greeting',
@@ -27,12 +29,18 @@ export function ChatbotPage() {
   const [sessions, setSessions] = useState<ChatSessionMetadata[]>([]);
   const [input, setInput] = useState('');
   const [isTyping, setIsTyping] = useState(false);
-  const [uploadedDoc, setUploadedDoc] = useState<{ name: string; text: string } | null>(null);
+  const [uploadedDoc, setUploadedDoc] = useState<{ name: string; text: string; summary?: string } | null>(null);
   const [isUploading, setIsUploading] = useState(false);
+  const [activeFileName, setActiveFileName] = useState<string | null>(null);
   const [showSessions, setShowSessions] = useState(false);
   const { showToast } = useToast();
   const fileInputRef = useRef<HTMLInputElement>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const { activeProcessing, processDocument } = useDocumentProcessing();
+
+  const activeChatDoc = Object.values(activeProcessing).find(
+    d => d.name === activeFileName && d.status !== 'completed' && d.status !== 'failed'
+  );
 
   // Migrate old chatHistory key and restore the active session on mount
   useEffect(() => {
@@ -179,36 +187,60 @@ export function ChatbotPage() {
     const file = e.target.files?.[0];
     if (!file) return;
 
+    setActiveFileName(file.name);
     setIsUploading(true);
     showToast(`Uploading "${file.name}" to AI sandbox...`, 'info');
-    
-    const formData = new FormData();
-    formData.append('file', file);
 
     try {
-      const data = await api.upload<{ filename: string; text: string }>('/upload', formData);
-      setUploadedDoc({ name: data.filename, text: data.text });
-      showToast(`Document "${data.filename}" context integrated successfully!`, 'success');
+      // Execute chunk-based preprocessing pipeline
+      const finalSummary = await processDocument(file);
+      
+      // Pull processed document from StorageService to get its full extracted text
+      const docs = StorageService.getDocuments();
+      const doc = docs.find(d => d.name === file.name);
 
-      const systemMsg: ChatMessage = {
+      setUploadedDoc({
+        name: file.name,
+        text: doc?.extractedText || finalSummary,
+        summary: finalSummary
+      });
+
+      showToast(`Document "${file.name}" successfully parsed and audited!`, 'success');
+
+      // Post the compiled summary brief to chat list
+      const summaryMsg: ChatMessage = {
         id: crypto.randomUUID(),
-        text: `Successfully uploaded ${data.filename}. I now have context of this document.`,
+        text: `Successfully uploaded and analyzed ${file.name}.\n\n### Compiled Executive Summary Brief\n\n${finalSummary}`,
         sender: 'bot',
         time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
         timestamp: new Date().toISOString(),
       };
-      setMessages((prev) => [...prev, systemMsg]);
-    } catch (error) {
-      console.error('Upload failed:', error);
-      showToast('Failed to process document context.', 'error');
+      setMessages((prev) => [...prev, summaryMsg]);
+    } catch (error: any) {
+      console.error('AI upload audit pipeline failed:', error);
+      showToast(`AI audit failed: ${error.message || error}`, 'error');
     } finally {
       setIsUploading(false);
+      setActiveFileName(null);
       if (fileInputRef.current) fileInputRef.current.value = '';
     }
   };
 
   const handleSummarize = async () => {
     if (!uploadedDoc) return;
+
+    if (uploadedDoc.summary) {
+      const summaryMsg: ChatMessage = {
+        id: crypto.randomUUID(),
+        text: `Summary of ${uploadedDoc.name}:\n\n${uploadedDoc.summary}`,
+        sender: 'bot',
+        time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+        timestamp: new Date().toISOString(),
+      };
+      setMessages((prev) => [...prev, summaryMsg]);
+      showToast('Summary retrieved successfully!', 'success');
+      return;
+    }
 
     setIsTyping(true);
     showToast('Analyzing and compiling summary...', 'info');
@@ -425,6 +457,36 @@ export function ChatbotPage() {
           </button>
         </div>
       </div>
+
+      {/* Reusable Premium Glassmorphic Stepper Overlay for Inline Upload Progress */}
+      {activeChatDoc && (
+        <div className="absolute inset-0 bg-gray-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="bg-white dark:bg-gray-950 p-6 md:p-8 rounded-2xl shadow-2xl border border-gray-150 dark:border-gray-800 max-w-md w-full space-y-6 animate-scale-up">
+            <h3 className="text-lg font-bold text-gray-900 dark:text-white text-center">
+              Contract Sandbox Ingestion
+            </h3>
+            
+            <ProcessingStepper
+              status={activeChatDoc.status}
+              progress={activeChatDoc.progress}
+              currentBlock={activeChatDoc.currentBlock}
+              totalBlocks={activeChatDoc.totalBlocks}
+              error={activeChatDoc.error}
+            />
+            
+            {(activeChatDoc.status === 'completed' || activeChatDoc.status === 'failed') && (
+              <button
+                onClick={() => {
+                  setActiveFileName(null);
+                }}
+                className="w-full py-2.5 bg-primary text-white text-xs font-bold rounded-xl hover:bg-primary/95 transition-all"
+              >
+                Close Audit Stepper
+              </button>
+            )}
+          </div>
+        </div>
+      )}
     </div>
   );
 }

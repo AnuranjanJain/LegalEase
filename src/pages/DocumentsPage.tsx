@@ -6,6 +6,7 @@ import {
 import { StorageService, Document } from '../services/storage';
 import { useToast } from '../contexts/ToastContext';
 import { useNavigate } from 'react-router-dom';
+import { useDocumentProcessing } from '../contexts/DocumentProcessingContext';
 
 export function DocumentsPage() {
   const [isDragging, setIsDragging] = useState(false);
@@ -16,37 +17,35 @@ export function DocumentsPage() {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const { showToast } = useToast();
   const navigate = useNavigate();
+  const { processDocument } = useDocumentProcessing();
 
   // Load documents from StorageService on mount
   useEffect(() => {
     setDocuments(StorageService.getDocuments());
   }, []);
 
-  const processFiles = (files: FileList) => {
-    Array.from(files).forEach((file) => {
-      const fileExtension = file.name.split('.').pop()?.toLowerCase() || 'txt';
-      
-      const newDoc: Document = {
-        id: `doc_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
-        name: file.name,
-        type: fileExtension,
-        size: file.size,
-        uploadDate: new Date().toISOString(),
-        status: 'processing'
-      };
-
-      // Save to StorageService and update state
-      StorageService.saveDocument(newDoc);
-      setDocuments(StorageService.getDocuments());
-      showToast(`Uploading "${file.name}"...`, 'info');
-
-      // Simulate AI Processing completion after 3 seconds
-      setTimeout(() => {
-        StorageService.updateDocumentStatus(newDoc.id, 'processed');
-        setDocuments(StorageService.getDocuments());
+  const processFiles = async (files: FileList) => {
+    if (files.length === 0) return;
+    
+    // Process the first file and redirect to progress tracker
+    const file = files[0];
+    showToast(`Initiating cognitive audit pipeline for "${file.name}"...`, 'info');
+    
+    try {
+      // Run the pipeline asynchronously in background context
+      processDocument(file).then(() => {
         showToast(`Document "${file.name}" successfully analyzed by AI!`, 'success');
-      }, 3000);
-    });
+        setDocuments(StorageService.getDocuments());
+      }).catch((err) => {
+        showToast(`AI audit failed: ${err.message || err}`, 'error');
+        setDocuments(StorageService.getDocuments());
+      });
+      
+      // Redirect straight to processing stepper page
+      navigate('/processing');
+    } catch (err) {
+      console.error(err);
+    }
   };
 
   const handleDragOver = (e: React.DragEvent<HTMLDivElement>) => {

@@ -22,6 +22,7 @@ describe('API Service', () => {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
+            Authorization: 'Bearer dev-token',
           },
           body: JSON.stringify({ data: 'test' }),
         })
@@ -83,7 +84,12 @@ describe('API Service', () => {
       await api.get('/test');
 
       expect(mockFetch).toHaveBeenCalledWith(
-        expect.stringContaining('/test')
+        expect.stringContaining('/test'),
+        expect.objectContaining({
+          headers: {
+            Authorization: 'Bearer dev-token',
+          },
+        })
       );
     });
 
@@ -128,6 +134,9 @@ describe('API Service', () => {
         expect.stringContaining('/upload'),
         expect.objectContaining({
           method: 'POST',
+          headers: {
+            Authorization: 'Bearer dev-token',
+          },
           body: formData,
         })
       );
