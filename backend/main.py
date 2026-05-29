@@ -147,6 +147,7 @@ async def correlation_id_middleware(request: Request, call_next):
 
 # Configuration
 MAX_UPLOAD_SIZE = int(os.getenv("MAX_UPLOAD_SIZE", str(25 * 1024 * 1024)))  # 25 MB default
+CHUNK_SIZE = 1024 * 1024
 
 
 
@@ -314,9 +315,18 @@ async def upload_document(request: Request, file: UploadFile = File(...)):
         raise HTTPException(status_code=413, detail="Uploaded file is too large")
 
     try:
-        content = await file.read()
-        if len(content) > MAX_UPLOAD_SIZE:
-            raise HTTPException(status_code=413, detail="Uploaded file is too large")
+        chunks = []
+        total_size = 0
+        while True:
+            chunk = await file.read(CHUNK_SIZE)
+            if not chunk:
+                break
+            total_size += len(chunk)
+            if total_size > MAX_UPLOAD_SIZE:
+                raise HTTPException(status_code=413, detail="Uploaded file is too large")
+            chunks.append(chunk)
+
+        content = b"".join(chunks)
 
         filename = file.filename or "unknown"
         file_extension = os.path.splitext(filename)[1].lower()
