@@ -1,9 +1,10 @@
 import { useState, useRef, useEffect, useMemo } from 'react';
-import { 
-  UploadCloud, FileText, Trash2, Eye, Search, 
-  Grid, List, CheckCircle, ArrowRight, RefreshCcw 
+import {
+  UploadCloud, FileText, Trash2, Eye, Search,
+  Grid, List, CheckCircle, ArrowRight, RefreshCcw, AlertCircle
 } from 'lucide-react';
 import { StorageService, Document } from '../services/storage';
+import { api } from '../services/api';
 import { useToast } from '../contexts/ToastContext';
 import { useNavigate } from 'react-router-dom';
 import { ShareButton } from '../components/ShareButton';
@@ -25,30 +26,42 @@ export function DocumentsPage() {
     setDocuments(StorageService.getDocuments());
   }, []);
 
+  /** Upload each file to the backend for real AI extraction. */
   const processFiles = (files: FileList) => {
-    Array.from(files).forEach((file) => {
+    Array.from(files).forEach(async (file) => {
       const fileExtension = file.name.split('.').pop()?.toLowerCase() || 'txt';
-      
+
       const newDoc: Document = {
         id: `doc_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
         name: file.name,
         type: fileExtension,
         size: file.size,
         uploadDate: new Date().toISOString(),
-        status: 'processing'
+        status: 'processing',
       };
 
-      // Save to StorageService and update state
       StorageService.saveDocument(newDoc);
       setDocuments(StorageService.getDocuments());
       showToast(`Uploading "${file.name}"...`, 'info');
 
-      // Simulate AI Processing completion after 3 seconds
-      setTimeout(() => {
-        StorageService.updateDocumentStatus(newDoc.id, 'processed');
+      try {
+        const formData = new FormData();
+        formData.append('file', file);
+
+        const data = await api.upload<{ filename: string; text: string }>('/upload', formData);
+
+        newDoc.status = 'processed';
+        newDoc.processedDate = new Date().toISOString();
+        newDoc.extractedText = data.text;
+        StorageService.saveDocument(newDoc);
         setDocuments(StorageService.getDocuments());
-        showToast(`Document "${file.name}" successfully analyzed by AI!`, 'success');
-      }, 3000);
+        showToast(`Document "${data.filename}" successfully analyzed by AI!`, 'success');
+      } catch {
+        newDoc.status = 'error';
+        StorageService.saveDocument(newDoc);
+        setDocuments(StorageService.getDocuments());
+        showToast(`Failed to process "${file.name}". Please try again.`, 'error');
+      }
     });
   };
 
@@ -273,9 +286,8 @@ export function DocumentsPage() {
             /* GRID VIEW */
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
               {filteredDocs.map((doc) => {
-                const isProcessing = doc.status === 'processing';
                 const typeInfo = getDocTypeDetails(doc.type);
-                
+
                 return (
                   <div 
                     key={doc.id} 
@@ -291,10 +303,15 @@ export function DocumentsPage() {
                           {doc.type}
                         </span>
                         
-                        {isProcessing ? (
+                        {doc.status === 'processing' ? (
                           <span className="inline-flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-full bg-amber-500/10 text-amber-500 border border-amber-500/20 animate-pulse">
                             <RefreshCcw size={10} className="animate-spin" />
                             AI Auditing
+                          </span>
+                        ) : doc.status === 'error' ? (
+                          <span className="inline-flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-full bg-red-500/10 text-red-500 border border-red-500/20">
+                            <AlertCircle size={10} />
+                            Failed
                           </span>
                         ) : (
                           <span className="inline-flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-500 border border-emerald-500/20">
@@ -349,7 +366,7 @@ export function DocumentsPage() {
                         onClick={() => handleReviewDetails(doc)}
                         className={`inline-flex items-center gap-1.5 px-4 py-2 text-xs font-bold rounded-lg border border-gray-250 dark:border-gray-800 hover:border-primary-500 hover:bg-primary-500 hover:text-white transition-all`}
                       >
-                        {isProcessing ? (
+                        {doc.status === 'processing' ? (
                           <>
                             <span>View Progress</span>
                             <ArrowRight size={12} className="animate-pulse" />
@@ -383,9 +400,8 @@ export function DocumentsPage() {
                   </thead>
                   <tbody className="divide-y divide-gray-150 dark:divide-gray-800">
                     {filteredDocs.map((doc) => {
-                      const isProcessing = doc.status === 'processing';
                       const typeInfo = getDocTypeDetails(doc.type);
-                      
+
                       return (
                         <tr key={doc.id} className="hover:bg-gray-50 dark:hover:bg-gray-950/40 transition-colors">
                           <td className="px-6 py-4 whitespace-nowrap">
@@ -414,10 +430,15 @@ export function DocumentsPage() {
                             {formatDate(doc.uploadDate)}
                           </td>
                           <td className="px-6 py-4 whitespace-nowrap">
-                            {isProcessing ? (
+                            {doc.status === 'processing' ? (
                               <span className="inline-flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-full bg-amber-500/10 text-amber-500 border border-amber-500/20 animate-pulse">
                                 <RefreshCcw size={10} className="animate-spin" />
                                 Processing
+                              </span>
+                            ) : doc.status === 'error' ? (
+                              <span className="inline-flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-full bg-red-500/10 text-red-500 border border-red-500/20">
+                                <AlertCircle size={10} />
+                                Failed
                               </span>
                             ) : (
                               <span className="inline-flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-500 border border-emerald-500/20">
