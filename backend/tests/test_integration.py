@@ -86,11 +86,8 @@ async def test_health_check_and_service_availability():
         data = response.json()
         
         assert "status" in data
-        assert "details" in data
-        assert "bytez" in data["details"]
-        
-        # Status should be either "ok" or "degraded"
         assert data["status"] in ["ok", "degraded"]
+        assert "details" not in data
 
 
 @pytest.mark.integration

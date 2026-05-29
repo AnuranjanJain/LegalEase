@@ -211,20 +211,24 @@ class AIService:
 
     def check_health(self) -> Dict[str, Any]:
         """
-        Provide detailed diagnostics for health endpoint.
+        Return a public-safe health status, with optional debug diagnostics.
         """
         status = "ok"
-        details = {
-            "bytez": bool(self.client),
-            "initialized": bool(self.client),
-            "stub_mode": self.stub_mode,
-            "graceful_degradation": self.graceful_degradation,
-            "chat_model": self.chat_model_name,
-            "summarize_model": self.summarize_model_name,
-        }
         if not self.client and not self.stub_mode:
             status = "degraded"
-        return {"status": status, "details": details}
+
+        if os.getenv("HEALTH_DEBUG", "false").lower() in ("true", "1", "yes"):
+            details = {
+                "bytez": bool(self.client),
+                "initialized": bool(self.client),
+                "stub_mode": self.stub_mode,
+                "graceful_degradation": self.graceful_degradation,
+                "chat_model": self.chat_model_name,
+                "summarize_model": self.summarize_model_name,
+            }
+            return {"status": status, "details": details}
+
+        return {"status": status}
 
 
 

@@ -13,8 +13,8 @@ async def test_health_endpoint_ok():
         assert r.status_code == 200
         data = r.json()
         assert "status" in data
-        assert "details" in data
-        assert "bytez" in data["details"]
+        assert data["status"] in ["ok", "degraded"]
+        assert "details" not in data
 
 
 @pytest.mark.asyncio
