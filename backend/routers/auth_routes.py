@@ -3,9 +3,9 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 from pydantic import BaseModel, EmailStr, Field
 
-from database import get_db
-import models
-from auth import (
+from backend.database import get_db
+from backend import models
+from backend.auth import (
     verify_password,
     get_password_hash,
     create_access_token,
