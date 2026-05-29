@@ -14,12 +14,9 @@ class SimpleRateLimiter:
         timestamps = [t for t in timestamps if t > window]
         remaining = self.calls - len(timestamps)
         if remaining<=0:
-<<<<<<< HEAD
             oldest_timestamp = timestamps[0] if timestamps else now
             retry_after = max(0, math.ceil(oldest_timestamp + self.period - now))
-=======
-            retry_after = max(0, int(math.ceil(timestamps[0] + self.period - now)))
->>>>>>> upstream/main
+
 
             return{
                 "allowed":False,
