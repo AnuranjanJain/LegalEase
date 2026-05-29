@@ -4,12 +4,16 @@ from fastapi.responses import JSONResponse, StreamingResponse
 from pydantic import BaseModel
 import os
 import logging
-import base64
 from io import BytesIO
 from typing import Optional
+
 import time
 import uuid
+
 from dotenv import load_dotenv
+
+from database import engine, Base
+from routers import auth_routes
 
 # Optional imports (wrap in try/except so server can start without optional deps)
 try:
@@ -31,6 +35,8 @@ from backend.core.validation import (
 )
 from backend.services.ai_service import ai_service, correlation_id_var
 
+#Middleware import 
+from middleware.rate_limit import RateLimitMiddleware
 # Configure logging
 logging.basicConfig(
     level=logging.INFO,
@@ -42,6 +48,7 @@ logger = logging.getLogger(__name__)
 load_dotenv()
 
 app = FastAPI()
+
 
 # Exception Handlers to match standardized error contracts
 @app.exception_handler(ValidationError)
@@ -96,15 +103,33 @@ async def service_unavailable_exception_handler(request: Request, exc: ServiceUn
     )
 
 
+# Create database tables
+Base.metadata.create_all(bind=engine)
+
+# Include authentication router
+app.include_router(auth_routes.router)
+
+
 # Enable CORS for frontend communication
-FRONTEND_URL = os.getenv("FRONTEND_URL", "http://localhost:5173")
+raw_allowed_origins = os.getenv("ALLOWED_ORIGINS") or os.getenv(
+    "FRONTEND_URL",
+    "http://localhost:5173"
+)
+ALLOWED_ORIGINS = [
+    origin.strip()
+    for origin in raw_allowed_origins.split(",")
+    if origin.strip()
+]
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[FRONTEND_URL],
+    allow_origins=ALLOWED_ORIGINS,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
+logger.info(f"Allowed frontend origins: {ALLOWED_ORIGINS}")
+#Centralized rate-limit middleware
+app.add_middleware(RateLimitMiddleware)
 
 
 # Correlation ID middleware to inject trace headers
@@ -122,6 +147,7 @@ async def correlation_id_middleware(request: Request, call_next):
 
 # Configuration
 MAX_UPLOAD_SIZE = int(os.getenv("MAX_UPLOAD_SIZE", str(25 * 1024 * 1024)))  # 25 MB default
+
 
 
 # Simple in-memory rate limiter (per-IP and per-key)
@@ -165,10 +191,24 @@ key_limiter = SimpleRateLimiter(
 )
 
 
+
+
 # API keys and dev mode
 API_KEYS = [k.strip() for k in os.getenv("API_KEYS", "").split(",") if k.strip()]
 DEV_API_KEY = os.getenv("DEV_API_KEY", "dev-token")
-ALLOW_DEV = os.getenv("ALLOW_DEV", "true").lower() in ("1", "true", "yes")
+ALLOW_DEV = os.getenv("ALLOW_DEV", "false").lower() in ("1", "true", "yes")
+
+if not API_KEYS:
+    logger.warning(
+        "API_KEYS is not configured. "
+        "Authentication fallback behavior is active."
+    )
+
+if ALLOW_DEV:
+    logger.warning(
+        "Development API authentication is enabled. "
+        "Do not use in production."
+    )
 
 
 class ChatRequest(BaseModel):
@@ -180,14 +220,6 @@ class ChatRequest(BaseModel):
 
 class SummarizeRequest(BaseModel):
     text: str
-
-
-def _get_client_ip(request: Request) -> str:
-    try:
-        return request.client.host
-    except Exception:
-        return "unknown"
-
 
 def _validate_api_key(request: Request) -> str:
     # Accept header `Authorization: Bearer <key>` or `X-API-Key`
@@ -214,11 +246,18 @@ def _validate_api_key(request: Request) -> str:
     return api_key
 
 
+def _get_client_ip(request: Request) -> str:
+    forwarded_for = request.headers.get("x-forwarded-for")
+    if forwarded_for:
+        return forwarded_for.split(",", 1)[0].strip()
+    return request.client.host if request.client else "unknown"
+
 
 @app.post("/chat")
 async def chat(request: Request, payload: ChatRequest):
     # Auth
     api_key = _validate_api_key(request)
+
 
     # Rate limiting
     ip = _get_client_ip(request)
@@ -267,14 +306,6 @@ async def chat(request: Request, payload: ChatRequest):
 async def upload_document(request: Request, file: UploadFile = File(...)):
     # Auth
     api_key = _validate_api_key(request)
-
-    # Rate limiting
-    ip = _get_client_ip(request)
-    if not ip_limiter.is_allowed(ip):
-        raise HTTPException(status_code=429, detail="Rate limit exceeded for IP")
-    if not key_limiter.is_allowed(api_key):
-        raise HTTPException(status_code=429, detail="Rate limit exceeded for API key")
-
     # Content-Length pre-check
     try:
         content_length = int(request.headers.get("content-length", "0"))
@@ -345,6 +376,7 @@ async def summarize(request: Request, payload: SummarizeRequest):
     # Auth
     api_key = _validate_api_key(request)
 
+
     # Rate limiting
     ip = _get_client_ip(request)
     if not ip_limiter.is_allowed(ip):
@@ -369,4 +401,5 @@ async def health():
 
 if __name__ == "__main__":
     import uvicorn
+
     uvicorn.run(app, host="0.0.0.0", port=8000)

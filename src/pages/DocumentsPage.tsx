@@ -6,7 +6,12 @@ import {
 import { StorageService, Document } from '../services/storage';
 import { useToast } from '../contexts/ToastContext';
 import { useNavigate } from 'react-router-dom';
+
 import { useDocumentProcessing } from '../contexts/DocumentProcessingContext';
+
+import { ShareButton } from '../components/ShareButton';
+import { WhatsAppShareModal } from '../components/WhatsAppShareModal';
+
 
 export function DocumentsPage() {
   const [isDragging, setIsDragging] = useState(false);
@@ -14,6 +19,7 @@ export function DocumentsPage() {
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedTypeFilter, setSelectedTypeFilter] = useState<'All' | 'PDF' | 'DOCX' | 'TXT'>('All');
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
+  const [shareDoc, setShareDoc] = useState<Document | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const { showToast } = useToast();
   const navigate = useNavigate();
@@ -325,13 +331,21 @@ export function DocumentsPage() {
 
                     {/* Action footer */}
                     <div className="p-4 bg-gray-50/50 dark:bg-gray-950/20 border-t border-gray-150 dark:border-gray-800/80 flex items-center justify-between gap-3">
-                      <button
-                        onClick={() => handleDelete(doc.id, doc.name)}
-                        className="p-2 text-gray-400 hover:text-red-500 hover:bg-red-500/10 rounded-lg transition-colors"
-                        aria-label={`Delete ${doc.name}`}
-                      >
-                        <Trash2 size={16} />
-                      </button>
+                      <div className="flex items-center gap-1">
+                        <button
+                          onClick={() => handleDelete(doc.id, doc.name)}
+                          className="p-2 text-gray-400 hover:text-red-500 hover:bg-red-500/10 rounded-lg transition-colors"
+                          aria-label={`Delete ${doc.name}`}
+                        >
+                          <Trash2 size={16} />
+                        </button>
+                        {/* WhatsApp Share button */}
+                        <ShareButton
+                          document={doc}
+                          onShare={setShareDoc}
+                          variant="icon"
+                        />
+                      </div>
 
                       <button
                         onClick={() => handleReviewDetails(doc)}
@@ -415,7 +429,7 @@ export function DocumentsPage() {
                             )}
                           </td>
                           <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-semibold">
-                            <div className="flex items-center justify-end gap-2">
+                            <div className="flex items-center justify-end gap-1">
                               <button
                                 onClick={() => handleReviewDetails(doc)}
                                 className="p-2 text-gray-400 hover:text-primary-500 dark:hover:text-white hover:bg-primary-500/10 rounded-lg transition-colors"
@@ -423,6 +437,12 @@ export function DocumentsPage() {
                               >
                                 <Eye size={16} />
                               </button>
+                              {/* WhatsApp Share button — list view */}
+                              <ShareButton
+                                document={doc}
+                                onShare={setShareDoc}
+                                variant="icon"
+                              />
                               <button
                                 onClick={() => handleDelete(doc.id, doc.name)}
                                 className="p-2 text-gray-400 hover:text-red-500 hover:bg-red-500/10 rounded-lg transition-colors"
@@ -458,6 +478,12 @@ export function DocumentsPage() {
         )}
 
       </div>
+
+      {/* WhatsApp Share Modal — portal-rendered above everything */}
+      <WhatsAppShareModal
+        document={shareDoc}
+        onClose={() => setShareDoc(null)}
+      />
     </div>
   );
 }
