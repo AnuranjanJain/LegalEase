@@ -5,7 +5,8 @@ export interface Document {
   size: number;
   uploadDate: string;
   processedDate?: string;
-  status: 'processed' | 'processing';
+  status: 'processed' | 'processing' | 'error';
+  extractedText?: string;
 }
 
 export interface UserProfile {
