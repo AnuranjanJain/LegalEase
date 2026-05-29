@@ -1,5 +1,5 @@
 import { useState, FormEvent } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link, useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { Eye, EyeOff, Mail, Lock, ArrowRight } from 'lucide-react';
 
@@ -13,6 +13,8 @@ export function LoginPage() {
   const [isLoading, setIsLoading] = useState(false);
   const { login } = useAuth();
   const navigate = useNavigate();
+  const location = useLocation();
+  const redirectTo = (location.state as { from?: string } | null)?.from || '/dashboard';
 
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
@@ -43,7 +45,7 @@ export function LoginPage() {
       }
 
       login(data.access_token);
-      navigate('/dashboard');
+      navigate(redirectTo);
     } catch {
       setError('Unable to connect to the server. Please try again.');
     } finally {

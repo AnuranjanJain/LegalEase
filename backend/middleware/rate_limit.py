@@ -1,7 +1,7 @@
 from fastapi import Request
-from fastapi import JSONResponse
+from fastapi.responses import JSONResponse
 from starlette.middleware.base import BaseHTTPMiddleware
-from utils.limiter import SimpleRateLimiter
+from backend.utils.limiter import SimpleRateLimiter
 import os
 
 RATE_LIMIT_PERIOD = int(os.getenv("RATE_LIMIT_PERIOD", "60"))
