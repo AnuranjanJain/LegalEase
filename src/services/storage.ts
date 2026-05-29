@@ -5,7 +5,7 @@ export interface Document {
   size: number;
   uploadDate: string;
   processedDate?: string;
-  status: 'processed' | 'processing';
+  status: 'processed' | 'processing' | 'error';
   extractedText?: string;
   summary?: string;
 }
@@ -97,7 +97,7 @@ export const StorageService = {
     return StorageService.getDocuments().find(d => d.id === id);
   },
 
-  updateDocumentStatus: (id: string, status: 'processed' | 'processing') => {
+  updateDocumentStatus: (id: string, status: 'processed' | 'processing' | 'error') => {
     const docs = StorageService.getDocuments();
     const docIndex = docs.findIndex(d => d.id === id);
     if (docIndex !== -1) {

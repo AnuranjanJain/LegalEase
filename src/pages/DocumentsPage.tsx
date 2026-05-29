@@ -1,9 +1,10 @@
 import { useState, useRef, useEffect, useMemo } from 'react';
-import { 
-  UploadCloud, FileText, Trash2, Eye, Search, 
-  Grid, List, CheckCircle, ArrowRight, RefreshCcw 
+import {
+  UploadCloud, FileText, Trash2, Eye, Search,
+  Grid, List, CheckCircle, ArrowRight, RefreshCcw, AlertCircle
 } from 'lucide-react';
 import { StorageService, Document } from '../services/storage';
+import { api } from '../services/api';
 import { useToast } from '../contexts/ToastContext';
 import { useNavigate } from 'react-router-dom';
 
@@ -249,7 +250,7 @@ export function DocumentsPage() {
             <div className="h-6 w-px bg-gray-200 dark:bg-gray-800 hidden sm:block"></div>
 
             {/* View Mode Grid/List buttons */}
-            <div className="flex p-1 bg-gray-100/80 dark:bg-gray-900/50 rounded-xl border border-gray-200 dark:border-gray-850">
+            <div className="flex p-1 bg-gray-100/80 dark:bg-gray-900/50 rounded-xl border border-gray-200 dark:border-gray-855">
               <button
                 onClick={() => setViewMode('grid')}
                 className={`p-1.5 rounded-lg transition-all ${viewMode === 'grid' ? 'bg-white dark:bg-gray-800 text-primary-600 dark:text-white shadow-sm' : 'text-gray-400 hover:text-gray-700 dark:hover:text-gray-200'}`}
@@ -275,9 +276,8 @@ export function DocumentsPage() {
             /* GRID VIEW */
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
               {filteredDocs.map((doc) => {
-                const isProcessing = doc.status === 'processing';
                 const typeInfo = getDocTypeDetails(doc.type);
-                
+
                 return (
                   <div 
                     key={doc.id} 
@@ -293,10 +293,15 @@ export function DocumentsPage() {
                           {doc.type}
                         </span>
                         
-                        {isProcessing ? (
+                        {doc.status === 'processing' ? (
                           <span className="inline-flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-full bg-amber-500/10 text-amber-500 border border-amber-500/20 animate-pulse">
                             <RefreshCcw size={10} className="animate-spin" />
                             AI Auditing
+                          </span>
+                        ) : doc.status === 'error' ? (
+                          <span className="inline-flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-full bg-red-500/10 text-red-500 border border-red-500/20">
+                            <AlertCircle size={10} />
+                            Failed
                           </span>
                         ) : (
                           <span className="inline-flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-500 border border-emerald-500/20">
@@ -351,7 +356,7 @@ export function DocumentsPage() {
                         onClick={() => handleReviewDetails(doc)}
                         className={`inline-flex items-center gap-1.5 px-4 py-2 text-xs font-bold rounded-lg border border-gray-250 dark:border-gray-800 hover:border-primary-500 hover:bg-primary-500 hover:text-white transition-all`}
                       >
-                        {isProcessing ? (
+                        {doc.status === 'processing' ? (
                           <>
                             <span>View Progress</span>
                             <ArrowRight size={12} className="animate-pulse" />
@@ -385,14 +390,13 @@ export function DocumentsPage() {
                   </thead>
                   <tbody className="divide-y divide-gray-150 dark:divide-gray-800">
                     {filteredDocs.map((doc) => {
-                      const isProcessing = doc.status === 'processing';
                       const typeInfo = getDocTypeDetails(doc.type);
-                      
+
                       return (
                         <tr key={doc.id} className="hover:bg-gray-50 dark:hover:bg-gray-950/40 transition-colors">
                           <td className="px-6 py-4 whitespace-nowrap">
                             <div className="flex items-center gap-3">
-                              <div className={`p-2 rounded-lg bg-gray-100 dark:bg-gray-800 flex-shrink-0`}>
+                              <div className={`p-2 rounded-lg bg-gray-100 dark:bg-gray-850 flex-shrink-0`}>
                                 <FileText size={18} className={typeInfo.iconColor} />
                               </div>
                               <div>
@@ -416,10 +420,15 @@ export function DocumentsPage() {
                             {formatDate(doc.uploadDate)}
                           </td>
                           <td className="px-6 py-4 whitespace-nowrap">
-                            {isProcessing ? (
+                            {doc.status === 'processing' ? (
                               <span className="inline-flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-full bg-amber-500/10 text-amber-500 border border-amber-500/20 animate-pulse">
                                 <RefreshCcw size={10} className="animate-spin" />
                                 Processing
+                              </span>
+                            ) : doc.status === 'error' ? (
+                              <span className="inline-flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-full bg-red-500/10 text-red-500 border border-red-500/20">
+                                <AlertCircle size={10} />
+                                Failed
                               </span>
                             ) : (
                               <span className="inline-flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-500 border border-emerald-500/20">
@@ -465,7 +474,7 @@ export function DocumentsPage() {
           <div className="text-center py-20 bg-white/50 dark:bg-gray-950/20 rounded-2xl border-2 border-dashed border-gray-200 dark:border-gray-800 shadow-sm">
             <FileText className="mx-auto text-gray-300 dark:text-gray-700 h-16 w-16 mb-4" />
             <h3 className="text-xl font-bold text-gray-900 dark:text-white mb-1">No Documents Found</h3>
-            <p className="text-sm text-gray-500 dark:text-gray-450 max-w-sm mx-auto mb-6">
+            <p className="text-sm text-gray-500 dark:text-gray-455 max-w-sm mx-auto mb-6">
               There are no documents matching your filters. Upload a contract above or adjust your search.
             </p>
             <button
