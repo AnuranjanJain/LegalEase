@@ -4,7 +4,6 @@ import {
   Grid, List, CheckCircle, ArrowRight, RefreshCcw, AlertCircle
 } from 'lucide-react';
 import { StorageService, Document } from '../services/storage';
-import { api } from '../services/api';
 import { useToast } from '../contexts/ToastContext';
 import { useNavigate } from 'react-router-dom';
 

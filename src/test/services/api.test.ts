@@ -4,6 +4,7 @@ import { api } from '../../services/api';
 describe('API Service', () => {
   beforeEach(() => {
     vi.restoreAllMocks();
+    localStorage.setItem('access_token', 'dev-token');
   });
 
   describe('post', () => {
