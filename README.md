@@ -1,3 +1,50 @@
+# ⚖️ LegalEase
+
+<p align="center">
+  <img src="assets/homepage.png" alt="LegalEase Banner" width="800"/>
+</p>
+
+<p align="center">
+  AI-powered legal document analysis platform that simplifies complex legal documents, provides intelligent summaries, and offers chatbot-based assistance.
+</p>
+
+<p align="center">
+  <img src="https://img.shields.io/github/stars/AnuranjanJain/LegalEase?style=for-the-badge" />
+  <img src="https://img.shields.io/github/forks/AnuranjanJain/LegalEase?style=for-the-badge" />
+  <img src="https://img.shields.io/github/issues/AnuranjanJain/LegalEase?style=for-the-badge" />
+  <img src="https://img.shields.io/github/license/AnuranjanJain/LegalEase?style=for-the-badge" />
+</p>
+
+## 🎯 Why LegalEase?
+
+Legal documents are often difficult for ordinary users to understand because of legal jargon and lengthy clauses.
+
+LegalEase helps users by:
+
+- Simplifying complex legal language
+- Generating concise summaries
+- Highlighting risks and important clauses
+- Providing AI-powered legal assistance
+- Improving accessibility and understanding
+
+## 📚 Table of Contents
+
+- About LegalEase
+- Live Demo
+- Features
+- Screenshots
+- Technology Stack
+- Project Structure
+- Installation
+- Usage
+- Testing
+- Configuration
+- Security
+- Contributing
+- Code of Conduct
+- Future Enhancements
+- License
+
 # LegalEase Website
 
 A comprehensive legal document analysis platform that combines AI-powered document processing, chatbot assistance, and user-friendly interfaces.
@@ -483,6 +530,23 @@ Before starting work:
 ---
 
 Thank you for contributing to LegalEase! 🚀
+
+## 🚀 First Time Contributor?
+
+If you're new to open source:
+
+- Look for beginner-friendly issues
+- Read CONTRIBUTING.md
+- Ask questions through Issues
+- Submit your first PR
+
+Every contribution matters!
+
+## 📜 Code of Conduct
+
+Please read our CODE_OF_CONDUCT.md before participating in the community.
+
+By contributing, you agree to maintain a respectful and inclusive environment.
 
 
 ## License
