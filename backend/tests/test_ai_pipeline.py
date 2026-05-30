@@ -12,6 +12,7 @@ from backend.core.validation import (
     validate_chat_input, validate_summarize_input, validate_mime_and_bytes, sanitize_text
 )
 from backend.services.ai_service import ai_service, correlation_id_var
+from backend.services.legal_mapping import map_legal_sections
 
 
 @pytest.mark.unit
@@ -24,6 +25,14 @@ def test_sanitize_text():
     assert "<script>" not in clean
     # Check that excessive blank lines are replaced with a max of double blank lines
     assert "\n\n\n" not in clean
+
+
+@pytest.mark.unit
+def test_map_legal_sections_matches_keywords():
+    """Test that legal section mapping returns relevant IPC section recommendations."""
+    matches = map_legal_sections("I was threatened and harassed with false promises and intimidation.")
+    assert isinstance(matches, list)
+    assert any(section["code"] == "IPC 506" for section in matches)
 
 
 @pytest.mark.unit

@@ -12,6 +12,7 @@ except Exception:
     Bytez = None
 
 from backend.core.exceptions import ProviderError, TimeoutError, ServiceUnavailableError
+from backend.services.legal_mapping import map_legal_sections, format_section_recommendations
 
 logger = logging.getLogger(__name__)
 
@@ -170,6 +171,13 @@ class AIService:
             else:
                 logger.error(f"[{self._get_corr_id()}] Error in chat response, graceful degradation disabled: {e}")
                 raise
+
+        # Intelligent legal section recommendations based on the user's problem description.
+        problem_description = message if not context else f"{message}\n{context}"
+        recommendations = map_legal_sections(problem_description, max_results=3)
+        if recommendations:
+            recommendation_text = format_section_recommendations(recommendations)
+            response_text = f"{response_text}\n\n{recommendation_text}"
 
         # Stream handling
         if stream:
