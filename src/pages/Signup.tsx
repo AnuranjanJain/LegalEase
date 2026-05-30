@@ -13,6 +13,18 @@ export function SignupPage() {
   const [isLoading, setIsLoading] = useState(false);
   const navigate = useNavigate();
 
+  const postWithRetry = async (url: string, options: RequestInit, retries = 2, delay = 500): Promise<Response> => {
+    try {
+      return await fetch(url, options);
+    } catch (error) {
+      if (retries <= 0) {
+        throw error;
+      }
+      await new Promise((resolve) => setTimeout(resolve, delay));
+      return postWithRetry(url, options, retries - 1, delay * 2);
+    }
+  };
+
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
     setError('');
@@ -32,23 +44,26 @@ export function SignupPage() {
 
     setIsLoading(true);
     try {
-      const response = await fetch(`${API_BASE_URL}/auth/signup`, {
+      const response = await postWithRetry(`${API_BASE_URL}/auth/signup`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ email, password }),
       });
 
-      const data = await response.json();
+      const data = await response.json().catch(() => ({}));
 
       if (!response.ok) {
-        setError(data.detail || 'Signup failed. Please try again.');
+        const fallbackMessage = response.status >= 500
+          ? 'Server error occurred during signup. Please try again later.'
+          : 'Signup failed. Please check your details and try again.';
+        setError(data.detail || fallbackMessage);
         return;
       }
 
       // Signup successful — redirect to login
       navigate('/login');
     } catch {
-      setError('Unable to connect to the server. Please try again.');
+      setError('Unable to connect to the server. Please check your network or try again later.');
     } finally {
       setIsLoading(false);
     }
