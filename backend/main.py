@@ -12,9 +12,9 @@ import uuid
 
 from dotenv import load_dotenv
 
-from database import engine, Base, get_db
-from routers import auth_routes
-from auth import validate_token_or_api_key
+from backend.database import engine, Base
+from backend.routers import auth_routes
+from backend.auth import validate_token_or_api_key
 
 # Optional imports (wrap in try/except so server can start without optional deps)
 try:
@@ -37,7 +37,7 @@ from backend.core.validation import (
 from backend.services.ai_service import ai_service, correlation_id_var
 
 #Middleware import 
-from middleware.rate_limit import RateLimitMiddleware
+from backend.middleware.rate_limit import RateLimitMiddleware
 # Configure logging
 logging.basicConfig(
     level=logging.INFO,
@@ -121,6 +121,9 @@ ALLOWED_ORIGINS = [
     for origin in raw_allowed_origins.split(",")
     if origin.strip()
 ]
+# Rate-limit middleware registered first so that CORSMiddleware
+# (added second) wraps it — ensuring 429 responses include CORS headers.
+app.add_middleware(RateLimitMiddleware)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=ALLOWED_ORIGINS,
@@ -129,8 +132,6 @@ app.add_middleware(
     allow_headers=["*"],
 )
 logger.info(f"Allowed frontend origins: {ALLOWED_ORIGINS}")
-#Centralized rate-limit middleware
-app.add_middleware(RateLimitMiddleware)
 
 
 # Correlation ID middleware to inject trace headers
@@ -148,6 +149,7 @@ async def correlation_id_middleware(request: Request, call_next):
 
 # Configuration
 MAX_UPLOAD_SIZE = int(os.getenv("MAX_UPLOAD_SIZE", str(25 * 1024 * 1024)))  # 25 MB default
+CHUNK_SIZE = 1024 * 1024
 
 
 
@@ -187,7 +189,7 @@ ip_limiter = SimpleRateLimiter(
     env_calls_key="RATE_LIMIT_IP_CALLS", env_period_key="RATE_LIMIT_PERIOD"
 )
 key_limiter = SimpleRateLimiter(
-    calls=30, period=60,
+    calls=300, period=60,
     env_calls_key="RATE_LIMIT_KEY_CALLS", env_period_key="RATE_LIMIT_PERIOD"
 )
 
@@ -196,7 +198,8 @@ key_limiter = SimpleRateLimiter(
 
 # API keys and dev mode
 API_KEYS = [k.strip() for k in os.getenv("API_KEYS", "").split(",") if k.strip()]
-DEV_API_KEY = os.getenv("DEV_API_KEY", "dev-token")
+# Require explicit DEV_API_KEY configuration — no guessable default
+DEV_API_KEY = os.getenv("DEV_API_KEY", "")
 ALLOW_DEV = os.getenv("ALLOW_DEV", "false").lower() in ("1", "true", "yes")
 
 if not API_KEYS:
@@ -206,10 +209,25 @@ if not API_KEYS:
     )
 
 if ALLOW_DEV:
-    logger.warning(
-        "Development API authentication is enabled. "
-        "Do not use in production."
-    )
+    if not DEV_API_KEY:
+        logger.error(
+            "ALLOW_DEV is enabled but DEV_API_KEY is not set. "
+            "Refusing to start with insecure configuration. "
+            "Set DEV_API_KEY to a strong, unique value."
+        )
+        raise RuntimeError(
+            "ALLOW_DEV=true requires DEV_API_KEY to be explicitly configured."
+        )
+    if API_KEYS:
+        logger.warning(
+            "ALLOW_DEV is enabled alongside API_KEYS. "
+            "Dev auth fallback is active — do not use in production."
+        )
+    else:
+        logger.warning(
+            "Development API authentication is enabled. "
+            "Do not use in production."
+        )
 
 
 class ChatRequest(BaseModel):
@@ -234,10 +252,9 @@ def _validate_api_key(request: Request) -> str:
     if not api_key:
         raise HTTPException(status_code=401, detail="Missing API key")
 
-    # Read config dynamically to support testing environments setting env vars
-    api_keys = [k.strip() for k in os.getenv("API_KEYS", "").split(",") if k.strip()]
-    allow_dev = os.getenv("ALLOW_DEV", "false").lower() in ("1", "true", "yes")
-    dev_api_key = os.getenv("DEV_API_KEY", "dev-token")
+    api_keys = API_KEYS
+    allow_dev = ALLOW_DEV
+    dev_api_key = DEV_API_KEY
 
     if api_keys and api_key not in api_keys:
         if allow_dev and api_key == dev_api_key:
@@ -256,12 +273,8 @@ def _get_client_ip(request: Request) -> str:
 
 @app.post("/chat")
 async def chat(request: Request, payload: ChatRequest, identity: str = Depends(validate_token_or_api_key)):
-    # Rate limiting
-    ip = _get_client_ip(request)
-    if not ip_limiter.is_allowed(ip):
-        raise HTTPException(status_code=429, detail="Rate limit exceeded for IP")
     if not key_limiter.is_allowed(identity):
-        raise HTTPException(status_code=429, detail="Rate limit exceeded for API key")
+        raise HTTPException(status_code=429, detail="Rate limit exceeded")
 
     # Sanitize inputs
     sanitized_message = sanitize_text(payload.message)
@@ -310,9 +323,18 @@ async def upload_document(request: Request, file: UploadFile = File(...), identi
         raise HTTPException(status_code=413, detail="Uploaded file is too large")
 
     try:
-        content = await file.read()
-        if len(content) > MAX_UPLOAD_SIZE:
-            raise HTTPException(status_code=413, detail="Uploaded file is too large")
+        chunks = []
+        total_size = 0
+        while True:
+            chunk = await file.read(CHUNK_SIZE)
+            if not chunk:
+                break
+            total_size += len(chunk)
+            if total_size > MAX_UPLOAD_SIZE:
+                raise HTTPException(status_code=413, detail="Uploaded file is too large")
+            chunks.append(chunk)
+
+        content = b"".join(chunks)
 
         filename = file.filename or "unknown"
         file_extension = os.path.splitext(filename)[1].lower()
@@ -368,12 +390,6 @@ async def upload_document(request: Request, file: UploadFile = File(...), identi
 
 @app.post("/summarize")
 async def summarize(request: Request, payload: SummarizeRequest, identity: str = Depends(validate_token_or_api_key)):
-    # Rate limiting
-    ip = _get_client_ip(request)
-    if not ip_limiter.is_allowed(ip):
-        raise HTTPException(status_code=429, detail="Rate limit exceeded for IP")
-    if not key_limiter.is_allowed(identity):
-        raise HTTPException(status_code=429, detail="Rate limit exceeded for API key")
 
     # Sanitize input
     sanitized_text = sanitize_text(payload.text)
