@@ -197,7 +197,8 @@ key_limiter = SimpleRateLimiter(
 
 # API keys and dev mode
 API_KEYS = [k.strip() for k in os.getenv("API_KEYS", "").split(",") if k.strip()]
-DEV_API_KEY = os.getenv("DEV_API_KEY", "dev-token")
+# Require explicit DEV_API_KEY configuration — no guessable default
+DEV_API_KEY = os.getenv("DEV_API_KEY", "")
 ALLOW_DEV = os.getenv("ALLOW_DEV", "false").lower() in ("1", "true", "yes")
 
 if not API_KEYS:
@@ -207,10 +208,25 @@ if not API_KEYS:
     )
 
 if ALLOW_DEV:
-    logger.warning(
-        "Development API authentication is enabled. "
-        "Do not use in production."
-    )
+    if not DEV_API_KEY:
+        logger.error(
+            "ALLOW_DEV is enabled but DEV_API_KEY is not set. "
+            "Refusing to start with insecure configuration. "
+            "Set DEV_API_KEY to a strong, unique value."
+        )
+        raise RuntimeError(
+            "ALLOW_DEV=true requires DEV_API_KEY to be explicitly configured."
+        )
+    if API_KEYS:
+        logger.warning(
+            "ALLOW_DEV is enabled alongside API_KEYS. "
+            "Dev auth fallback is active — do not use in production."
+        )
+    else:
+        logger.warning(
+            "Development API authentication is enabled. "
+            "Do not use in production."
+        )
 
 
 class ChatRequest(BaseModel):
@@ -258,6 +274,9 @@ def _get_client_ip(request: Request) -> str:
 async def chat(request: Request, payload: ChatRequest):
     # Auth
     api_key = _validate_api_key(request)
+
+    if not key_limiter.is_allowed(api_key):
+        raise HTTPException(status_code=429, detail="Rate limit exceeded")
 
     # Sanitize inputs
     sanitized_message = sanitize_text(payload.message)
