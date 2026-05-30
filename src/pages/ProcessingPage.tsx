@@ -1,8 +1,8 @@
 import { useState, useEffect, useRef } from 'react';
-import { useLocation, useNavigate, NavLink } from 'react-router-dom';
+import { useLocation, NavLink } from 'react-router-dom';
 import { 
   RefreshCcw, CheckCircle, Clock, Cpu, Sparkles, 
-  AlertTriangle, FileText, ArrowRight, BookOpen 
+  AlertTriangle, FileText, BookOpen 
 } from 'lucide-react';
 import { api } from '../services/api';
 import { StorageService } from '../services/storage';
@@ -32,7 +32,6 @@ type StageStatus = 'pending' | 'processing' | 'completed' | 'failed';
 
 export function ProcessingPage() {
   const location = useLocation();
-  const navigate = useNavigate();
   const { showToast } = useToast();
   const hasStarted = useRef(false);
 

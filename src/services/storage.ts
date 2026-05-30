@@ -5,8 +5,9 @@ export interface Document {
   size: number;
   uploadDate: string;
   processedDate?: string;
-  status: 'processed' | 'processing' | 'failed';
+  status: 'processed' | 'processing' | 'failed' | 'error';
   text?: string;
+  extractedText?: string;
   summary?: string;
 }
 

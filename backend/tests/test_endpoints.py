@@ -1,3 +1,4 @@
+import os
 import pytest
 import os
 from fastapi import status
@@ -13,8 +14,8 @@ async def test_health_endpoint_ok():
         assert r.status_code == 200
         data = r.json()
         assert "status" in data
-        assert "details" in data
-        assert "bytez" in data["details"]
+        assert data["status"] in ["ok", "degraded"]
+        assert "details" not in data
 
 
 @pytest.mark.asyncio
@@ -118,9 +119,8 @@ async def test_upload_endpoint_with_pdf():
 async def test_upload_endpoint_with_docx():
     """Test upload endpoint with a DOCX file"""
     import os
-    from unittest.mock import patch, Mock
     os.environ["ALLOW_DEV"] = "true"
-    
+
     from unittest.mock import Mock, patch
     mock_doc = Mock()
     mock_para = Mock()
@@ -131,7 +131,6 @@ async def test_upload_endpoint_with_docx():
     # Mock DOCX content (starts with PK magic bytes)
     content = b"PK\x03\x04\x14\x00\x00\x00\x08\x00"
     files = {"file": ("sample.docx", content, "application/vnd.openxmlformats-officedocument.wordprocessingml.document")}
-    
 
     with patch("backend.main.DocxDocument", return_value=mock_doc):
         async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as ac:
@@ -171,11 +170,12 @@ async def test_upload_endpoint_unsupported_file():
 @pytest.mark.asyncio
 async def test_rate_limiting_on_chat():
     """Test that rate limiting works on chat endpoint"""
-    import backend.main
+    import backend.middleware.rate_limit
+    from backend.utils.limiter import SimpleRateLimiter
     
-    # Patch the limiter directly
-    orig_limiter = backend.main.key_limiter
-    backend.main.key_limiter = backend.main.SimpleRateLimiter(2, 60)
+    # Patch the IP limiter used by the middleware
+    orig_limiter = backend.middleware.rate_limit.ip_limiter
+    backend.middleware.rate_limit.ip_limiter = SimpleRateLimiter(2, 60)
     
     headers = {"x-api-key": "dev-token"}
     payload = {"message": "Hello"}
@@ -191,7 +191,7 @@ async def test_rate_limiting_on_chat():
             r3 = await ac.post("/chat", json=payload, headers=headers)
             assert r3.status_code == 429
     finally:
-        backend.main.key_limiter = orig_limiter
+        backend.middleware.rate_limit.ip_limiter = orig_limiter
         
     if "ALLOW_DEV" in os.environ:
         del os.environ["ALLOW_DEV"]

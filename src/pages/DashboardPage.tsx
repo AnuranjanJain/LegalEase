@@ -3,24 +3,37 @@ import { useMemo } from 'react';
 import { FileText, Clock, CheckCircle, UploadCloud } from 'lucide-react';
 import { NavLink } from 'react-router-dom';
 import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip, Legend } from 'recharts';
+import { StorageService } from '../services/storage';
 
 export function DashboardPage() {
-  const stats = [
-    { label: 'Documents Processed', value: '24', icon: CheckCircle, color: 'text-green-600', bg: 'bg-green-100 dark:bg-green-900/30' },
-    { label: 'Pending Review', value: '3', icon: Clock, color: 'text-yellow-600', bg: 'bg-yellow-100 dark:bg-yellow-900/30' },
-    { label: 'Total Uploads', value: '128', icon: FileText, color: 'text-primary', bg: 'bg-primary/10' },
-  ];
+  const allDocs = useMemo(() => StorageService.getDocuments(), []);
 
-  const recentDocs = [
-    { title: 'Employment Contract - TechCorp', type: 'Employment', status: 'Completed', date: '2 hours ago' },
-    { title: 'Lease Agreement 2024', type: 'Lease', status: 'Processing', date: '5 mins ago' },
-    { title: 'NDA - Startup Inc', type: 'NDA', status: 'Completed', date: 'Yesterday' },
-  ];
+  const processedCount = useMemo(() =>
+    allDocs.filter(d => d.status === 'processed').length, [allDocs]);
+
+  const processingCount = useMemo(() =>
+    allDocs.filter(d => d.status === 'processing').length, [allDocs]);
+
+  const totalCount = allDocs.length;
+
+  const stats = useMemo(() => [
+    { label: 'Documents Processed', value: String(processedCount), icon: CheckCircle, color: 'text-green-600', bg: 'bg-green-100 dark:bg-green-900/30' },
+    { label: 'Pending Review', value: String(processingCount), icon: Clock, color: 'text-yellow-600', bg: 'bg-yellow-100 dark:bg-yellow-900/30' },
+    { label: 'Total Uploads', value: String(totalCount), icon: FileText, color: 'text-primary', bg: 'bg-primary/10' },
+  ], [processedCount, processingCount, totalCount]);
+
+  const recentDocs = useMemo(() =>
+    allDocs.slice(0, 5).map(doc => ({
+      title: doc.name,
+      type: doc.type?.toUpperCase() || 'Other',
+      status: doc.status === 'processed' ? 'Completed' : 'Processing',
+      date: new Date(doc.uploadDate).toLocaleDateString(),
+    })), [allDocs]);
 
   // --- FEATURE 1: Logic to parse data dynamically for Recharts ---
   const chartData = useMemo(() => {
     const counts: Record<string, number> = {};
-    recentDocs.forEach((doc) => {
+    allDocs.forEach((doc) => {
       const type = doc.type || 'Other';
       counts[type] = (counts[type] || 0) + 1;
     });
@@ -29,7 +42,7 @@ export function DashboardPage() {
       name: key,
       value: counts[key],
     }));
-  }, [recentDocs]);
+  }, [allDocs]);
 
   // Accessible UI color definitions matching Tailwind theme profiles
   const COLORS = ['#3B82F6', '#10B981', '#F59E0B', '#EF4444'];

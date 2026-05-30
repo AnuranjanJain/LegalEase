@@ -12,8 +12,8 @@ import uuid
 
 from dotenv import load_dotenv
 
-from database import engine, Base
-from routers import auth_routes
+from backend.database import engine, Base
+from backend.routers import auth_routes
 
 # Optional imports (wrap in try/except so server can start without optional deps)
 try:
@@ -36,7 +36,7 @@ from backend.core.validation import (
 from backend.services.ai_service import ai_service, correlation_id_var
 
 #Middleware import 
-from middleware.rate_limit import RateLimitMiddleware
+from backend.middleware.rate_limit import RateLimitMiddleware
 # Configure logging
 logging.basicConfig(
     level=logging.INFO,
@@ -120,6 +120,9 @@ ALLOWED_ORIGINS = [
     for origin in raw_allowed_origins.split(",")
     if origin.strip()
 ]
+# Rate-limit middleware registered first so that CORSMiddleware
+# (added second) wraps it — ensuring 429 responses include CORS headers.
+app.add_middleware(RateLimitMiddleware)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=ALLOWED_ORIGINS,
@@ -128,8 +131,6 @@ app.add_middleware(
     allow_headers=["*"],
 )
 logger.info(f"Allowed frontend origins: {ALLOWED_ORIGINS}")
-#Centralized rate-limit middleware
-app.add_middleware(RateLimitMiddleware)
 
 
 # Correlation ID middleware to inject trace headers
@@ -147,6 +148,7 @@ async def correlation_id_middleware(request: Request, call_next):
 
 # Configuration
 MAX_UPLOAD_SIZE = int(os.getenv("MAX_UPLOAD_SIZE", str(25 * 1024 * 1024)))  # 25 MB default
+CHUNK_SIZE = 1024 * 1024
 
 
 
@@ -186,7 +188,7 @@ ip_limiter = SimpleRateLimiter(
     env_calls_key="RATE_LIMIT_IP_CALLS", env_period_key="RATE_LIMIT_PERIOD"
 )
 key_limiter = SimpleRateLimiter(
-    calls=30, period=60,
+    calls=300, period=60,
     env_calls_key="RATE_LIMIT_KEY_CALLS", env_period_key="RATE_LIMIT_PERIOD"
 )
 
@@ -233,9 +235,8 @@ def _validate_api_key(request: Request) -> str:
     if not api_key:
         raise HTTPException(status_code=401, detail="Missing API key")
 
-    # Read config dynamically to support testing environments setting env vars
     api_keys = [k.strip() for k in os.getenv("API_KEYS", "").split(",") if k.strip()]
-    allow_dev = os.getenv("ALLOW_DEV", "true").lower() in ("1", "true", "yes")
+    allow_dev = os.getenv("ALLOW_DEV", "false").lower() in ("1", "true", "yes")
     dev_api_key = os.getenv("DEV_API_KEY", "dev-token")
 
     if api_keys and api_key not in api_keys:
@@ -257,14 +258,6 @@ def _get_client_ip(request: Request) -> str:
 async def chat(request: Request, payload: ChatRequest):
     # Auth
     api_key = _validate_api_key(request)
-
-
-    # Rate limiting
-    ip = _get_client_ip(request)
-    if not ip_limiter.is_allowed(ip):
-        raise HTTPException(status_code=429, detail="Rate limit exceeded for IP")
-    if not key_limiter.is_allowed(api_key):
-        raise HTTPException(status_code=429, detail="Rate limit exceeded for API key")
 
     # Sanitize inputs
     sanitized_message = sanitize_text(payload.message)
@@ -315,9 +308,18 @@ async def upload_document(request: Request, file: UploadFile = File(...)):
         raise HTTPException(status_code=413, detail="Uploaded file is too large")
 
     try:
-        content = await file.read()
-        if len(content) > MAX_UPLOAD_SIZE:
-            raise HTTPException(status_code=413, detail="Uploaded file is too large")
+        chunks = []
+        total_size = 0
+        while True:
+            chunk = await file.read(CHUNK_SIZE)
+            if not chunk:
+                break
+            total_size += len(chunk)
+            if total_size > MAX_UPLOAD_SIZE:
+                raise HTTPException(status_code=413, detail="Uploaded file is too large")
+            chunks.append(chunk)
+
+        content = b"".join(chunks)
 
         filename = file.filename or "unknown"
         file_extension = os.path.splitext(filename)[1].lower()
@@ -375,14 +377,6 @@ async def upload_document(request: Request, file: UploadFile = File(...)):
 async def summarize(request: Request, payload: SummarizeRequest):
     # Auth
     api_key = _validate_api_key(request)
-
-
-    # Rate limiting
-    ip = _get_client_ip(request)
-    if not ip_limiter.is_allowed(ip):
-        raise HTTPException(status_code=429, detail="Rate limit exceeded for IP")
-    if not key_limiter.is_allowed(api_key):
-        raise HTTPException(status_code=429, detail="Rate limit exceeded for API key")
 
     # Sanitize input
     sanitized_text = sanitize_text(payload.text)

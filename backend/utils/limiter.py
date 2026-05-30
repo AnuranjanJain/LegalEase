@@ -1,3 +1,4 @@
+import math
 import time
 from typing import Dict, List
 
@@ -13,7 +14,7 @@ class SimpleRateLimiter:
         timestamps = [t for t in timestamps if t > window]
         remaining = self.calls - len(timestamps)
         if remaining <= 0:
-            retry_after = int(timestamps[0] + self.period - now)
+            retry_after = max(0, int(math.ceil(timestamps[0] + self.period - now)))
 
             return {
                 "allowed": False,
