@@ -39,7 +39,7 @@ export function Footer() {
             </h3>
             <NavLink to="/dashboard" className={linkClass}>Dashboard</NavLink>
             <NavLink to="/documents" className={linkClass}>Documents</NavLink>
-            <NavLink to="/chatbot" className={linkClass}>AI Chatbot</NavLink>
+            <NavLink to="/legal-resources" className={linkClass}>Legal Resources</NavLink>
           </div>
 
           {/* Legal links */}

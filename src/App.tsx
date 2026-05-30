@@ -5,6 +5,7 @@ import { HomePage } from './pages/HomePage';
 import { DashboardPage } from './pages/DashboardPage';
 import { DocumentsPage } from './pages/DocumentsPage';
 import { ChatbotPage } from './pages/ChatbotPage';
+import { LegalResourcesPage } from './pages/LegalResourcesPage';
 import { ProfilePage } from './pages/ProfilePage';
 import { DocumentationPage } from './pages/DocumentationPage';
 import { ProcessingPage } from './pages/ProcessingPage';
@@ -40,6 +41,7 @@ function App() {
             <Route path="dashboard" element={<ProtectedRoute><DashboardPage /></ProtectedRoute>} />
             <Route path="documents" element={<ProtectedRoute><DocumentsPage /></ProtectedRoute>} />
             <Route path="documentation" element={<DocumentationPage />} />
+            <Route path="legal-resources" element={<LegalResourcesPage />} />
             <Route path="processing" element={<ProtectedRoute><ProcessingPage /></ProtectedRoute>} />
             <Route path="chatbot" element={<ProtectedRoute><ChatbotPage /></ProtectedRoute>} />
             <Route path="profile" element={<ProtectedRoute><ProfilePage /></ProtectedRoute>} />
