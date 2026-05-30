@@ -259,6 +259,9 @@ async def chat(request: Request, payload: ChatRequest):
     # Auth
     api_key = _validate_api_key(request)
 
+    if not key_limiter.is_allowed(api_key):
+        raise HTTPException(status_code=429, detail="Rate limit exceeded")
+
     # Sanitize inputs
     sanitized_message = sanitize_text(payload.message)
     sanitized_context = sanitize_text(payload.context) if payload.context else None
