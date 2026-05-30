@@ -2,22 +2,22 @@ name: CI
 
 on:
   push:
-    branches: [ main ]
+    branches: [main]
   pull_request:
-    branches: [ main ]
+    branches: [main]
 
 jobs:
   build-and-lint:
     runs-on: ubuntu-latest
     steps:
-    - uses: actions/checkout@v5
-    - name: Use Node.js
-      uses: actions/setup-node@v5
-      with:
-        node-version: '18.x'
-        cache: 'npm'
-      env:
-        FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
-    - run: npm ci
-    - run: npm run lint
-    - run: npm run build
+      - uses: actions/checkout@v5
+      - name: Use Node.js
+        uses: actions/setup-node@v5
+        with:
+          node-version: '18.x'
+          cache: 'npm'
+        env:
+          FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+      - run: npm ci
+      - run: npm run lint
+      - run: npm run build

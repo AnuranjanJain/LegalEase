@@ -1,4 +1,12 @@
-import { Shield, Lock, Server, Key, Activity, CheckCircle2, Mail } from 'lucide-react';
+import {
+  Shield,
+  Lock,
+  Server,
+  Key,
+  Activity,
+  CheckCircle2,
+  Mail,
+} from 'lucide-react';
 
 interface Section {
   icon: JSX.Element;
@@ -67,8 +75,10 @@ const sections: Section[] = [
 
 const colorMap: Record<string, string> = {
   blue: 'bg-blue-100 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400',
-  emerald: 'bg-emerald-100 dark:bg-emerald-900/30 text-emerald-600 dark:text-emerald-400',
-  purple: 'bg-purple-100 dark:bg-purple-900/30 text-purple-600 dark:text-purple-400',
+  emerald:
+    'bg-emerald-100 dark:bg-emerald-900/30 text-emerald-600 dark:text-emerald-400',
+  purple:
+    'bg-purple-100 dark:bg-purple-900/30 text-purple-600 dark:text-purple-400',
   amber: 'bg-amber-100 dark:bg-amber-900/30 text-amber-600 dark:text-amber-400',
   rose: 'bg-rose-100 dark:bg-rose-900/30 text-rose-600 dark:text-rose-400',
 };
@@ -80,10 +90,26 @@ interface TrustBadge {
 }
 
 const trustBadges: TrustBadge[] = [
-  { label: 'SOC-2 Type II', sub: 'Certified', color: 'text-blue-600 dark:text-blue-400' },
-  { label: 'GDPR', sub: 'Compliant', color: 'text-emerald-600 dark:text-emerald-400' },
-  { label: 'HIPAA', sub: 'Compliant', color: 'text-purple-600 dark:text-purple-400' },
-  { label: 'ISO 27001', sub: 'Certified', color: 'text-amber-600 dark:text-amber-400' },
+  {
+    label: 'SOC-2 Type II',
+    sub: 'Certified',
+    color: 'text-blue-600 dark:text-blue-400',
+  },
+  {
+    label: 'GDPR',
+    sub: 'Compliant',
+    color: 'text-emerald-600 dark:text-emerald-400',
+  },
+  {
+    label: 'HIPAA',
+    sub: 'Compliant',
+    color: 'text-purple-600 dark:text-purple-400',
+  },
+  {
+    label: 'ISO 27001',
+    sub: 'Certified',
+    color: 'text-amber-600 dark:text-amber-400',
+  },
 ];
 
 export function SecurityPage() {
@@ -102,7 +128,9 @@ export function SecurityPage() {
             Security at LegalEase
           </h1>
           <p className="text-gray-500 dark:text-gray-400 max-w-2xl mx-auto text-base leading-relaxed">
-            Your legal documents are among your most sensitive assets. We've built our entire infrastructure around protecting them with the highest security standards in the industry.
+            Your legal documents are among your most sensitive assets. We've
+            built our entire infrastructure around protecting them with the
+            highest security standards in the industry.
           </p>
 
           {/* Trust badges */}
@@ -113,7 +141,9 @@ export function SecurityPage() {
                 className="flex flex-col items-center px-6 py-3 rounded-xl bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 shadow-sm"
               >
                 <CheckCircle2 size={18} className={`mb-1 ${badge.color}`} />
-                <span className={`text-sm font-bold ${badge.color}`}>{badge.label}</span>
+                <span className={`text-sm font-bold ${badge.color}`}>
+                  {badge.label}
+                </span>
                 <span className="text-xs text-gray-400">{badge.sub}</span>
               </div>
             ))}
@@ -131,14 +161,21 @@ export function SecurityPage() {
                 className="group p-8 rounded-2xl bg-white dark:bg-gray-900 border border-gray-150 dark:border-gray-800 shadow-sm hover:shadow-lg transition-all duration-300"
               >
                 <div className="flex items-center gap-4 mb-6">
-                  <div className={`w-10 h-10 rounded-xl flex items-center justify-center ${colorMap[section.color]}`}>
+                  <div
+                    className={`w-10 h-10 rounded-xl flex items-center justify-center ${colorMap[section.color]}`}
+                  >
                     {section.icon}
                   </div>
-                  <h2 className="text-xl font-bold text-gray-900 dark:text-white">{section.title}</h2>
+                  <h2 className="text-xl font-bold text-gray-900 dark:text-white">
+                    {section.title}
+                  </h2>
                 </div>
                 <ul className="space-y-3">
                   {section.content.map((item, i) => (
-                    <li key={i} className="flex items-start gap-3 text-sm text-gray-600 dark:text-gray-400 leading-relaxed">
+                    <li
+                      key={i}
+                      className="flex items-start gap-3 text-sm text-gray-600 dark:text-gray-400 leading-relaxed"
+                    >
                       <span className="mt-1.5 w-1.5 h-1.5 rounded-full bg-gray-400 dark:bg-gray-600 flex-shrink-0" />
                       {item}
                     </li>
@@ -150,10 +187,16 @@ export function SecurityPage() {
 
           {/* Contact */}
           <div className="mt-12 p-8 rounded-2xl bg-gradient-to-br from-emerald-50 to-teal-50 dark:from-emerald-950/40 dark:to-teal-950/40 border border-emerald-200 dark:border-emerald-900/50 text-center">
-            <Shield className="mx-auto text-emerald-600 dark:text-emerald-400 mb-3" size={28} />
-            <h3 className="text-lg font-bold text-gray-900 dark:text-white mb-2">Found a security vulnerability?</h3>
+            <Shield
+              className="mx-auto text-emerald-600 dark:text-emerald-400 mb-3"
+              size={28}
+            />
+            <h3 className="text-lg font-bold text-gray-900 dark:text-white mb-2">
+              Found a security vulnerability?
+            </h3>
             <p className="text-sm text-gray-500 dark:text-gray-400 mb-4">
-              We take all security reports seriously. Please disclose responsibly and we will respond within 24 hours.
+              We take all security reports seriously. Please disclose
+              responsibly and we will respond within 24 hours.
             </p>
             <a
               href="mailto:security@legalease.io"

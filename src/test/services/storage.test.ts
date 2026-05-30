@@ -23,7 +23,7 @@ describe('StorageService', () => {
         status: 'processed' as const,
       };
       localStorage.setItem('le_documents', JSON.stringify([mockDoc]));
-      
+
       const docs = StorageService.getDocuments();
       expect(docs).toHaveLength(1);
       expect(docs[0]).toEqual(mockDoc);
@@ -46,10 +46,10 @@ describe('StorageService', () => {
         uploadDate: new Date().toISOString(),
         status: 'processed' as const,
       };
-      
+
       StorageService.saveDocument(doc);
       const docs = StorageService.getDocuments();
-      
+
       expect(docs).toHaveLength(1);
       expect(docs[0]).toEqual(doc);
     });
@@ -63,12 +63,12 @@ describe('StorageService', () => {
         uploadDate: new Date().toISOString(),
         status: 'processing' as const,
       };
-      
+
       StorageService.saveDocument(doc);
-      
+
       const updatedDoc = { ...doc, status: 'processed' as const };
       StorageService.saveDocument(updatedDoc);
-      
+
       const docs = StorageService.getDocuments();
       expect(docs).toHaveLength(1);
       expect(docs[0].status).toBe('processed');
@@ -83,7 +83,7 @@ describe('StorageService', () => {
         uploadDate: new Date().toISOString(),
         status: 'processed' as const,
       };
-      
+
       const doc2 = {
         id: 'doc_2',
         name: 'Test2.pdf',
@@ -92,10 +92,10 @@ describe('StorageService', () => {
         uploadDate: new Date().toISOString(),
         status: 'processed' as const,
       };
-      
+
       StorageService.saveDocument(doc1);
       StorageService.saveDocument(doc2);
-      
+
       const docs = StorageService.getDocuments();
       expect(docs).toHaveLength(2);
       expect(docs[0].id).toBe('doc_2');
@@ -112,10 +112,10 @@ describe('StorageService', () => {
         uploadDate: new Date().toISOString(),
         status: 'processed' as const,
       };
-      
+
       StorageService.saveDocument(doc);
       const found = StorageService.getDocument('doc_1');
-      
+
       expect(found).toEqual(doc);
     });
 
@@ -135,10 +135,10 @@ describe('StorageService', () => {
         uploadDate: new Date().toISOString(),
         status: 'processing' as const,
       };
-      
+
       StorageService.saveDocument(doc);
       StorageService.updateDocumentStatus('doc_1', 'processed');
-      
+
       const updated = StorageService.getDocument('doc_1');
       expect(updated?.status).toBe('processed');
       expect(updated?.processedDate).toBeDefined();
@@ -154,10 +154,10 @@ describe('StorageService', () => {
         status: 'processed' as const,
         processedDate: new Date().toISOString(),
       };
-      
+
       StorageService.saveDocument(doc);
       StorageService.updateDocumentStatus('doc_1', 'processing');
-      
+
       const updated = StorageService.getDocument('doc_1');
       expect(updated?.status).toBe('processing');
     });
@@ -172,7 +172,7 @@ describe('StorageService', () => {
   describe('getProfile', () => {
     it('should return default profile when none exists', () => {
       const profile = StorageService.getProfile();
-      
+
       expect(profile.firstName).toBe('Sarah');
       expect(profile.lastName).toBe('Johnson');
       expect(profile.email).toBe('sarah.johnson@email.com');
@@ -201,10 +201,10 @@ describe('StorageService', () => {
           },
         },
       };
-      
+
       localStorage.setItem('le_profile', JSON.stringify(mockProfile));
       const profile = StorageService.getProfile();
-      
+
       expect(profile.firstName).toBe('John');
       expect(profile.lastName).toBe('Doe');
     });
@@ -234,10 +234,10 @@ describe('StorageService', () => {
           },
         },
       };
-      
+
       StorageService.saveProfile(profile);
       const saved = StorageService.getProfile();
-      
+
       expect(saved.firstName).toBe('Jane');
       expect(saved.lastName).toBe('Smith');
     });
@@ -247,7 +247,7 @@ describe('StorageService', () => {
     it('should initialize sample documents when storage is empty', () => {
       StorageService.initSampleData();
       const docs = StorageService.getDocuments();
-      
+
       expect(docs.length).toBeGreaterThan(0);
       expect(docs[0].name).toContain('Lease Agreement');
     });
@@ -261,10 +261,10 @@ describe('StorageService', () => {
         uploadDate: new Date().toISOString(),
         status: 'processed' as const,
       };
-      
+
       StorageService.saveDocument(existingDoc);
       StorageService.initSampleData();
-      
+
       const docs = StorageService.getDocuments();
       expect(docs).toHaveLength(1);
       expect(docs[0].id).toBe('existing');

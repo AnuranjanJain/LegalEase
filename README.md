@@ -1,6 +1,7 @@
 # LegalEase Website
 
 A comprehensive legal document analysis platform that combines AI-powered document processing, chatbot assistance, and user-friendly interfaces.
+
 ## 🌐 Live Demo
 
 Check out the live project here:  
@@ -11,17 +12,20 @@ Explore the LegalEase platform to upload documents,view summaries,and interact w
 ## 📸 Screenshots
 
 ### 🏠 Homepage
+
 ![Homepage](assets/homepage.png)
 
 ### 🤖 AI Chatbot
+
 ![AI Chatbot](assets/aichatbot.png)
 
 ### 📄 Document Simplifier
+
 ![Document Simplifier](assets/documentmodifier.png)
 
 ### ⚙️ Features Page
-![Features](assets/features.png)
 
+![Features](assets/features.png)
 
 ## Project Structure
 
@@ -44,6 +48,7 @@ legal-ease-website/
 ## Features
 
 ### 🏠 Home Page (`index.html`)
+
 - **Hero Section**: Compelling introduction with call-to-action buttons
 - **Features Overview**: Document summary, jargon explanations, and risk alerts
 - **Quick Actions**: Direct access to main features
@@ -51,30 +56,35 @@ legal-ease-website/
 - **Responsive Design**: Mobile-friendly layout
 
 ### 📊 Dashboard (`pages/dashboard.html`)
+
 - **Statistics Overview**: Document counts, processing status, and time saved
 - **Quick Actions**: Fast access to upload, chat, and processing
 - **Recent Activity**: Timeline of user actions
 - **Recent Documents**: Latest uploaded files with status indicators
 
 ### 📄 Document Upload (`pages/documents.html`)
+
 - **Drag & Drop Interface**: Intuitive file upload experience
 - **File Validation**: Type and size checking (PDF, DOCX, TXT up to 25MB)
 - **Feature Explanation**: Clear description of AI capabilities
 - **Recent Documents**: History with processing status
 
 ### 🤖 AI Chatbot (`pages/chatbot.html`)
+
 - **Interactive Chat Interface**: Real-time conversation with AI
 - **Legal Topics Sidebar**: Quick access to common questions
 - **Message History**: Persistent conversation log
 - **Legal Disclaimer**: Important usage guidelines
 
 ### ⚙️ Processing Status (`pages/processing.html`)
+
 - **Real-time Progress**: Step-by-step processing visualization
 - **Animated Progress Bars**: Visual feedback for each stage
 - **Processing History**: Past document processing records
 - **Status Management**: Cancel, retry, and download options
 
 ### 👤 User Profile (`pages/profile.html`)
+
 - **Personal Information**: Complete profile management
 - **Address Details**: Billing and contact information
 - **Preferences**: Language, timezone, and notification settings
@@ -91,17 +101,20 @@ legal-ease-website/
 ## Key Features
 
 ### 🎨 Design Elements
+
 - **Consistent Color Scheme**: Primary blue (#197fe6) with light/dark theme support
 - **Material Design Icons**: Google Material Symbols
 - **Smooth Animations**: CSS transitions and JavaScript-powered interactions
 - **Accessibility**: Proper ARIA labels and keyboard navigation
 
 ### 📱 Responsive Design
+
 - **Mobile Navigation**: Collapsible menu for smaller screens
 - **Flexible Layouts**: CSS Grid and Flexbox for optimal viewing
 - **Touch-Friendly**: Appropriately sized interactive elements
 
 ### 🔧 Interactive Features
+
 - **File Upload**: Drag & drop with progress indication
 - **Chat Interface**: Real-time messaging simulation
 - **Processing Animation**: Step-by-step progress visualization
@@ -275,15 +288,15 @@ cp .env.example .env
 ```
 
 - **Important environment variables** (see `.env.example`):
-    - `BYTEZ_API_KEY` — required by the backend to access the Bytez SDK. Keep this secret.
-    - `FRONTEND_URL` — frontend origin used for CORS (default: `http://localhost:5173`).
-    - `BYTEZ_API_KEY` — required by the backend to access the Bytez SDK. Keep this secret.
-    - `FRONTEND_URL` — frontend origin used for CORS (default: `http://localhost:5173`).
-    - `API_KEYS` — comma-separated list of valid API keys for server endpoints (recommended in production).
-    - `DEV_API_KEY` — developer API key allowed when `ALLOW_DEV` is enabled (default: `dev-token`).
-    - `ALLOW_DEV` — allow using `DEV_API_KEY` for local development (`true`/`false`, default `true`).
-    - `MAX_UPLOAD_SIZE` — maximum allowed upload size in bytes (default 26214400 = 25MB).
-    - `RATE_LIMIT_IP_CALLS`, `RATE_LIMIT_KEY_CALLS`, `RATE_LIMIT_PERIOD` — simple rate-limiting configuration (defaults: 60, 30, 60).
+  - `BYTEZ_API_KEY` — required by the backend to access the Bytez SDK. Keep this secret.
+  - `FRONTEND_URL` — frontend origin used for CORS (default: `http://localhost:5173`).
+  - `BYTEZ_API_KEY` — required by the backend to access the Bytez SDK. Keep this secret.
+  - `FRONTEND_URL` — frontend origin used for CORS (default: `http://localhost:5173`).
+  - `API_KEYS` — comma-separated list of valid API keys for server endpoints (recommended in production).
+  - `DEV_API_KEY` — developer API key allowed when `ALLOW_DEV` is enabled (default: `dev-token`).
+  - `ALLOW_DEV` — allow using `DEV_API_KEY` for local development (`true`/`false`, default `true`).
+  - `MAX_UPLOAD_SIZE` — maximum allowed upload size in bytes (default 26214400 = 25MB).
+  - `RATE_LIMIT_IP_CALLS`, `RATE_LIMIT_KEY_CALLS`, `RATE_LIMIT_PERIOD` — simple rate-limiting configuration (defaults: 60, 30, 60).
 
 - **Run backend (development):**
 
@@ -312,29 +325,31 @@ npm run dev
 ```
 
 - **Running in CI / Production:**
-    - Provide secrets via your CI environment variables/secrets (do not store real secrets in the repository).
-    - Use the environment variables directly in your process manager (systemd, Docker, Kubernetes, etc.).
+  - Provide secrets via your CI environment variables/secrets (do not store real secrets in the repository).
+  - Use the environment variables directly in your process manager (systemd, Docker, Kubernetes, etc.).
 
 **Security notes**
 
 - `.env` and other secret files are ignored by `.gitignore` by default. The repo includes `!.env.example` so the example can be committed while real secrets remain ignored.
 - Avoid printing secrets to stdout or logs. The backend no longer prints the API key at startup.
 
-
 ## File Organization
 
 ### HTML Files
+
 - Semantic HTML5 structure
 - Consistent navigation across pages
 - Proper meta tags for SEO and responsiveness
 
 ### CSS Architecture
+
 - Tailwind CSS for utility-first styling
 - Custom animations and transitions
 - Dark mode support
 - Print styles included
 
 ### JavaScript Functionality
+
 - Modular code organization
 - Event-driven architecture
 - Local storage for preferences
@@ -343,7 +358,9 @@ npm run dev
 ## Customization
 
 ### Colors
+
 The primary color scheme can be modified in the Tailwind config:
+
 ```javascript
 colors: {
     "primary": "#197fe6",        // Main brand color
@@ -353,11 +370,13 @@ colors: {
 ```
 
 ### Content
+
 - Update company information in headers/footers
 - Modify feature descriptions and benefits
 - Customize legal disclaimers and privacy notices
 
 ### Functionality
+
 - Integrate with actual backend APIs
 - Add real authentication
 - Implement document processing workflows
@@ -387,6 +406,7 @@ colors: {
 ## Support
 
 For questions or issues:
+
 1. Check the browser console for JavaScript errors
 2. Ensure files are served via HTTP (not file://)
 3. Verify Tailwind CSS is loading correctly
@@ -402,9 +422,9 @@ We welcome contributions from beginners and open-source enthusiasts! Follow thes
 
 ### 1️⃣ Fork the Repository
 
-* Go to the project repository
-* Click on the **Fork** button (top right)
-* This creates a copy of the repository in your GitHub account
+- Go to the project repository
+- Click on the **Fork** button (top right)
+- This creates a copy of the repository in your GitHub account
 
 ---
 
@@ -431,8 +451,8 @@ git checkout -b your-branch-name
 
 ### 4️⃣ Make Changes
 
-* Open the project in a code editor (e.g., VS Code)
-* Make your desired changes (e.g., improve README, fix UI, add features)
+- Open the project in a code editor (e.g., VS Code)
+- Make your desired changes (e.g., improve README, fix UI, add features)
 
 ---
 
@@ -455,10 +475,10 @@ git push origin your-branch-name
 
 ### 7️⃣ Create a Pull Request (PR)
 
-* Go to your forked repository on GitHub
-* Click on **Compare & Pull Request**
-* Add a clear title and description
-* Submit the PR for review
+- Go to your forked repository on GitHub
+- Click on **Compare & Pull Request**
+- Add a clear title and description
+- Submit the PR for review
 
 ---
 
@@ -466,24 +486,23 @@ git push origin your-branch-name
 
 Before starting work:
 
-* Go to the **Issues** tab
-* Check if the issue already exists
-* If not, click **New Issue**
-* Clearly describe the problem or improvement
+- Go to the **Issues** tab
+- Check if the issue already exists
+- If not, click **New Issue**
+- Clearly describe the problem or improvement
 
 ---
 
 ### ✅ Contribution Tips
 
-* Keep your PR small and focused
-* Follow proper commit message format
-* Avoid making unrelated changes
-* Be respectful in discussions
+- Keep your PR small and focused
+- Follow proper commit message format
+- Avoid making unrelated changes
+- Be respectful in discussions
 
 ---
 
 Thank you for contributing to LegalEase! 🚀
-
 
 ## License
 

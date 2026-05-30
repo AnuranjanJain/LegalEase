@@ -28,12 +28,12 @@ jobs:
               core.setOutput('is_gssoc', true);
               return;
             }
-            
+
             const prBody = context.payload.pull_request.body || '';
             const issueRegex = /(?:fix|fixes|fixed|close|closes|closed|resolve|resolves|resolved)\s+#(\d+)/gi;
             let match;
             let isGssoc = false;
-            
+
             while ((match = issueRegex.exec(prBody)) !== null) {
               const issueNumber = parseInt(match[1], 10);
               try {
@@ -87,11 +87,11 @@ jobs:
           script: |
             const { owner, repo } = context.repo;
             const ref = context.payload.pull_request.head.sha;
-            
+
             console.log(`Waiting for deployment status for ${ref}...`);
             let deploymentUrl = null;
             let status = null;
-            
+
             for (let i = 0; i < 60; i++) {
               await new Promise(r => setTimeout(r, 10000));
               
@@ -114,11 +114,11 @@ jobs:
                 }
               }
             }
-            
+
             if (!deploymentUrl) {
               core.warning('Could not find Vercel deployment URL within the timeout.');
             }
-            
+
             core.setOutput('deployment_url', deploymentUrl || 'Not available');
 
       - name: Auto Merge and Comment
@@ -130,26 +130,26 @@ jobs:
             const prNumber = context.issue.number;
             const deploymentUrl = '${{ steps.wait-vercel.outputs.deployment_url }}';
             const user = context.payload.pull_request.user.login;
-            
+
             const commentBody = `
             🎉 **Thank you for your GSSoC'26 contribution, @${user}!** 🎉
-            
+
             All checks have passed successfully!
-            
+
             ✅ **Linting:** Passed
             ✅ **Build:** Passed
             ✅ **Preview Deployment:** ${deploymentUrl !== 'Not available' ? `[View Preview](${deploymentUrl})` : 'URL not found'}
-            
+
             Merging this PR automatically as all checks passed! 🚀
             `;
-            
+
             await github.rest.issues.createComment({
               owner,
               repo,
               issue_number: prNumber,
               body: commentBody
             });
-            
+
             try {
               await github.rest.pulls.merge({
                 owner,

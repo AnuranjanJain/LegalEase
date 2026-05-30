@@ -80,7 +80,7 @@ export const StorageService = {
   saveDocument: (doc: Document) => {
     try {
       const docs = StorageService.getDocuments();
-      const existingIndex = docs.findIndex(d => d.id === doc.id);
+      const existingIndex = docs.findIndex((d) => d.id === doc.id);
       if (existingIndex !== -1) {
         docs[existingIndex] = doc;
       } else {
@@ -93,12 +93,12 @@ export const StorageService = {
   },
 
   getDocument: (id: string): Document | undefined => {
-    return StorageService.getDocuments().find(d => d.id === id);
+    return StorageService.getDocuments().find((d) => d.id === id);
   },
 
   updateDocumentStatus: (id: string, status: 'processed' | 'processing') => {
     const docs = StorageService.getDocuments();
-    const docIndex = docs.findIndex(d => d.id === id);
+    const docIndex = docs.findIndex((d) => d.id === id);
     if (docIndex !== -1) {
       docs[docIndex].status = status;
       if (status === 'processed') {
@@ -137,7 +137,7 @@ export const StorageService = {
         street: '123 Main Street, Apt 4B',
         city: 'New York',
         state: 'NY',
-        zip: '10001'
+        zip: '10001',
       },
       preferences: {
         language: 'en',
@@ -145,9 +145,9 @@ export const StorageService = {
         notifications: {
           documents: true,
           security: true,
-          marketing: false
-        }
-      }
+          marketing: false,
+        },
+      },
     };
     localStorage.setItem(STORAGE_KEYS.PROFILE, JSON.stringify(defaultProfile));
     return defaultProfile;
@@ -163,7 +163,7 @@ export const StorageService = {
           size: 2400000,
           uploadDate: new Date(Date.now() - 7200000).toISOString(),
           status: 'processed',
-          processedDate: new Date(Date.now() - 3600000).toISOString()
+          processedDate: new Date(Date.now() - 3600000).toISOString(),
         },
         {
           id: 'doc_2',
@@ -171,7 +171,7 @@ export const StorageService = {
           type: 'docx',
           size: 1800000,
           uploadDate: new Date(Date.now() - 86400000).toISOString(),
-          status: 'processing'
+          status: 'processing',
         },
         {
           id: 'doc_3',
@@ -180,12 +180,12 @@ export const StorageService = {
           size: 952000,
           uploadDate: new Date(Date.now() - 259200000).toISOString(),
           status: 'processed',
-          processedDate: new Date(Date.now() - 172800000).toISOString()
-        }
+          processedDate: new Date(Date.now() - 172800000).toISOString(),
+        },
       ];
       localStorage.setItem(STORAGE_KEYS.DOCUMENTS, JSON.stringify(sampleDocs));
     }
-  }
+  },
 };
 
 export const ChatStorageService = {
@@ -208,18 +208,22 @@ export const ChatStorageService = {
       const metadata: ChatSessionMetadata = {
         id: sessionData.id,
         title: sessionData.title || 'New Conversation',
-        createdAt: sessionData.messages[0]?.timestamp || new Date().toISOString(),
+        createdAt:
+          sessionData.messages[0]?.timestamp || new Date().toISOString(),
         updatedAt: new Date().toISOString(),
-        messageCount: sessionData.messages.length
+        messageCount: sessionData.messages.length,
       };
 
-      const existingIndex = sessions.findIndex(s => s.id === sessionData.id);
+      const existingIndex = sessions.findIndex((s) => s.id === sessionData.id);
       if (existingIndex !== -1) {
         sessions[existingIndex] = metadata;
       } else {
         sessions.unshift(metadata);
       }
-      localStorage.setItem(STORAGE_KEYS.CHAT_SESSIONS, JSON.stringify(sessions));
+      localStorage.setItem(
+        STORAGE_KEYS.CHAT_SESSIONS,
+        JSON.stringify(sessions)
+      );
     } catch (error) {
       console.error('Error saving chat session to storage:', error);
     }
@@ -241,7 +245,7 @@ export const ChatStorageService = {
     const sessionData: ChatSessionData = {
       id,
       messages: [],
-      title
+      title,
     };
     ChatStorageService.saveSession(sessionData);
     ChatStorageService.setActiveSessionId(id);
@@ -254,8 +258,11 @@ export const ChatStorageService = {
       localStorage.removeItem(sessionKey);
 
       const sessions = ChatStorageService.getSessions();
-      const filteredSessions = sessions.filter(s => s.id !== id);
-      localStorage.setItem(STORAGE_KEYS.CHAT_SESSIONS, JSON.stringify(filteredSessions));
+      const filteredSessions = sessions.filter((s) => s.id !== id);
+      localStorage.setItem(
+        STORAGE_KEYS.CHAT_SESSIONS,
+        JSON.stringify(filteredSessions)
+      );
 
       const activeId = ChatStorageService.getActiveSessionId();
       if (activeId === id) {
@@ -286,7 +293,7 @@ export const ChatStorageService = {
   clearAllSessions: () => {
     try {
       const sessions = ChatStorageService.getSessions();
-      sessions.forEach(session => {
+      sessions.forEach((session) => {
         const sessionKey = STORAGE_KEYS.CHAT_SESSION_PREFIX + session.id;
         localStorage.removeItem(sessionKey);
       });
@@ -308,9 +315,12 @@ export const ChatStorageService = {
         }
 
         const sessionId = crypto.randomUUID();
-        const firstUserMessage = parsedHistory.find((m: any) => m.sender === 'user');
+        const firstUserMessage = parsedHistory.find(
+          (m: any) => m.sender === 'user'
+        );
         const title = firstUserMessage
-          ? firstUserMessage.text.substring(0, 50) + (firstUserMessage.text.length > 50 ? '...' : '')
+          ? firstUserMessage.text.substring(0, 50) +
+            (firstUserMessage.text.length > 50 ? '...' : '')
           : 'Migrated Conversation';
 
         const sessionData: ChatSessionData = {
@@ -318,9 +328,9 @@ export const ChatStorageService = {
           messages: parsedHistory.map((m: any) => ({
             ...m,
             id: String(m.id),
-            timestamp: m.timestamp || new Date().toISOString()
+            timestamp: m.timestamp || new Date().toISOString(),
           })),
-          title
+          title,
         };
 
         ChatStorageService.saveSession(sessionData);
@@ -331,5 +341,5 @@ export const ChatStorageService = {
       console.error('Error migrating old chat history:', error);
       localStorage.removeItem('chatHistory');
     }
-  }
+  },
 };

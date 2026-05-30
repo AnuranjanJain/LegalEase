@@ -2,11 +2,14 @@ const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000';
 
 const getAuthHeaders = (): Record<string, string> => {
   const token = localStorage.getItem('access_token');
-  return token ? { 'Authorization': `Bearer ${token}` } : {};
+  return token ? { Authorization: `Bearer ${token}` } : {};
 };
 
 /** Build a user-friendly error from a failed response. */
-async function handleErrorResponse(response: Response, fallbackPrefix: string): Promise<never> {
+async function handleErrorResponse(
+  response: Response,
+  fallbackPrefix: string
+): Promise<never> {
   if (response.status === 429) {
     const retryAfter = response.headers.get('Retry-After');
     const seconds = retryAfter ? parseInt(retryAfter, 10) : 0;
@@ -19,8 +22,14 @@ async function handleErrorResponse(response: Response, fallbackPrefix: string): 
 }
 
 export const api = {
-  post: async <T>(endpoint: string, data: any, conversationHistory?: Array<{role: string, content: string}>): Promise<T> => {
-    const requestData = conversationHistory ? { ...data, conversation_history: conversationHistory } : data;
+  post: async <T>(
+    endpoint: string,
+    data: any,
+    conversationHistory?: Array<{ role: string; content: string }>
+  ): Promise<T> => {
+    const requestData = conversationHistory
+      ? { ...data, conversation_history: conversationHistory }
+      : data;
     const response = await fetch(`${API_BASE_URL}${endpoint}`, {
       method: 'POST',
       headers: {

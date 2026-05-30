@@ -1,4 +1,10 @@
-import { createContext, useContext, useState, useCallback, ReactNode } from 'react';
+import {
+  createContext,
+  useContext,
+  useState,
+  useCallback,
+  ReactNode,
+} from 'react';
 
 export interface AppNotification {
   id: number;
@@ -14,11 +20,15 @@ interface NotificationContextType {
   unreadCount: number;
   markAllRead: () => void;
   markRead: (id: number) => void;
-  addNotification: (n: Omit<AppNotification, 'id' | 'read' | 'timestamp'>) => void;
+  addNotification: (
+    n: Omit<AppNotification, 'id' | 'read' | 'timestamp'>
+  ) => void;
   removeNotification: (id: number) => void;
 }
 
-const NotificationContext = createContext<NotificationContextType | undefined>(undefined);
+const NotificationContext = createContext<NotificationContextType | undefined>(
+  undefined
+);
 
 const INITIAL_NOTIFICATIONS: AppNotification[] = [
   {
@@ -48,7 +58,9 @@ const INITIAL_NOTIFICATIONS: AppNotification[] = [
 ];
 
 export function NotificationProvider({ children }: { children: ReactNode }) {
-  const [notifications, setNotifications] = useState<AppNotification[]>(INITIAL_NOTIFICATIONS);
+  const [notifications, setNotifications] = useState<AppNotification[]>(
+    INITIAL_NOTIFICATIONS
+  );
 
   const unreadCount = notifications.filter((n) => !n.read).length;
 
@@ -78,7 +90,14 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
 
   return (
     <NotificationContext.Provider
-      value={{ notifications, unreadCount, markAllRead, markRead, addNotification, removeNotification }}
+      value={{
+        notifications,
+        unreadCount,
+        markAllRead,
+        markRead,
+        addNotification,
+        removeNotification,
+      }}
     >
       {children}
     </NotificationContext.Provider>
@@ -87,6 +106,9 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
 
 export function useNotifications() {
   const ctx = useContext(NotificationContext);
-  if (!ctx) throw new Error('useNotifications must be used within NotificationProvider');
+  if (!ctx)
+    throw new Error(
+      'useNotifications must be used within NotificationProvider'
+    );
   return ctx;
 }

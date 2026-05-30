@@ -1,160 +1,251 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="en">
-<head>
-    <meta charset="utf-8"/>
-    <meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+  <head>
+    <meta charset="utf-8" />
+    <meta content="width=device-width, initial-scale=1.0" name="viewport" />
     <title>LegalEase - Document Upload & Summary</title>
-    <link href="data:image/x-icon;base64," rel="icon" type="image/x-icon"/>
+    <link href="data:image/x-icon;base64," rel="icon" type="image/x-icon" />
     <script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
-    <link href="https://fonts.googleapis.com" rel="preconnect"/>
-    <link crossorigin="" href="https://fonts.gstatic.com" rel="preconnect"/>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;900&amp;display=swap" rel="stylesheet"/>
-    <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined" rel="stylesheet"/>
-    <link href="../assets/css/styles.css" rel="stylesheet"/>
+    <link href="https://fonts.googleapis.com" rel="preconnect" />
+    <link crossorigin="" href="https://fonts.gstatic.com" rel="preconnect" />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;900&amp;display=swap"
+      rel="stylesheet"
+    />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined"
+      rel="stylesheet"
+    />
+    <link href="../assets/css/styles.css" rel="stylesheet" />
     <script src="../assets/js/tailwind-config.js"></script>
     <script src="../assets/js/components.js"></script>
-</head>
-<body class="bg-background-light dark:bg-background-dark font-display text-gray-800 dark:text-gray-200">
+  </head>
+  <body
+    class="bg-background-light dark:bg-background-dark font-display text-gray-800 dark:text-gray-200"
+  >
     <div class="flex min-h-screen w-full flex-col">
-        <!-- Header -->
-        <header id="global-header" class="bg-white dark:bg-background-dark border-b border-gray-200 dark:border-gray-800 px-6 py-1"></header>
+      <!-- Header -->
+      <header
+        id="global-header"
+        class="bg-white dark:bg-background-dark border-b border-gray-200 dark:border-gray-800 px-6 py-1"
+      ></header>
 
-        <!-- Main Content -->
-        <main class="flex-1 py-10">
-            <div class="app-container">
-                <div class="mx-auto max-w-4xl text-center mb-12">
-                    <h1 class="text-4xl md:text-5xl font-bold tracking-tight mb-4">Simplify Your Legal Documents</h1>
-                    <p class="text-lg text-gray-600 dark:text-gray-400">Upload your document and let our AI provide you with a clear, understandable summary.</p>
-                </div>
+      <!-- Main Content -->
+      <main class="flex-1 py-10">
+        <div class="app-container">
+          <div class="mx-auto max-w-4xl text-center mb-12">
+            <h1 class="text-4xl md:text-5xl font-bold tracking-tight mb-4">
+              Simplify Your Legal Documents
+            </h1>
+            <p class="text-lg text-gray-600 dark:text-gray-400">
+              Upload your document and let our AI provide you with a clear,
+              understandable summary.
+            </p>
+          </div>
 
-                <!-- Upload Area -->
-                <div class="relative flex flex-col items-center justify-center gap-4 rounded-xl border-2 border-dashed border-gray-300 dark:border-gray-700 bg-white dark:bg-background-dark/50 p-10 md:p-20 text-center transition-all duration-300 hover:border-primary hover:bg-primary/5">
-                    <div class="absolute top-4 right-4 flex items-center gap-2 text-sm text-gray-500 dark:text-gray-400">
-                        <span class="material-symbols-outlined text-lg" aria-hidden="true">lock</span>
-                        <span>Secure &amp; Confidential</span>
-                    </div>
-                    <div class="flex h-16 w-16 items-center justify-center rounded-full bg-primary/10 text-primary">
-                        <span class="material-symbols-outlined" style="font-size: 32px" aria-hidden="true">upload_file</span>
-                    </div>
-                    <p class="text-lg font-semibold">Drag and drop your document here</p>
-                    <p class="text-gray-500 dark:text-gray-400">or</p>
-                    <button class="flex items-center justify-center gap-2 rounded-lg bg-primary px-6 py-3 text-base font-bold text-white shadow-sm transition-all hover:bg-primary/90 hover:shadow-lg" aria-label="Browse files to upload">
-                        Browse Files
-                    </button>
-                    <p class="mt-4 text-xs text-gray-400 dark:text-gray-500">Max file size: 25MB. Supported formats: .pdf, .docx, .txt</p>
-                </div>
-
-                <!-- Features Section -->
-                <div class="mt-16 space-y-12">
-                    <!-- Document Summary -->
-                    <div class="flex items-start gap-6">
-                        <div class="flex h-12 w-12 flex-shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary">
-                            <span class="material-symbols-outlined" aria-hidden="true">description</span>
-                        </div>
-                        <div>
-                            <h2 class="text-2xl font-bold mb-2">Document Summary</h2>
-                            <p class="text-gray-600 dark:text-gray-400">
-                                This section provides a concise overview of the key points and clauses within your legal document, making it easier to grasp the core content at a glance.
-                            </p>
-                        </div>
-                    </div>
-
-                    <!-- Jargon Explanations -->
-                    <div class="flex items-start gap-6">
-                        <div class="flex h-12 w-12 flex-shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary">
-                            <span class="material-symbols-outlined" aria-hidden="true">translate</span>
-                        </div>
-                        <div>
-                            <h2 class="text-2xl font-bold mb-2">Jargon Explanations</h2>
-                            <p class="text-gray-600 dark:text-gray-400">
-                                Here, complex legal terms are broken down into plain language, ensuring you understand every detail without needing a law degree.
-                            </p>
-                        </div>
-                    </div>
-
-                    <!-- Risk Alerts -->
-                    <div class="flex items-start gap-6">
-                        <div class="flex h-12 w-12 flex-shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary">
-                            <span class="material-symbols-outlined" aria-hidden="true">warning</span>
-                        </div>
-                        <div>
-                            <h2 class="text-2xl font-bold mb-2">Risk Alerts</h2>
-                            <p class="text-gray-600 dark:text-gray-400">
-                                This feature highlights potential risks or critical areas within the document that require your attention, helping you make informed decisions.
-                            </p>
-                        </div>
-                    </div>
-                </div>
-
-                <!-- Recent Documents Section -->
-                <div class="mt-16">
-                    <h2 class="text-2xl font-bold mb-6">Recent Documents</h2>
-                    <div class="space-y-4">
-                        <div class="flex items-center justify-between p-4 rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-background-dark/50">
-                            <div class="flex items-center gap-4">
-                                <div class="flex h-10 w-10 items-center justify-center rounded-lg bg-red-50 text-red-600">
-                                    <span class="material-symbols-outlined">picture_as_pdf</span>
-                                </div>
-                                <div>
-                                    <h3 class="font-medium">Lease Agreement - Apartment 4B</h3>
-                                    <p class="text-sm text-gray-500 dark:text-gray-400">Uploaded 2 hours ago</p>
-                                </div>
-                            </div>
-                            <div class="flex items-center gap-2">
-                                <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200">
-                                    Processed
-                                </span>
-                                <button class="p-2 text-gray-400 hover:text-gray-600 dark:hover:text-gray-200">
-                                    <span class="material-symbols-outlined">more_vert</span>
-                                </button>
-                            </div>
-                        </div>
-
-                        <div class="flex items-center justify-between p-4 rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-background-dark/50">
-                            <div class="flex items-center gap-4">
-                                <div class="flex h-10 w-10 items-center justify-center rounded-lg bg-blue-50 text-blue-600">
-                                    <span class="material-symbols-outlined">description</span>
-                                </div>
-                                <div>
-                                    <h3 class="font-medium">Employment Contract - TechCorp</h3>
-                                    <p class="text-sm text-gray-500 dark:text-gray-400">Uploaded 1 day ago</p>
-                                </div>
-                            </div>
-                            <div class="flex items-center gap-2">
-                                <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200">
-                                    Processing
-                                </span>
-                                <button class="p-2 text-gray-400 hover:text-gray-600 dark:hover:text-gray-200">
-                                    <span class="material-symbols-outlined">more_vert</span>
-                                </button>
-                            </div>
-                        </div>
-
-                        <div class="flex items-center justify-between p-4 rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-background-dark/50">
-                            <div class="flex items-center gap-4">
-                                <div class="flex h-10 w-10 items-center justify-center rounded-lg bg-red-50 text-red-600">
-                                    <span class="material-symbols-outlined">picture_as_pdf</span>
-                                </div>
-                                <div>
-                                    <h3 class="font-medium">Privacy Policy Update</h3>
-                                    <p class="text-sm text-gray-500 dark:text-gray-400">Uploaded 3 days ago</p>
-                                </div>
-                            </div>
-                            <div class="flex items-center gap-2">
-                                <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200">
-                                    Processed
-                                </span>
-                                <button class="p-2 text-gray-400 hover:text-gray-600 dark:hover:text-gray-200">
-                                    <span class="material-symbols-outlined">more_vert</span>
-                                </button>
-                            </div>
-                        </div>
-                    </div>
-                </div>
+          <!-- Upload Area -->
+          <div
+            class="relative flex flex-col items-center justify-center gap-4 rounded-xl border-2 border-dashed border-gray-300 dark:border-gray-700 bg-white dark:bg-background-dark/50 p-10 md:p-20 text-center transition-all duration-300 hover:border-primary hover:bg-primary/5"
+          >
+            <div
+              class="absolute top-4 right-4 flex items-center gap-2 text-sm text-gray-500 dark:text-gray-400"
+            >
+              <span class="material-symbols-outlined text-lg" aria-hidden="true"
+                >lock</span
+              >
+              <span>Secure &amp; Confidential</span>
             </div>
-        </main>
-        <!-- Footer -->
-        <footer id="global-footer" class="bg-white dark:bg-gray-900 border-t border-gray-200 dark:border-gray-800"></footer>
+            <div
+              class="flex h-16 w-16 items-center justify-center rounded-full bg-primary/10 text-primary"
+            >
+              <span
+                class="material-symbols-outlined"
+                style="font-size: 32px"
+                aria-hidden="true"
+                >upload_file</span
+              >
+            </div>
+            <p class="text-lg font-semibold">
+              Drag and drop your document here
+            </p>
+            <p class="text-gray-500 dark:text-gray-400">or</p>
+            <button
+              class="flex items-center justify-center gap-2 rounded-lg bg-primary px-6 py-3 text-base font-bold text-white shadow-sm transition-all hover:bg-primary/90 hover:shadow-lg"
+              aria-label="Browse files to upload"
+            >
+              Browse Files
+            </button>
+            <p class="mt-4 text-xs text-gray-400 dark:text-gray-500">
+              Max file size: 25MB. Supported formats: .pdf, .docx, .txt
+            </p>
+          </div>
+
+          <!-- Features Section -->
+          <div class="mt-16 space-y-12">
+            <!-- Document Summary -->
+            <div class="flex items-start gap-6">
+              <div
+                class="flex h-12 w-12 flex-shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary"
+              >
+                <span class="material-symbols-outlined" aria-hidden="true"
+                  >description</span
+                >
+              </div>
+              <div>
+                <h2 class="text-2xl font-bold mb-2">Document Summary</h2>
+                <p class="text-gray-600 dark:text-gray-400">
+                  This section provides a concise overview of the key points and
+                  clauses within your legal document, making it easier to grasp
+                  the core content at a glance.
+                </p>
+              </div>
+            </div>
+
+            <!-- Jargon Explanations -->
+            <div class="flex items-start gap-6">
+              <div
+                class="flex h-12 w-12 flex-shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary"
+              >
+                <span class="material-symbols-outlined" aria-hidden="true"
+                  >translate</span
+                >
+              </div>
+              <div>
+                <h2 class="text-2xl font-bold mb-2">Jargon Explanations</h2>
+                <p class="text-gray-600 dark:text-gray-400">
+                  Here, complex legal terms are broken down into plain language,
+                  ensuring you understand every detail without needing a law
+                  degree.
+                </p>
+              </div>
+            </div>
+
+            <!-- Risk Alerts -->
+            <div class="flex items-start gap-6">
+              <div
+                class="flex h-12 w-12 flex-shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary"
+              >
+                <span class="material-symbols-outlined" aria-hidden="true"
+                  >warning</span
+                >
+              </div>
+              <div>
+                <h2 class="text-2xl font-bold mb-2">Risk Alerts</h2>
+                <p class="text-gray-600 dark:text-gray-400">
+                  This feature highlights potential risks or critical areas
+                  within the document that require your attention, helping you
+                  make informed decisions.
+                </p>
+              </div>
+            </div>
+          </div>
+
+          <!-- Recent Documents Section -->
+          <div class="mt-16">
+            <h2 class="text-2xl font-bold mb-6">Recent Documents</h2>
+            <div class="space-y-4">
+              <div
+                class="flex items-center justify-between p-4 rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-background-dark/50"
+              >
+                <div class="flex items-center gap-4">
+                  <div
+                    class="flex h-10 w-10 items-center justify-center rounded-lg bg-red-50 text-red-600"
+                  >
+                    <span class="material-symbols-outlined"
+                      >picture_as_pdf</span
+                    >
+                  </div>
+                  <div>
+                    <h3 class="font-medium">Lease Agreement - Apartment 4B</h3>
+                    <p class="text-sm text-gray-500 dark:text-gray-400">
+                      Uploaded 2 hours ago
+                    </p>
+                  </div>
+                </div>
+                <div class="flex items-center gap-2">
+                  <span
+                    class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200"
+                  >
+                    Processed
+                  </span>
+                  <button
+                    class="p-2 text-gray-400 hover:text-gray-600 dark:hover:text-gray-200"
+                  >
+                    <span class="material-symbols-outlined">more_vert</span>
+                  </button>
+                </div>
+              </div>
+
+              <div
+                class="flex items-center justify-between p-4 rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-background-dark/50"
+              >
+                <div class="flex items-center gap-4">
+                  <div
+                    class="flex h-10 w-10 items-center justify-center rounded-lg bg-blue-50 text-blue-600"
+                  >
+                    <span class="material-symbols-outlined">description</span>
+                  </div>
+                  <div>
+                    <h3 class="font-medium">Employment Contract - TechCorp</h3>
+                    <p class="text-sm text-gray-500 dark:text-gray-400">
+                      Uploaded 1 day ago
+                    </p>
+                  </div>
+                </div>
+                <div class="flex items-center gap-2">
+                  <span
+                    class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200"
+                  >
+                    Processing
+                  </span>
+                  <button
+                    class="p-2 text-gray-400 hover:text-gray-600 dark:hover:text-gray-200"
+                  >
+                    <span class="material-symbols-outlined">more_vert</span>
+                  </button>
+                </div>
+              </div>
+
+              <div
+                class="flex items-center justify-between p-4 rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-background-dark/50"
+              >
+                <div class="flex items-center gap-4">
+                  <div
+                    class="flex h-10 w-10 items-center justify-center rounded-lg bg-red-50 text-red-600"
+                  >
+                    <span class="material-symbols-outlined"
+                      >picture_as_pdf</span
+                    >
+                  </div>
+                  <div>
+                    <h3 class="font-medium">Privacy Policy Update</h3>
+                    <p class="text-sm text-gray-500 dark:text-gray-400">
+                      Uploaded 3 days ago
+                    </p>
+                  </div>
+                </div>
+                <div class="flex items-center gap-2">
+                  <span
+                    class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200"
+                  >
+                    Processed
+                  </span>
+                  <button
+                    class="p-2 text-gray-400 hover:text-gray-600 dark:hover:text-gray-200"
+                  >
+                    <span class="material-symbols-outlined">more_vert</span>
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </main>
+      <!-- Footer -->
+      <footer
+        id="global-footer"
+        class="bg-white dark:bg-gray-900 border-t border-gray-200 dark:border-gray-800"
+      ></footer>
     </div>
-</body>
+  </body>
 </html>

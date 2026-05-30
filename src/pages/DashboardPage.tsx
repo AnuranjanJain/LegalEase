@@ -1,34 +1,68 @@
-
 import { useMemo } from 'react';
 import { FileText, Clock, CheckCircle, UploadCloud } from 'lucide-react';
 import { NavLink } from 'react-router-dom';
-import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip, Legend } from 'recharts';
+import {
+  PieChart,
+  Pie,
+  Cell,
+  ResponsiveContainer,
+  Tooltip,
+  Legend,
+} from 'recharts';
 import { StorageService } from '../services/storage';
 
 export function DashboardPage() {
   const allDocs = useMemo(() => StorageService.getDocuments(), []);
 
-  const processedCount = useMemo(() =>
-    allDocs.filter(d => d.status === 'processed').length, [allDocs]);
+  const processedCount = useMemo(
+    () => allDocs.filter((d) => d.status === 'processed').length,
+    [allDocs]
+  );
 
-  const processingCount = useMemo(() =>
-    allDocs.filter(d => d.status === 'processing').length, [allDocs]);
+  const processingCount = useMemo(
+    () => allDocs.filter((d) => d.status === 'processing').length,
+    [allDocs]
+  );
 
   const totalCount = allDocs.length;
 
-  const stats = useMemo(() => [
-    { label: 'Documents Processed', value: String(processedCount), icon: CheckCircle, color: 'text-green-600', bg: 'bg-green-100 dark:bg-green-900/30' },
-    { label: 'Pending Review', value: String(processingCount), icon: Clock, color: 'text-yellow-600', bg: 'bg-yellow-100 dark:bg-yellow-900/30' },
-    { label: 'Total Uploads', value: String(totalCount), icon: FileText, color: 'text-primary', bg: 'bg-primary/10' },
-  ], [processedCount, processingCount, totalCount]);
+  const stats = useMemo(
+    () => [
+      {
+        label: 'Documents Processed',
+        value: String(processedCount),
+        icon: CheckCircle,
+        color: 'text-green-600',
+        bg: 'bg-green-100 dark:bg-green-900/30',
+      },
+      {
+        label: 'Pending Review',
+        value: String(processingCount),
+        icon: Clock,
+        color: 'text-yellow-600',
+        bg: 'bg-yellow-100 dark:bg-yellow-900/30',
+      },
+      {
+        label: 'Total Uploads',
+        value: String(totalCount),
+        icon: FileText,
+        color: 'text-primary',
+        bg: 'bg-primary/10',
+      },
+    ],
+    [processedCount, processingCount, totalCount]
+  );
 
-  const recentDocs = useMemo(() =>
-    allDocs.slice(0, 5).map(doc => ({
-      title: doc.name,
-      type: doc.type?.toUpperCase() || 'Other',
-      status: doc.status === 'processed' ? 'Completed' : 'Processing',
-      date: new Date(doc.uploadDate).toLocaleDateString(),
-    })), [allDocs]);
+  const recentDocs = useMemo(
+    () =>
+      allDocs.slice(0, 5).map((doc) => ({
+        title: doc.name,
+        type: doc.type?.toUpperCase() || 'Other',
+        status: doc.status === 'processed' ? 'Completed' : 'Processing',
+        date: new Date(doc.uploadDate).toLocaleDateString(),
+      })),
+    [allDocs]
+  );
 
   // --- FEATURE 1: Logic to parse data dynamically for Recharts ---
   const chartData = useMemo(() => {
@@ -49,12 +83,14 @@ export function DashboardPage() {
 
   const handleUploadTrigger = () => {
     // Put code or navigation here to open file picker modal
-    console.log("Trigger upload flow...");
+    console.log('Trigger upload flow...');
   };
 
   return (
     <div className="app-container py-8">
-      <h1 className="text-2xl font-bold text-gray-900 dark:text-white mb-6">Dashboard</h1>
+      <h1 className="text-2xl font-bold text-gray-900 dark:text-white mb-6">
+        Dashboard
+      </h1>
 
       {/* --- FEATURE 3: Empty State Engineering condition check --- */}
       {recentDocs.length === 0 ? (
@@ -62,9 +98,12 @@ export function DashboardPage() {
           <div className="p-4 bg-gray-100 dark:bg-gray-800 rounded-full text-gray-400 mb-4">
             <UploadCloud size={40} />
           </div>
-          <h3 className="text-lg font-semibold text-gray-900 dark:text-white">No documents analyzed yet</h3>
+          <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
+            No documents analyzed yet
+          </h3>
           <p className="mt-2 text-sm text-gray-500 dark:text-gray-400 max-w-sm">
-            Get started by uploading your first legal document (NDA, Lease, or Employment contract) to populate your analytics dashboard.
+            Get started by uploading your first legal document (NDA, Lease, or
+            Employment contract) to populate your analytics dashboard.
           </p>
           <button
             type="button"
@@ -79,10 +118,17 @@ export function DashboardPage() {
           {/* Stats Grid */}
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
             {stats.map((stat) => (
-              <div key={stat.label} className="bg-white dark:bg-gray-800 p-6 rounded-xl border border-gray-200 dark:border-gray-700 shadow-sm flex items-center justify-between">
+              <div
+                key={stat.label}
+                className="bg-white dark:bg-gray-800 p-6 rounded-xl border border-gray-200 dark:border-gray-700 shadow-sm flex items-center justify-between"
+              >
                 <div>
-                  <p className="text-sm font-medium text-gray-500 dark:text-gray-400">{stat.label}</p>
-                  <p className="text-3xl font-bold text-gray-900 dark:text-white mt-2">{stat.value}</p>
+                  <p className="text-sm font-medium text-gray-500 dark:text-gray-400">
+                    {stat.label}
+                  </p>
+                  <p className="text-3xl font-bold text-gray-900 dark:text-white mt-2">
+                    {stat.value}
+                  </p>
                 </div>
                 <div className={`p-3 rounded-lg ${stat.bg}`}>
                   <stat.icon className={`h-6 w-6 ${stat.color}`} />
@@ -93,23 +139,36 @@ export function DashboardPage() {
 
           {/* Core Content Layout Grid (Splits list and visual module cleanly) */}
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-            
             {/* Recent Documents Table List (Occupies 2 columns on wide layouts) */}
             <div className="lg:col-span-2 bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 shadow-sm overflow-hidden h-fit">
               <div className="px-6 py-4 border-b border-gray-200 dark:border-gray-700 flex justify-between items-center">
-                <h2 className="text-lg font-semibold text-gray-900 dark:text-white">Recent Activity</h2>
-                <NavLink to="/documents" className="text-primary hover:text-primary/80 text-sm font-medium">View all</NavLink>
+                <h2 className="text-lg font-semibold text-gray-900 dark:text-white">
+                  Recent Activity
+                </h2>
+                <NavLink
+                  to="/documents"
+                  className="text-primary hover:text-primary/80 text-sm font-medium"
+                >
+                  View all
+                </NavLink>
               </div>
               <div className="divide-y divide-gray-200 dark:divide-gray-700">
                 {recentDocs.map((doc, idx) => (
-                  <div key={idx} className="p-4 flex items-center justify-between hover:bg-gray-50 dark:hover:bg-gray-750 transition-colors">
+                  <div
+                    key={idx}
+                    className="p-4 flex items-center justify-between hover:bg-gray-50 dark:hover:bg-gray-750 transition-colors"
+                  >
                     <div className="flex items-center gap-4">
                       <div className="h-10 w-10 bg-gray-100 dark:bg-gray-700 rounded-lg flex items-center justify-center text-gray-500">
                         <FileText size={20} />
                       </div>
                       <div>
-                        <p className="text-sm font-medium text-gray-900 dark:text-white">{doc.title}</p>
-                        <p className="text-xs text-gray-500 dark:text-gray-400">{doc.date}</p>
+                        <p className="text-sm font-medium text-gray-900 dark:text-white">
+                          {doc.title}
+                        </p>
+                        <p className="text-xs text-gray-500 dark:text-gray-400">
+                          {doc.date}
+                        </p>
                       </div>
                     </div>
 
@@ -138,8 +197,12 @@ export function DashboardPage() {
             {/* --- FEATURE 1: Integrated Recharts Document Type Distribution Module --- */}
             <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 shadow-sm p-5 flex flex-col justify-between">
               <div>
-                <h2 className="text-lg font-semibold text-gray-900 dark:text-white mb-1">Document Distribution</h2>
-                <p className="text-xs text-gray-500 dark:text-gray-400 mb-4">Breakdown of legal categories</p>
+                <h2 className="text-lg font-semibold text-gray-900 dark:text-white mb-1">
+                  Document Distribution
+                </h2>
+                <p className="text-xs text-gray-500 dark:text-gray-400 mb-4">
+                  Breakdown of legal categories
+                </p>
               </div>
               <div className="h-56 w-full relative flex items-center justify-center">
                 <ResponsiveContainer width="100%" height="100%">
@@ -154,15 +217,25 @@ export function DashboardPage() {
                       dataKey="value"
                     >
                       {chartData.map((_entry, index) => (
-                        <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} stroke="transparent" />
+                        <Cell
+                          key={`cell-${index}`}
+                          fill={COLORS[index % COLORS.length]}
+                          stroke="transparent"
+                        />
                       ))}
                     </Pie>
-                    <Tooltip 
-                      contentStyle={{ background: '#1F2937', borderRadius: '8px', border: 'none', color: '#FFF', fontSize: '12px' }}
+                    <Tooltip
+                      contentStyle={{
+                        background: '#1F2937',
+                        borderRadius: '8px',
+                        border: 'none',
+                        color: '#FFF',
+                        fontSize: '12px',
+                      }}
                       itemStyle={{ color: '#FFF' }}
                     />
-                    <Legend 
-                      verticalAlign="bottom" 
+                    <Legend
+                      verticalAlign="bottom"
                       height={36}
                       iconType="circle"
                       iconSize={8}
@@ -172,11 +245,9 @@ export function DashboardPage() {
                 </ResponsiveContainer>
               </div>
             </div>
-
           </div>
         </>
       )}
     </div>
   );
 }
- 

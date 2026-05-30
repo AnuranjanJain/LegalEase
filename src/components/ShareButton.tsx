@@ -34,14 +34,19 @@ export function ShareButton({
         title={isDisabled ? 'Analysis still in progress' : 'Share on WhatsApp'}
         className={`inline-flex items-center gap-1.5 px-3.5 py-2 rounded-lg text-xs font-bold
           border transition-all duration-200 group/share
-          ${isDisabled
-            ? 'opacity-40 cursor-not-allowed border-gray-200 dark:border-gray-800 text-gray-400'
-            : 'border-[#25D366]/40 text-[#25D366] bg-[#25D366]/5 hover:bg-[#25D366] hover:text-white hover:border-[#25D366] hover:shadow-md hover:shadow-[#25D366]/20 hover:scale-[1.03] active:scale-[0.97]'
+          ${
+            isDisabled
+              ? 'opacity-40 cursor-not-allowed border-gray-200 dark:border-gray-800 text-gray-400'
+              : 'border-[#25D366]/40 text-[#25D366] bg-[#25D366]/5 hover:bg-[#25D366] hover:text-white hover:border-[#25D366] hover:shadow-md hover:shadow-[#25D366]/20 hover:scale-[1.03] active:scale-[0.97]'
           } ${className}`}
         aria-label={`Share ${doc.name} on WhatsApp`}
       >
         {/* WhatsApp SVG */}
-        <svg viewBox="0 0 32 32" className="w-3.5 h-3.5 flex-shrink-0" fill="none">
+        <svg
+          viewBox="0 0 32 32"
+          className="w-3.5 h-3.5 flex-shrink-0"
+          fill="none"
+        >
           <path
             d="M16 2C8.268 2 2 8.268 2 16c0 2.47.67 4.78 1.836 6.76L2 30l7.44-1.804A13.94 13.94 0 0016 30c7.732 0 14-6.268 14-14S23.732 2 16 2z"
             fill="currentColor"
@@ -64,9 +69,10 @@ export function ShareButton({
       disabled={isDisabled}
       title={isDisabled ? 'Analysis still in progress' : 'Share on WhatsApp'}
       className={`p-2 rounded-lg transition-all duration-200
-        ${isDisabled
-          ? 'opacity-40 cursor-not-allowed text-gray-300 dark:text-gray-600'
-          : 'text-gray-400 hover:text-[#25D366] hover:bg-[#25D366]/10 hover:scale-110 active:scale-95'
+        ${
+          isDisabled
+            ? 'opacity-40 cursor-not-allowed text-gray-300 dark:text-gray-600'
+            : 'text-gray-400 hover:text-[#25D366] hover:bg-[#25D366]/10 hover:scale-110 active:scale-95'
         } ${className}`}
       aria-label={`Share ${doc.name} on WhatsApp`}
     >

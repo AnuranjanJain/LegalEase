@@ -38,9 +38,7 @@ interface WhatsAppShareModalProps {
  */
 function generateAnalysisMeta(doc: Document): AnalysisMeta {
   // Seed a pseudo-score from the doc id characters
-  const seed = doc.id
-    .split('')
-    .reduce((acc, ch) => acc + ch.charCodeAt(0), 0);
+  const seed = doc.id.split('').reduce((acc, ch) => acc + ch.charCodeAt(0), 0);
 
   const trustScore = 70 + (seed % 28); // 70-97
   const riskScore = 100 - trustScore;
@@ -58,8 +56,8 @@ function generateAnalysisMeta(doc: Document): AnalysisMeta {
       riskLevel === 'Low'
         ? 'No significant risk factors were detected.'
         : riskLevel === 'Medium'
-        ? 'Moderate risk areas were identified that warrant legal review.'
-        : 'High-risk clauses were found — immediate legal consultation is recommended.'
+          ? 'Moderate risk areas were identified that warrant legal review.'
+          : 'High-risk clauses were found — immediate legal consultation is recommended.'
     }`,
     keyClauses: [
       'Termination & notice provisions',
@@ -112,11 +110,13 @@ ${meta.recommendations.map((r) => `• ${r}`).join('\n')}
 /* ─── Risk badge colours ──────────────────────────────────────── */
 const RISK_STYLE = {
   Low: {
-    badge: 'bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 border-emerald-500/30',
+    badge:
+      'bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 border-emerald-500/30',
     bar: 'bg-emerald-500',
   },
   Medium: {
-    badge: 'bg-amber-500/15 text-amber-600 dark:text-amber-400 border-amber-500/30',
+    badge:
+      'bg-amber-500/15 text-amber-600 dark:text-amber-400 border-amber-500/30',
     bar: 'bg-amber-500',
   },
   High: {
@@ -127,7 +127,10 @@ const RISK_STYLE = {
 
 /* ─── Component ───────────────────────────────────────────────── */
 
-export function WhatsAppShareModal({ document: doc, onClose }: WhatsAppShareModalProps) {
+export function WhatsAppShareModal({
+  document: doc,
+  onClose,
+}: WhatsAppShareModalProps) {
   const { showToast } = useToast();
   const [copied, setCopied] = useState(false);
   const [isVisible, setIsVisible] = useState(false);
@@ -263,7 +266,9 @@ export function WhatsAppShareModal({ document: doc, onClose }: WhatsAppShareModa
                 Risk Level
               </span>
             </div>
-            <span className={`inline-flex items-center gap-1 text-xs font-bold px-2 py-0.5 rounded-full border ${riskStyle.badge}`}>
+            <span
+              className={`inline-flex items-center gap-1 text-xs font-bold px-2 py-0.5 rounded-full border ${riskStyle.badge}`}
+            >
               {meta.riskLevel}
             </span>
             {/* Mini progress bar */}
@@ -348,9 +353,10 @@ export function WhatsAppShareModal({ document: doc, onClose }: WhatsAppShareModa
               className={`flex items-center justify-center gap-2 py-2.5 px-4 rounded-xl
                 border text-sm font-semibold transition-all duration-200
                 hover:scale-[1.02] active:scale-[0.98]
-                ${copied
-                  ? 'bg-emerald-500/10 border-emerald-500/40 text-emerald-600 dark:text-emerald-400'
-                  : 'bg-gray-50 dark:bg-gray-800 border-gray-200 dark:border-gray-700 text-gray-700 dark:text-gray-300 hover:border-gray-300 dark:hover:border-gray-600'
+                ${
+                  copied
+                    ? 'bg-emerald-500/10 border-emerald-500/40 text-emerald-600 dark:text-emerald-400'
+                    : 'bg-gray-50 dark:bg-gray-800 border-gray-200 dark:border-gray-700 text-gray-700 dark:text-gray-300 hover:border-gray-300 dark:hover:border-gray-600'
                 }`}
             >
               {copied ? <CheckCheck size={15} /> : <Copy size={15} />}

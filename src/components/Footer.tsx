@@ -10,7 +10,6 @@ const linkClass = ({ isActive }: { isActive: boolean }) =>
 export function Footer() {
   return (
     <footer className="relative bg-gray-50 dark:bg-[#030303] border-t border-gray-200 dark:border-white/5 overflow-hidden transition-colors duration-300">
-
       {/* Background Graphic Grid */}
       <div className="absolute inset-0 bg-[linear-gradient(rgba(0,0,0,0.03)_1px,transparent_1px),linear-gradient(90deg,rgba(0,0,0,0.03)_1px,transparent_1px)] dark:bg-[linear-gradient(rgba(255,255,255,0.02)_1px,transparent_1px),linear-gradient(90deg,rgba(255,255,255,0.02)_1px,transparent_1px)] bg-[size:64px_64px] pointer-events-none" />
 
@@ -18,17 +17,16 @@ export function Footer() {
       <div className="absolute bottom-0 left-1/2 -translate-x-1/2 w-[80%] h-[200px] bg-blue-600/10 dark:bg-blue-500/20 blur-[150px] pointer-events-none rounded-full" />
 
       <div className="relative z-10 max-w-7xl mx-auto px-6 lg:px-8 pt-24 pb-12">
-
         {/* Main grid: branding left, nav columns right */}
         <div className="grid grid-cols-1 lg:grid-cols-4 gap-12 mb-20">
-
           {/* Branding — spans 2 of 4 cols on large screens */}
           <div className="lg:col-span-2">
             <h2 className="text-4xl md:text-5xl font-semibold tracking-tighter text-gray-900 dark:text-white mb-4">
               LegalEase.
             </h2>
             <p className="text-base text-gray-500 dark:text-white/40 max-w-sm leading-relaxed">
-              The intelligence layer for your legal documents. Secure, fast, and driven by AI.
+              The intelligence layer for your legal documents. Secure, fast, and
+              driven by AI.
             </p>
           </div>
 
@@ -37,9 +35,15 @@ export function Footer() {
             <h3 className="text-xs font-bold text-gray-900 dark:text-white uppercase tracking-widest mb-1">
               Platform
             </h3>
-            <NavLink to="/dashboard" className={linkClass}>Dashboard</NavLink>
-            <NavLink to="/documents" className={linkClass}>Documents</NavLink>
-            <NavLink to="/chatbot" className={linkClass}>AI Chatbot</NavLink>
+            <NavLink to="/dashboard" className={linkClass}>
+              Dashboard
+            </NavLink>
+            <NavLink to="/documents" className={linkClass}>
+              Documents
+            </NavLink>
+            <NavLink to="/chatbot" className={linkClass}>
+              AI Chatbot
+            </NavLink>
           </div>
 
           {/* Legal links */}
@@ -47,11 +51,16 @@ export function Footer() {
             <h3 className="text-xs font-bold text-gray-900 dark:text-white uppercase tracking-widest mb-1">
               Legal
             </h3>
-            <NavLink to="/privacy" className={linkClass}>Privacy Policy</NavLink>
-            <NavLink to="/terms" className={linkClass}>Terms of Service</NavLink>
-            <NavLink to="/security" className={linkClass}>Security</NavLink>
+            <NavLink to="/privacy" className={linkClass}>
+              Privacy Policy
+            </NavLink>
+            <NavLink to="/terms" className={linkClass}>
+              Terms of Service
+            </NavLink>
+            <NavLink to="/security" className={linkClass}>
+              Security
+            </NavLink>
           </div>
-
         </div>
 
         {/* Divider */}
@@ -60,7 +69,8 @@ export function Footer() {
         {/* Bottom Bar */}
         <div className="flex flex-col sm:flex-row justify-between items-center gap-4">
           <p className="text-sm text-gray-400 dark:text-white/30">
-            &copy; {new Date().getFullYear()} LegalEase Inc. All rights reserved.
+            &copy; {new Date().getFullYear()} LegalEase Inc. All rights
+            reserved.
           </p>
 
           <div className="flex items-center space-x-5">
@@ -86,7 +96,6 @@ export function Footer() {
             </a>
           </div>
         </div>
-
       </div>
     </footer>
   );

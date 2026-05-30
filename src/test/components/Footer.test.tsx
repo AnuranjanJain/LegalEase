@@ -12,7 +12,9 @@ describe('Footer Component', () => {
     );
 
     expect(screen.getByText(/LegalEase\./i)).toBeInTheDocument();
-    expect(screen.getByText(new RegExp(`\\b${new Date().getFullYear()}\\b`))).toBeInTheDocument();
+    expect(
+      screen.getByText(new RegExp(`\\b${new Date().getFullYear()}\\b`))
+    ).toBeInTheDocument();
   });
 
   it('renders navigation links', () => {

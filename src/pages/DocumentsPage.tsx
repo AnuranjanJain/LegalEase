@@ -1,7 +1,16 @@
 import { useState, useRef, useEffect, useMemo } from 'react';
 import {
-  UploadCloud, FileText, Trash2, Eye, Search,
-  Grid, List, CheckCircle, ArrowRight, RefreshCcw, AlertCircle
+  UploadCloud,
+  FileText,
+  Trash2,
+  Eye,
+  Search,
+  Grid,
+  List,
+  CheckCircle,
+  ArrowRight,
+  RefreshCcw,
+  AlertCircle,
 } from 'lucide-react';
 import { StorageService, Document } from '../services/storage';
 import { api } from '../services/api';
@@ -14,7 +23,9 @@ export function DocumentsPage() {
   const [isDragging, setIsDragging] = useState(false);
   const [documents, setDocuments] = useState<Document[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
-  const [selectedTypeFilter, setSelectedTypeFilter] = useState<'All' | 'PDF' | 'DOCX' | 'TXT'>('All');
+  const [selectedTypeFilter, setSelectedTypeFilter] = useState<
+    'All' | 'PDF' | 'DOCX' | 'TXT'
+  >('All');
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
   const [shareDoc, setShareDoc] = useState<Document | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -48,19 +59,28 @@ export function DocumentsPage() {
         const formData = new FormData();
         formData.append('file', file);
 
-        const data = await api.upload<{ filename: string; text: string }>('/upload', formData);
+        const data = await api.upload<{ filename: string; text: string }>(
+          '/upload',
+          formData
+        );
 
         newDoc.status = 'processed';
         newDoc.processedDate = new Date().toISOString();
         newDoc.extractedText = data.text;
         StorageService.saveDocument(newDoc);
         setDocuments(StorageService.getDocuments());
-        showToast(`Document "${data.filename}" successfully analyzed by AI!`, 'success');
+        showToast(
+          `Document "${data.filename}" successfully analyzed by AI!`,
+          'success'
+        );
       } catch {
         newDoc.status = 'error';
         StorageService.saveDocument(newDoc);
         setDocuments(StorageService.getDocuments());
-        showToast(`Failed to process "${file.name}". Please try again.`, 'error');
+        showToast(
+          `Failed to process "${file.name}". Please try again.`,
+          'error'
+        );
       }
     });
   };
@@ -109,14 +129,22 @@ export function DocumentsPage() {
 
   const formatDate = (dateStr: string): string => {
     const d = new Date(dateStr);
-    return d.toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' });
+    return d.toLocaleDateString('en-US', {
+      year: 'numeric',
+      month: 'short',
+      day: 'numeric',
+    });
   };
 
   // Search & Type Filtering
   const filteredDocs = useMemo(() => {
     return documents.filter((doc) => {
-      const matchesSearch = doc.name.toLowerCase().includes(searchQuery.toLowerCase());
-      const matchesType = selectedTypeFilter === 'All' || doc.type.toUpperCase() === selectedTypeFilter;
+      const matchesSearch = doc.name
+        .toLowerCase()
+        .includes(searchQuery.toLowerCase());
+      const matchesType =
+        selectedTypeFilter === 'All' ||
+        doc.type.toUpperCase() === selectedTypeFilter;
       return matchesSearch && matchesType;
     });
   }, [documents, searchQuery, selectedTypeFilter]);
@@ -126,18 +154,18 @@ export function DocumentsPage() {
     if (t === 'pdf') {
       return {
         color: 'text-red-500 bg-red-500/10 border-red-500/20',
-        iconColor: 'text-red-500'
+        iconColor: 'text-red-500',
       };
     }
     if (t === 'docx' || t === 'doc') {
       return {
         color: 'text-blue-500 bg-blue-500/10 border-blue-500/20',
-        iconColor: 'text-blue-500'
+        iconColor: 'text-blue-500',
       };
     }
     return {
       color: 'text-purple-500 bg-purple-500/10 border-purple-500/20',
-      iconColor: 'text-purple-500'
+      iconColor: 'text-purple-500',
     };
   };
 
@@ -146,22 +174,26 @@ export function DocumentsPage() {
       showToast('Document analysis is in progress. Please wait...', 'warning');
       navigate('/processing');
     } else {
-      showToast(`Initiating cognitive audit review for "${doc.name}"`, 'success');
+      showToast(
+        `Initiating cognitive audit review for "${doc.name}"`,
+        'success'
+      );
       navigate('/dashboard');
     }
   };
 
   return (
     <div className="relative overflow-hidden bg-background-light dark:bg-background-dark min-h-screen text-gray-800 dark:text-gray-200">
-      
       {/* Decorative Ambient Background Glows */}
       <div className="absolute inset-0 opacity-40 pointer-events-none">
         <div className="absolute top-10 left-10 w-96 h-96 bg-primary-600/10 dark:bg-primary-600/5 rounded-full filter blur-[100px] animate-pulse"></div>
-        <div className="absolute bottom-1/4 right-10 w-80 h-80 bg-blue-800/10 dark:bg-blue-800/5 rounded-full filter blur-[90px] animate-pulse" style={{ animationDelay: '2.5s' }}></div>
+        <div
+          className="absolute bottom-1/4 right-10 w-80 h-80 bg-blue-800/10 dark:bg-blue-800/5 rounded-full filter blur-[90px] animate-pulse"
+          style={{ animationDelay: '2.5s' }}
+        ></div>
       </div>
 
       <div className="app-container relative z-10 py-12 max-w-7xl">
-        
         {/* Header Section */}
         <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-10 gap-6">
           <div>
@@ -169,7 +201,8 @@ export function DocumentsPage() {
               Document Vault
             </h1>
             <p className="text-gray-600 dark:text-gray-400 text-sm mt-1 max-w-xl">
-              Upload, analyze, and manage your legal documents. Our cognitive AI extracts clause metrics and assesses liabilities instantly.
+              Upload, analyze, and manage your legal documents. Our cognitive AI
+              extracts clause metrics and assesses liabilities instantly.
             </p>
           </div>
 
@@ -198,7 +231,7 @@ export function DocumentsPage() {
         >
           {/* Ambient card back glow */}
           <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-48 h-48 bg-primary-600/5 rounded-full filter blur-[60px] opacity-0 group-hover:opacity-100 transition-opacity"></div>
-          
+
           <input
             type="file"
             ref={fileInputRef}
@@ -207,11 +240,11 @@ export function DocumentsPage() {
             accept=".pdf,.doc,.docx,.txt"
             multiple
           />
-          
+
           <div className="w-16 h-16 bg-primary-600/10 text-primary-600 dark:text-primary-400 rounded-2xl flex items-center justify-center mx-auto mb-4 group-hover:scale-110 group-hover:rotate-12 transition-all duration-300">
             <UploadCloud size={32} />
           </div>
-          
+
           <h3 className="text-xl font-bold text-gray-900 dark:text-white mb-2">
             {isDragging ? 'Drop Files Here' : 'Click to Upload or Drag & Drop'}
           </h3>
@@ -225,12 +258,14 @@ export function DocumentsPage() {
 
         {/* search and Filters Bar */}
         <div className="bg-white/80 dark:bg-gray-950/80 border border-gray-150 dark:border-gray-850 p-4 rounded-2xl shadow-sm backdrop-blur-md flex flex-col md:flex-row gap-4 justify-between items-center mb-8">
-          
           {/* Search box */}
           <div className="relative w-full md:w-80">
-            <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 dark:text-gray-500" />
-            <input 
-              type="text" 
+            <Search
+              size={16}
+              className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 dark:text-gray-500"
+            />
+            <input
+              type="text"
               placeholder="Search documents..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
@@ -246,8 +281,8 @@ export function DocumentsPage() {
                   key={filter}
                   onClick={() => setSelectedTypeFilter(filter)}
                   className={`px-3 py-1.5 text-xs font-semibold rounded-lg transition-all ${
-                    selectedTypeFilter === filter 
-                      ? 'bg-primary-600 text-white shadow-sm' 
+                    selectedTypeFilter === filter
+                      ? 'bg-primary-600 text-white shadow-sm'
                       : 'text-gray-600 hover:text-gray-900 dark:text-gray-400 dark:hover:text-white'
                   }`}
                 >
@@ -277,7 +312,6 @@ export function DocumentsPage() {
               </button>
             </div>
           </div>
-
         </div>
 
         {/* --- PREMIUM DYNAMIC DOCUMENT VIEWS --- */}
@@ -289,20 +323,24 @@ export function DocumentsPage() {
                 const typeInfo = getDocTypeDetails(doc.type);
 
                 return (
-                  <div 
-                    key={doc.id} 
+                  <div
+                    key={doc.id}
                     className="group bg-white dark:bg-gray-900 rounded-2xl border border-gray-200 dark:border-gray-800 shadow-sm hover:shadow-xl hover:-translate-y-1.5 transition-all duration-300 relative overflow-hidden flex flex-col justify-between"
                   >
                     {/* Glowing bar at top based on file type */}
-                    <div className={`absolute top-0 left-0 w-full h-1 bg-gradient-to-r ${doc.type === 'pdf' ? 'from-red-500 to-rose-500' : doc.type === 'docx' ? 'from-blue-500 to-indigo-500' : 'from-purple-500 to-pink-500'} opacity-0 group-hover:opacity-100 transition-opacity`}></div>
+                    <div
+                      className={`absolute top-0 left-0 w-full h-1 bg-gradient-to-r ${doc.type === 'pdf' ? 'from-red-500 to-rose-500' : doc.type === 'docx' ? 'from-blue-500 to-indigo-500' : 'from-purple-500 to-pink-500'} opacity-0 group-hover:opacity-100 transition-opacity`}
+                    ></div>
 
                     <div className="p-6">
                       {/* Header with Type badge and Status */}
                       <div className="flex justify-between items-start mb-4">
-                        <span className={`text-[10px] font-extrabold uppercase tracking-widest px-2.5 py-0.5 rounded-full border ${typeInfo.color}`}>
+                        <span
+                          className={`text-[10px] font-extrabold uppercase tracking-widest px-2.5 py-0.5 rounded-full border ${typeInfo.color}`}
+                        >
                           {doc.type}
                         </span>
-                        
+
                         {doc.status === 'processing' ? (
                           <span className="inline-flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-full bg-amber-500/10 text-amber-500 border border-amber-500/20 animate-pulse">
                             <RefreshCcw size={10} className="animate-spin" />
@@ -323,11 +361,13 @@ export function DocumentsPage() {
 
                       {/* File Icon & Info */}
                       <div className="flex gap-4 items-start">
-                        <div className={`p-3 rounded-xl bg-gray-50 dark:bg-gray-850 border border-gray-100 dark:border-gray-800 flex-shrink-0 group-hover:scale-105 transition-transform duration-300`}>
+                        <div
+                          className={`p-3 rounded-xl bg-gray-50 dark:bg-gray-850 border border-gray-100 dark:border-gray-800 flex-shrink-0 group-hover:scale-105 transition-transform duration-300`}
+                        >
                           <FileText size={28} className={typeInfo.iconColor} />
                         </div>
                         <div className="min-w-0 flex-1">
-                          <h3 
+                          <h3
                             onClick={() => handleReviewDetails(doc)}
                             className="text-base font-bold text-gray-900 dark:text-white group-hover:text-primary-500 transition-colors truncate cursor-pointer"
                             title={doc.name}
@@ -379,7 +419,6 @@ export function DocumentsPage() {
                         )}
                       </button>
                     </div>
-
                   </div>
                 );
               })}
@@ -391,11 +430,21 @@ export function DocumentsPage() {
                 <table className="min-w-full divide-y divide-gray-150 dark:divide-gray-800">
                   <thead className="bg-gray-50 dark:bg-gray-950/50">
                     <tr>
-                      <th className="px-6 py-4 text-left text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider">Document Name</th>
-                      <th className="px-6 py-4 text-left text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider">Size</th>
-                      <th className="px-6 py-4 text-left text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider">Date Uploaded</th>
-                      <th className="px-6 py-4 text-left text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider">AI Audit Status</th>
-                      <th className="px-6 py-4 text-right text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider">Actions</th>
+                      <th className="px-6 py-4 text-left text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                        Document Name
+                      </th>
+                      <th className="px-6 py-4 text-left text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                        Size
+                      </th>
+                      <th className="px-6 py-4 text-left text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                        Date Uploaded
+                      </th>
+                      <th className="px-6 py-4 text-left text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                        AI Audit Status
+                      </th>
+                      <th className="px-6 py-4 text-right text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                        Actions
+                      </th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-gray-150 dark:divide-gray-800">
@@ -403,21 +452,31 @@ export function DocumentsPage() {
                       const typeInfo = getDocTypeDetails(doc.type);
 
                       return (
-                        <tr key={doc.id} className="hover:bg-gray-50 dark:hover:bg-gray-950/40 transition-colors">
+                        <tr
+                          key={doc.id}
+                          className="hover:bg-gray-50 dark:hover:bg-gray-950/40 transition-colors"
+                        >
                           <td className="px-6 py-4 whitespace-nowrap">
                             <div className="flex items-center gap-3">
-                              <div className={`p-2 rounded-lg bg-gray-100 dark:bg-gray-800 flex-shrink-0`}>
-                                <FileText size={18} className={typeInfo.iconColor} />
+                              <div
+                                className={`p-2 rounded-lg bg-gray-100 dark:bg-gray-800 flex-shrink-0`}
+                              >
+                                <FileText
+                                  size={18}
+                                  className={typeInfo.iconColor}
+                                />
                               </div>
                               <div>
-                                <h4 
+                                <h4
                                   onClick={() => handleReviewDetails(doc)}
                                   className="text-sm font-bold text-gray-950 dark:text-white hover:text-primary transition-colors cursor-pointer truncate max-w-sm"
                                   title={doc.name}
                                 >
                                   {doc.name}
                                 </h4>
-                                <span className={`text-[9px] font-extrabold uppercase tracking-widest px-1.5 py-0.1 rounded border ${typeInfo.color} inline-block mt-0.5`}>
+                                <span
+                                  className={`text-[9px] font-extrabold uppercase tracking-widest px-1.5 py-0.1 rounded border ${typeInfo.color} inline-block mt-0.5`}
+                                >
                                   {doc.type}
                                 </span>
                               </div>
@@ -432,7 +491,10 @@ export function DocumentsPage() {
                           <td className="px-6 py-4 whitespace-nowrap">
                             {doc.status === 'processing' ? (
                               <span className="inline-flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-full bg-amber-500/10 text-amber-500 border border-amber-500/20 animate-pulse">
-                                <RefreshCcw size={10} className="animate-spin" />
+                                <RefreshCcw
+                                  size={10}
+                                  className="animate-spin"
+                                />
                                 Processing
                               </span>
                             ) : doc.status === 'error' ? (
@@ -483,9 +545,12 @@ export function DocumentsPage() {
           /* EMPTY STATE */
           <div className="text-center py-20 bg-white/50 dark:bg-gray-950/20 rounded-2xl border-2 border-dashed border-gray-200 dark:border-gray-800 shadow-sm">
             <FileText className="mx-auto text-gray-300 dark:text-gray-700 h-16 w-16 mb-4" />
-            <h3 className="text-xl font-bold text-gray-900 dark:text-white mb-1">No Documents Found</h3>
+            <h3 className="text-xl font-bold text-gray-900 dark:text-white mb-1">
+              No Documents Found
+            </h3>
             <p className="text-sm text-gray-500 dark:text-gray-450 max-w-sm mx-auto mb-6">
-              There are no documents matching your filters. Upload a contract above or adjust your search.
+              There are no documents matching your filters. Upload a contract
+              above or adjust your search.
             </p>
             <button
               onClick={() => fileInputRef.current?.click()}
@@ -495,7 +560,6 @@ export function DocumentsPage() {
             </button>
           </div>
         )}
-
       </div>
 
       {/* WhatsApp Share Modal — portal-rendered above everything */}

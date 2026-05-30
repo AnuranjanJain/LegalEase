@@ -82,9 +82,7 @@ describe('API Service', () => {
 
       await api.get('/test');
 
-      expect(mockFetch).toHaveBeenCalledWith(
-        expect.stringContaining('/test')
-      );
+      expect(mockFetch).toHaveBeenCalledWith(expect.stringContaining('/test'));
     });
 
     it('should return parsed JSON on success', async () => {
@@ -155,7 +153,9 @@ describe('API Service', () => {
       global.fetch = mockFetch;
 
       const formData = new FormData();
-      await expect(api.upload('/upload', formData)).rejects.toThrow('File too large');
+      await expect(api.upload('/upload', formData)).rejects.toThrow(
+        'File too large'
+      );
     });
   });
 });

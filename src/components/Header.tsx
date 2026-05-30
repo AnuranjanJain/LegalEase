@@ -1,8 +1,23 @@
 import { useState, useRef, useEffect } from 'react';
 import { NavLink, useNavigate } from 'react-router-dom';
-import { Menu, X, Bell, Moon, Sun, User, Settings, FileText, Shield, Info, LogOut } from 'lucide-react';
+import {
+  Menu,
+  X,
+  Bell,
+  Moon,
+  Sun,
+  User,
+  Settings,
+  FileText,
+  Shield,
+  Info,
+  LogOut,
+} from 'lucide-react';
 import { useDarkMode } from '../hooks/useDarkMode';
-import { useNotifications, AppNotification } from '../contexts/NotificationContext';
+import {
+  useNotifications,
+  AppNotification,
+} from '../contexts/NotificationContext';
 
 function timeAgo(date: Date): string {
   const diff = Math.floor((Date.now() - date.getTime()) / 1000);
@@ -13,8 +28,10 @@ function timeAgo(date: Date): string {
 }
 
 function notifIcon(type: AppNotification['type']) {
-  if (type === 'document') return <FileText size={14} className="text-primary" />;
-  if (type === 'security') return <Shield size={14} className="text-amber-500" />;
+  if (type === 'document')
+    return <FileText size={14} className="text-primary" />;
+  if (type === 'security')
+    return <Shield size={14} className="text-amber-500" />;
   return <Info size={14} className="text-gray-400" />;
 }
 
@@ -25,7 +42,8 @@ export function Header() {
   const userMenuRef = useRef<HTMLDivElement>(null);
   const notificationRef = useRef<HTMLDivElement>(null);
   const { isDarkMode, toggleDarkMode } = useDarkMode();
-  const { notifications, unreadCount, markAllRead, markRead } = useNotifications();
+  const { notifications, unreadCount, markAllRead, markRead } =
+    useNotifications();
   const navigate = useNavigate();
 
   const toggleNotificationMenu = () => setIsNotificationOpen((s) => !s);
@@ -34,10 +52,16 @@ export function Header() {
 
   useEffect(() => {
     function handleClickOutside(event: MouseEvent) {
-      if (userMenuRef.current && !userMenuRef.current.contains(event.target as Node)) {
+      if (
+        userMenuRef.current &&
+        !userMenuRef.current.contains(event.target as Node)
+      ) {
         setIsUserMenuOpen(false);
       }
-      if (notificationRef.current && !notificationRef.current.contains(event.target as Node)) {
+      if (
+        notificationRef.current &&
+        !notificationRef.current.contains(event.target as Node)
+      ) {
         setIsNotificationOpen(false);
       }
     }
@@ -60,11 +84,21 @@ export function Header() {
           <div className="flex items-center gap-4">
             <NavLink to="/" className="flex items-center gap-2 group">
               <div className="text-primary transition-transform group-hover:scale-105">
-                <svg className="h-8 w-8" fill="none" viewBox="0 0 48 48" xmlns="http://www.w3.org/2000/svg">
-                  <path d="M44 11.2727C44 14.0109 39.8386 16.3957 33.69 17.6364C39.8386 18.877 44 21.2618 44 24C44 26.7382 39.8386 29.123 33.69 30.3636C39.8386 31.6043 44 33.9891 44 36.7273C44 40.7439 35.0457 44 24 44C12.9543 44 4 40.7439 4 36.7273C4 33.9891 8.16144 31.6043 14.31 30.3636C8.16144 29.123 4 26.7382 4 24C4 21.2618 8.16144 18.877 14.31 17.6364C8.16144 16.3957 4 14.0109 4 11.2727C4 7.25611 12.9543 4 24 4C35.0457 4 44 7.25611 44 11.2727Z" fill="currentColor" />
+                <svg
+                  className="h-8 w-8"
+                  fill="none"
+                  viewBox="0 0 48 48"
+                  xmlns="http://www.w3.org/2000/svg"
+                >
+                  <path
+                    d="M44 11.2727C44 14.0109 39.8386 16.3957 33.69 17.6364C39.8386 18.877 44 21.2618 44 24C44 26.7382 39.8386 29.123 33.69 30.3636C39.8386 31.6043 44 33.9891 44 36.7273C44 40.7439 35.0457 44 24 44C12.9543 44 4 40.7439 4 36.7273C4 33.9891 8.16144 31.6043 14.31 30.3636C8.16144 29.123 4 26.7382 4 24C4 21.2618 8.16144 18.877 14.31 17.6364C8.16144 16.3957 4 14.0109 4 11.2727C4 7.25611 12.9543 4 24 4C35.0457 4 44 7.25611 44 11.2727Z"
+                    fill="currentColor"
+                  />
                 </svg>
               </div>
-              <h1 className="text-lg font-medium tracking-tight text-gray-900 dark:text-white hidden sm:block">LegalEase</h1>
+              <h1 className="text-lg font-medium tracking-tight text-gray-900 dark:text-white hidden sm:block">
+                LegalEase
+              </h1>
             </NavLink>
           </div>
 
@@ -85,7 +119,10 @@ export function Header() {
 
           {/* Actions */}
           <div className="flex items-center gap-1 sm:gap-2 pr-1">
-            <button onClick={toggleDarkMode} className="p-2.5 rounded-full text-gray-500 dark:text-white/50 hover:bg-gray-100 dark:hover:bg-white/10 transition-all">
+            <button
+              onClick={toggleDarkMode}
+              className="p-2.5 rounded-full text-gray-500 dark:text-white/50 hover:bg-gray-100 dark:hover:bg-white/10 transition-all"
+            >
               {isDarkMode ? <Sun size={18} /> : <Moon size={18} />}
             </button>
 
@@ -123,13 +160,21 @@ export function Header() {
                           onClick={() => markRead(n.id)}
                           className={`px-4 py-3 cursor-pointer transition-colors flex gap-3 ${!n.read ? 'bg-primary/5 dark:bg-primary/10' : 'hover:bg-gray-50 dark:hover:bg-gray-700'} ${index !== notifications.length - 1 ? 'border-b border-gray-100 dark:border-gray-700' : ''}`}
                         >
-                          <div className="mt-0.5 flex-shrink-0">{notifIcon(n.type)}</div>
+                          <div className="mt-0.5 flex-shrink-0">
+                            {notifIcon(n.type)}
+                          </div>
                           <div className="flex-1 min-w-0">
-                            <p className={`text-sm font-medium truncate ${!n.read ? 'text-gray-900 dark:text-white' : 'text-gray-700 dark:text-gray-300'}`}>
+                            <p
+                              className={`text-sm font-medium truncate ${!n.read ? 'text-gray-900 dark:text-white' : 'text-gray-700 dark:text-gray-300'}`}
+                            >
                               {n.title}
                             </p>
-                            <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">{n.description}</p>
-                            <p className="text-xs text-gray-400 dark:text-gray-500 mt-1">{timeAgo(n.timestamp)}</p>
+                            <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
+                              {n.description}
+                            </p>
+                            <p className="text-xs text-gray-400 dark:text-gray-500 mt-1">
+                              {timeAgo(n.timestamp)}
+                            </p>
                           </div>
                           {!n.read && (
                             <div className="flex-shrink-0 mt-1">
@@ -140,21 +185,32 @@ export function Header() {
                       ))
                     ) : (
                       <div className="px-4 py-8 text-center">
-                        <Bell size={24} className="mx-auto text-gray-300 dark:text-gray-600 mb-2" />
-                        <p className="text-sm text-gray-500 dark:text-gray-400">No notifications</p>
+                        <Bell
+                          size={24}
+                          className="mx-auto text-gray-300 dark:text-gray-600 mb-2"
+                        />
+                        <p className="text-sm text-gray-500 dark:text-gray-400">
+                          No notifications
+                        </p>
                       </div>
                     )}
                   </div>
 
                   <div className="px-4 py-2 border-t border-gray-100 dark:border-gray-700 flex items-center justify-between">
                     {unreadCount > 0 && (
-                      <button className="text-xs text-primary hover:underline" onClick={markAllRead}>
+                      <button
+                        className="text-xs text-primary hover:underline"
+                        onClick={markAllRead}
+                      >
                         Mark all as read
                       </button>
                     )}
                     <button
                       className="text-xs text-gray-500 dark:text-gray-400 hover:text-primary ml-auto"
-                      onClick={() => { setIsNotificationOpen(false); navigate('/profile/notifications'); }}
+                      onClick={() => {
+                        setIsNotificationOpen(false);
+                        navigate('/profile/notifications');
+                      }}
                     >
                       Manage preferences →
                     </button>
@@ -188,12 +244,28 @@ export function Header() {
               {isUserMenuOpen && (
                 <div className="absolute right-0 mt-4 w-60 rounded-3xl bg-white/90 dark:bg-[#0a0a0a]/90 backdrop-blur-3xl border border-gray-100 dark:border-white/10 shadow-2xl p-2 z-50 animate-in fade-in slide-in-from-top-4">
                   <div className="px-4 py-3 border-b border-gray-100 dark:border-white/5 mb-2">
-                    <p className="text-sm font-medium text-gray-900 dark:text-white">Sarah Wilson</p>
-                    <p className="text-xs text-gray-500 dark:text-white/40">sarah.w@example.com</p>
+                    <p className="text-sm font-medium text-gray-900 dark:text-white">
+                      Sarah Wilson
+                    </p>
+                    <p className="text-xs text-gray-500 dark:text-white/40">
+                      sarah.w@example.com
+                    </p>
                   </div>
-                  <NavLink to="/profile" className="flex items-center gap-3 px-4 py-2.5 text-sm text-gray-600 dark:text-white/70 hover:bg-gray-100 dark:hover:bg-white/5 rounded-xl transition-colors"><User size={16} /> Profile</NavLink>
-                  <NavLink to="/settings" className="flex items-center gap-3 px-4 py-2.5 text-sm text-gray-600 dark:text-white/70 hover:bg-gray-100 dark:hover:bg-white/5 rounded-xl transition-colors"><Settings size={16} /> Settings</NavLink>
-                  <button className="flex items-center gap-3 w-full text-left px-4 py-2.5 mt-1 text-sm text-red-500 font-medium hover:bg-red-50 dark:hover:bg-red-500/10 rounded-xl transition-colors"><LogOut size={16} /> Sign out</button>
+                  <NavLink
+                    to="/profile"
+                    className="flex items-center gap-3 px-4 py-2.5 text-sm text-gray-600 dark:text-white/70 hover:bg-gray-100 dark:hover:bg-white/5 rounded-xl transition-colors"
+                  >
+                    <User size={16} /> Profile
+                  </NavLink>
+                  <NavLink
+                    to="/settings"
+                    className="flex items-center gap-3 px-4 py-2.5 text-sm text-gray-600 dark:text-white/70 hover:bg-gray-100 dark:hover:bg-white/5 rounded-xl transition-colors"
+                  >
+                    <Settings size={16} /> Settings
+                  </NavLink>
+                  <button className="flex items-center gap-3 w-full text-left px-4 py-2.5 mt-1 text-sm text-red-500 font-medium hover:bg-red-50 dark:hover:bg-red-500/10 rounded-xl transition-colors">
+                    <LogOut size={16} /> Sign out
+                  </button>
                 </div>
               )}
             </div>

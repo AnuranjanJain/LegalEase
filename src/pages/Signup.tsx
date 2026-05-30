@@ -59,7 +59,10 @@ export function SignupPage() {
       {/* Background glows */}
       <div className="absolute inset-0 opacity-40 pointer-events-none">
         <div className="absolute top-20 right-1/4 w-96 h-96 bg-primary-650/8 dark:bg-primary-600/5 rounded-full filter blur-[120px] animate-pulse"></div>
-        <div className="absolute bottom-20 left-1/4 w-80 h-80 bg-blue-800/10 dark:bg-blue-800/5 rounded-full filter blur-[100px] animate-pulse" style={{ animationDelay: '2.5s' }}></div>
+        <div
+          className="absolute bottom-20 left-1/4 w-80 h-80 bg-blue-800/10 dark:bg-blue-800/5 rounded-full filter blur-[100px] animate-pulse"
+          style={{ animationDelay: '2.5s' }}
+        ></div>
       </div>
 
       <div className="w-full max-w-md relative z-10">
@@ -67,19 +70,33 @@ export function SignupPage() {
         <div className="text-center mb-8">
           <Link to="/" className="inline-flex items-center gap-2 group">
             <div className="text-primary transition-transform group-hover:scale-105">
-              <svg className="h-10 w-10" fill="none" viewBox="0 0 48 48" xmlns="http://www.w3.org/2000/svg">
-                <path d="M44 11.2727C44 14.0109 39.8386 16.3957 33.69 17.6364C39.8386 18.877 44 21.2618 44 24C44 26.7382 39.8386 29.123 33.69 30.3636C39.8386 31.6043 44 33.9891 44 36.7273C44 40.7439 35.0457 44 24 44C12.9543 44 4 40.7439 4 36.7273C4 33.9891 8.16144 31.6043 14.31 30.3636C8.16144 29.123 4 26.7382 4 24C4 21.2618 8.16144 18.877 14.31 17.6364C8.16144 16.3957 4 14.0109 4 11.2727C4 7.25611 12.9543 4 24 4C35.0457 4 44 7.25611 44 11.2727Z" fill="currentColor" />
+              <svg
+                className="h-10 w-10"
+                fill="none"
+                viewBox="0 0 48 48"
+                xmlns="http://www.w3.org/2000/svg"
+              >
+                <path
+                  d="M44 11.2727C44 14.0109 39.8386 16.3957 33.69 17.6364C39.8386 18.877 44 21.2618 44 24C44 26.7382 39.8386 29.123 33.69 30.3636C39.8386 31.6043 44 33.9891 44 36.7273C44 40.7439 35.0457 44 24 44C12.9543 44 4 40.7439 4 36.7273C4 33.9891 8.16144 31.6043 14.31 30.3636C8.16144 29.123 4 26.7382 4 24C4 21.2618 8.16144 18.877 14.31 17.6364C8.16144 16.3957 4 14.0109 4 11.2727C4 7.25611 12.9543 4 24 4C35.0457 4 44 7.25611 44 11.2727Z"
+                  fill="currentColor"
+                />
               </svg>
             </div>
-            <span className="text-xl font-medium tracking-tight text-gray-900 dark:text-white">LegalEase</span>
+            <span className="text-xl font-medium tracking-tight text-gray-900 dark:text-white">
+              LegalEase
+            </span>
           </Link>
         </div>
 
         {/* Card */}
         <div className="bg-white/70 dark:bg-gray-950/40 backdrop-blur-md rounded-2xl border border-gray-150 dark:border-gray-850 p-8 shadow-sm">
           <div className="mb-6">
-            <h2 className="text-2xl font-extrabold tracking-tight text-gray-900 dark:text-white">Create an account</h2>
-            <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">Get started with LegalEase today</p>
+            <h2 className="text-2xl font-extrabold tracking-tight text-gray-900 dark:text-white">
+              Create an account
+            </h2>
+            <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
+              Get started with LegalEase today
+            </p>
           </div>
 
           {error && (
@@ -91,12 +108,18 @@ export function SignupPage() {
           <form onSubmit={handleSubmit} className="space-y-5">
             {/* Email */}
             <div>
-              <label htmlFor="signup-email" className="block text-[10px] font-extrabold uppercase tracking-widest text-gray-400 dark:text-gray-500 mb-2">
+              <label
+                htmlFor="signup-email"
+                className="block text-[10px] font-extrabold uppercase tracking-widest text-gray-400 dark:text-gray-500 mb-2"
+              >
                 Email Address
               </label>
               <div className="relative">
                 <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
-                  <Mail size={16} className="text-gray-400 dark:text-gray-500" />
+                  <Mail
+                    size={16}
+                    className="text-gray-400 dark:text-gray-500"
+                  />
                 </div>
                 <input
                   id="signup-email"
@@ -112,12 +135,18 @@ export function SignupPage() {
 
             {/* Password */}
             <div>
-              <label htmlFor="signup-password" className="block text-[10px] font-extrabold uppercase tracking-widest text-gray-400 dark:text-gray-500 mb-2">
+              <label
+                htmlFor="signup-password"
+                className="block text-[10px] font-extrabold uppercase tracking-widest text-gray-400 dark:text-gray-500 mb-2"
+              >
                 Password
               </label>
               <div className="relative">
                 <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
-                  <Lock size={16} className="text-gray-400 dark:text-gray-500" />
+                  <Lock
+                    size={16}
+                    className="text-gray-400 dark:text-gray-500"
+                  />
                 </div>
                 <input
                   id="signup-password"
@@ -137,18 +166,26 @@ export function SignupPage() {
                 </button>
               </div>
               {password.length > 0 && password.length < 8 && (
-                <p className="mt-1.5 text-xs text-amber-500">Password must be at least 8 characters</p>
+                <p className="mt-1.5 text-xs text-amber-500">
+                  Password must be at least 8 characters
+                </p>
               )}
             </div>
 
             {/* Confirm Password */}
             <div>
-              <label htmlFor="signup-confirm-password" className="block text-[10px] font-extrabold uppercase tracking-widest text-gray-400 dark:text-gray-500 mb-2">
+              <label
+                htmlFor="signup-confirm-password"
+                className="block text-[10px] font-extrabold uppercase tracking-widest text-gray-400 dark:text-gray-500 mb-2"
+              >
                 Confirm Password
               </label>
               <div className="relative">
                 <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
-                  <Lock size={16} className="text-gray-400 dark:text-gray-500" />
+                  <Lock
+                    size={16}
+                    className="text-gray-400 dark:text-gray-500"
+                  />
                 </div>
                 <input
                   id="signup-confirm-password"
@@ -161,7 +198,9 @@ export function SignupPage() {
                 />
               </div>
               {confirmPassword.length > 0 && password !== confirmPassword && (
-                <p className="mt-1.5 text-xs text-red-500">Passwords do not match</p>
+                <p className="mt-1.5 text-xs text-red-500">
+                  Passwords do not match
+                </p>
               )}
             </div>
 
@@ -185,7 +224,10 @@ export function SignupPage() {
           <div className="mt-6 pt-6 border-t border-gray-150 dark:border-gray-850/60 text-center">
             <p className="text-sm text-gray-500 dark:text-gray-400">
               Already have an account?{' '}
-              <Link to="/login" className="text-primary font-semibold hover:underline">
+              <Link
+                to="/login"
+                className="text-primary font-semibold hover:underline"
+              >
                 Sign in
               </Link>
             </p>

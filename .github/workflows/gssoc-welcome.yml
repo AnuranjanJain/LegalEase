@@ -18,7 +18,7 @@ jobs:
             const { owner, repo } = context.repo;
             const creator = context.payload.pull_request.user.login;
             const prNumber = context.issue.number;
-            
+
             // Check if it's their first PR
             const { data: prs } = await github.rest.pulls.list({
               owner,
@@ -26,7 +26,7 @@ jobs:
               state: 'all',
               creator
             });
-            
+
             if (prs.length === 1) {
               const body = `
               👋 Welcome to **LegalEase**, @${creator}! 

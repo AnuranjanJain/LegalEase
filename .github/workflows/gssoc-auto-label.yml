@@ -21,7 +21,7 @@ jobs:
             let match;
             const labelsToAdd = new Set();
             let isGssoc = false;
-            
+
             while ((match = issueRegex.exec(prBody)) !== null) {
               const issueNumber = parseInt(match[1], 10);
               try {
@@ -41,7 +41,7 @@ jobs:
                 console.log(`Could not fetch issue #${issueNumber}: ${e.message}`);
               }
             }
-            
+
             if (isGssoc) {
               labelsToAdd.add('gssoc:approved');
               const labels = Array.from(labelsToAdd);

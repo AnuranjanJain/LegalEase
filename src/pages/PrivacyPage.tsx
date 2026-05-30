@@ -67,8 +67,10 @@ const sections: Section[] = [
 
 const colorMap: Record<string, string> = {
   blue: 'bg-blue-100 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400',
-  emerald: 'bg-emerald-100 dark:bg-emerald-900/30 text-emerald-600 dark:text-emerald-400',
-  purple: 'bg-purple-100 dark:bg-purple-900/30 text-purple-600 dark:text-purple-400',
+  emerald:
+    'bg-emerald-100 dark:bg-emerald-900/30 text-emerald-600 dark:text-emerald-400',
+  purple:
+    'bg-purple-100 dark:bg-purple-900/30 text-purple-600 dark:text-purple-400',
   amber: 'bg-amber-100 dark:bg-amber-900/30 text-amber-600 dark:text-amber-400',
   rose: 'bg-rose-100 dark:bg-rose-900/30 text-rose-600 dark:text-rose-400',
 };
@@ -89,9 +91,13 @@ export function PrivacyPage() {
             Privacy Policy
           </h1>
           <p className="text-gray-500 dark:text-gray-400 max-w-2xl mx-auto text-base leading-relaxed">
-            We are committed to protecting your personal information and your right to privacy. This policy outlines how LegalEase collects, uses, and safeguards your data.
+            We are committed to protecting your personal information and your
+            right to privacy. This policy outlines how LegalEase collects, uses,
+            and safeguards your data.
           </p>
-          <p className="text-xs text-gray-400 dark:text-gray-500 mt-4">Last updated: May 22, 2026</p>
+          <p className="text-xs text-gray-400 dark:text-gray-500 mt-4">
+            Last updated: May 22, 2026
+          </p>
         </div>
       </section>
 
@@ -105,14 +111,21 @@ export function PrivacyPage() {
                 className="group p-8 rounded-2xl bg-white dark:bg-gray-900 border border-gray-150 dark:border-gray-800 shadow-sm hover:shadow-lg transition-all duration-300"
               >
                 <div className="flex items-center gap-4 mb-6">
-                  <div className={`w-10 h-10 rounded-xl flex items-center justify-center ${colorMap[section.color]}`}>
+                  <div
+                    className={`w-10 h-10 rounded-xl flex items-center justify-center ${colorMap[section.color]}`}
+                  >
                     {section.icon}
                   </div>
-                  <h2 className="text-xl font-bold text-gray-900 dark:text-white">{section.title}</h2>
+                  <h2 className="text-xl font-bold text-gray-900 dark:text-white">
+                    {section.title}
+                  </h2>
                 </div>
                 <ul className="space-y-3">
                   {section.content.map((item, i) => (
-                    <li key={i} className="flex items-start gap-3 text-sm text-gray-600 dark:text-gray-400 leading-relaxed">
+                    <li
+                      key={i}
+                      className="flex items-start gap-3 text-sm text-gray-600 dark:text-gray-400 leading-relaxed"
+                    >
                       <span className="mt-1.5 w-1.5 h-1.5 rounded-full bg-gray-400 dark:bg-gray-600 flex-shrink-0" />
                       {item}
                     </li>
@@ -124,10 +137,16 @@ export function PrivacyPage() {
 
           {/* Contact */}
           <div className="mt-12 p-8 rounded-2xl bg-gradient-to-br from-blue-50 to-indigo-50 dark:from-blue-950/40 dark:to-indigo-950/40 border border-blue-200 dark:border-blue-900/50 text-center">
-            <Mail className="mx-auto text-blue-600 dark:text-blue-400 mb-3" size={28} />
-            <h3 className="text-lg font-bold text-gray-900 dark:text-white mb-2">Questions about this policy?</h3>
+            <Mail
+              className="mx-auto text-blue-600 dark:text-blue-400 mb-3"
+              size={28}
+            />
+            <h3 className="text-lg font-bold text-gray-900 dark:text-white mb-2">
+              Questions about this policy?
+            </h3>
             <p className="text-sm text-gray-500 dark:text-gray-400 mb-4">
-              Our Data Protection Officer is available to address any concerns you may have.
+              Our Data Protection Officer is available to address any concerns
+              you may have.
             </p>
             <a
               href="mailto:privacy@legalease.io"
