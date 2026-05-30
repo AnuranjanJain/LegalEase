@@ -1,3 +1,4 @@
+
 import {
   createContext,
   useContext,
@@ -5,6 +6,9 @@ import {
   useEffect,
   ReactNode,
 } from 'react';
+
+import { createContext, useContext, useState, ReactNode } from 'react';
+
 
 interface AuthContextType {
   isAuthenticated: boolean;
@@ -34,17 +38,22 @@ function isTokenValid(token: string): boolean {
 }
 
 export function AuthProvider({ children }: { children: ReactNode }) {
-  const [isAuthenticated, setIsAuthenticated] = useState<boolean>(false);
-
-  useEffect(() => {
+  // Pass a function to useState so it synchronously checks localStorage 
+  // on the very first render, preventing the "flash" redirect on refresh.
+  const [isAuthenticated, setIsAuthenticated] = useState<boolean>(() => {
     const token = localStorage.getItem('access_token');
+    
     if (token && isTokenValid(token)) {
-      setIsAuthenticated(true);
-    } else if (token) {
-      localStorage.removeItem('access_token');
-      setIsAuthenticated(false);
+      return true;
     }
-  }, []);
+    
+    // If token exists but is invalid/expired, clean it up
+    if (token) {
+      localStorage.removeItem('access_token');
+    }
+    
+    return false;
+  });
 
   const login = (token: string) => {
     localStorage.setItem('access_token', token);
