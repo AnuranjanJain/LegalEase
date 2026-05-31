@@ -1,5 +1,6 @@
 import os
 import re
+import zipfile
 from typing import Optional
 from backend.core.exceptions import ValidationError
 
@@ -7,6 +8,10 @@ from backend.core.exceptions import ValidationError
 MAX_CHAT_INPUT_CHARS = int(os.getenv("MAX_CHAT_INPUT_CHARS", "4000"))
 MAX_SUMMARIZE_INPUT_CHARS = int(os.getenv("MAX_SUMMARIZE_INPUT_CHARS", "20000"))
 MAX_CONTEXT_INPUT_CHARS = int(os.getenv("MAX_CONTEXT_INPUT_CHARS", "10000"))
+MAX_DOCX_ARCHIVE_ENTRIES = int(os.getenv("MAX_DOCX_ARCHIVE_ENTRIES", "200"))
+MAX_DOCX_ARCHIVE_UNCOMPRESSED_BYTES = int(os.getenv("MAX_DOCX_ARCHIVE_UNCOMPRESSED_BYTES", str(10 * 1024 * 1024)))
+MAX_DOCX_ARCHIVE_ENTRY_BYTES = int(os.getenv("MAX_DOCX_ARCHIVE_ENTRY_BYTES", str(5 * 1024 * 1024)))
+MAX_DOCX_ARCHIVE_COMPRESSION_RATIO = float(os.getenv("MAX_DOCX_ARCHIVE_COMPRESSION_RATIO", "100"))
 
 
 def validate_chat_input(message: str, context: Optional[str] = None):
@@ -78,3 +83,26 @@ def validate_mime_and_bytes(content: bytes, content_type: str, filename: str):
     elif file_extension == ".docx":
         if not content.startswith(b"PK\x03\x04"):
             raise ValidationError("File content signature does not match DOCX structure (ZIP archive)")
+
+
+def validate_docx_archive_safety(file_path: str):
+    """
+    Inspect a DOCX archive for obvious abuse patterns before parsing.
+    """
+    try:
+        with zipfile.ZipFile(file_path) as archive:
+            entries = archive.infolist()
+            if len(entries) > MAX_DOCX_ARCHIVE_ENTRIES:
+                raise ValidationError("DOCX archive contains too many files")
+
+            total_uncompressed_size = 0
+            for entry in entries:
+                total_uncompressed_size += entry.file_size
+                if entry.file_size > MAX_DOCX_ARCHIVE_ENTRY_BYTES:
+                    raise ValidationError("DOCX archive contains an oversized embedded file")
+                if entry.compress_size > 0 and (entry.file_size / entry.compress_size) > MAX_DOCX_ARCHIVE_COMPRESSION_RATIO:
+                    raise ValidationError("DOCX archive compression ratio is suspiciously high")
+                if total_uncompressed_size > MAX_DOCX_ARCHIVE_UNCOMPRESSED_BYTES:
+                    raise ValidationError("DOCX archive is too large to process safely")
+    except zipfile.BadZipFile:
+        raise ValidationError("DOCX archive is invalid or corrupted")

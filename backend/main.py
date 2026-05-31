@@ -2,9 +2,10 @@ from fastapi import FastAPI, HTTPException, UploadFile, File, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, StreamingResponse
 from pydantic import BaseModel
+import asyncio
 import os
 import logging
-from io import BytesIO
+import tempfile
 from typing import Optional
 
 import time
@@ -31,7 +32,8 @@ from backend.core.exceptions import (
     AIError, ValidationError, ProviderError, TimeoutError, ServiceUnavailableError
 )
 from backend.core.validation import (
-    validate_chat_input, validate_summarize_input, sanitize_text, validate_mime_and_bytes
+    validate_chat_input, validate_summarize_input, sanitize_text, validate_mime_and_bytes,
+    validate_docx_archive_safety
 )
 from backend.services.ai_service import ai_service, correlation_id_var
 
@@ -149,6 +151,9 @@ async def correlation_id_middleware(request: Request, call_next):
 # Configuration
 MAX_UPLOAD_SIZE = int(os.getenv("MAX_UPLOAD_SIZE", str(25 * 1024 * 1024)))  # 25 MB default
 CHUNK_SIZE = 1024 * 1024
+UPLOAD_PARSE_TIMEOUT_SECONDS = float(os.getenv("UPLOAD_PARSE_TIMEOUT_SECONDS", "5"))
+MAX_PDF_PAGES = int(os.getenv("MAX_PDF_PAGES", "100"))
+MAX_DOCX_PARAGRAPHS = int(os.getenv("MAX_DOCX_PARAGRAPHS", "2000"))
 
 
 
@@ -270,6 +275,16 @@ def _get_client_ip(request: Request) -> str:
     return request.client.host if request.client else "unknown"
 
 
+async def _run_bounded_parser(parser_callable):
+    try:
+        return await asyncio.wait_for(
+            asyncio.to_thread(parser_callable),
+            timeout=UPLOAD_PARSE_TIMEOUT_SECONDS,
+        )
+    except asyncio.TimeoutError:
+        raise HTTPException(status_code=413, detail="Document parsing exceeded the allowed processing time")
+
+
 @app.post("/chat")
 async def chat(request: Request, payload: ChatRequest):
     # Auth
@@ -326,36 +341,51 @@ async def upload_document(request: Request, file: UploadFile = File(...)):
     if content_length and content_length > MAX_UPLOAD_SIZE:
         raise HTTPException(status_code=413, detail="Uploaded file is too large")
 
+    temp_path = None
     try:
-        chunks = []
-        total_size = 0
-        while True:
-            chunk = await file.read(CHUNK_SIZE)
-            if not chunk:
-                break
-            total_size += len(chunk)
-            if total_size > MAX_UPLOAD_SIZE:
-                raise HTTPException(status_code=413, detail="Uploaded file is too large")
-            chunks.append(chunk)
-
-        content = b"".join(chunks)
-
         filename = file.filename or "unknown"
         file_extension = os.path.splitext(filename)[1].lower()
         extracted_text = ""
+        total_size = 0
+        with tempfile.NamedTemporaryFile(delete=False, suffix=file_extension or "") as temp_file:
+            temp_path = temp_file.name
+            while True:
+                chunk = await file.read(CHUNK_SIZE)
+                if not chunk:
+                    break
+                total_size += len(chunk)
+                if total_size > MAX_UPLOAD_SIZE:
+                    raise HTTPException(status_code=413, detail="Uploaded file is too large")
+                temp_file.write(chunk)
 
-        # Perform MIME-aware preprocessing and signature validation
-        validate_mime_and_bytes(content, file.content_type or "", filename)
+        with open(temp_path, "rb") as temp_file:
+            content_prefix = temp_file.read(4096)
 
-        # Process by type
-        if file_extension == '.pdf' or content.startswith(b'%PDF-'):
+        # Perform MIME-aware preprocessing and signature validation using only the
+        # minimum bytes needed for structural checks.
+        validate_mime_and_bytes(content_prefix, file.content_type or "", filename)
+
+        # Process by type from the temporary on-disk file.
+        if file_extension == '.pdf' or content_prefix.startswith(b'%PDF-'):
             if fitz is None:
                 raise HTTPException(status_code=503, detail="PDF processing not available")
             try:
-                doc = fitz.open(stream=content, filetype="pdf")
-                for page in doc:
-                    extracted_text += page.get_text()
+                def parse_pdf():
+                    doc = fitz.open(temp_path)
+                    try:
+                        if doc.page_count > MAX_PDF_PAGES:
+                            raise HTTPException(status_code=413, detail="PDF exceeds the maximum allowed page count")
+                        text_parts = []
+                        for page in doc:
+                            text_parts.append(page.get_text())
+                        return "".join(text_parts)
+                    finally:
+                        doc.close()
+
+                extracted_text = await _run_bounded_parser(parse_pdf)
             except Exception as e:
+                if isinstance(e, HTTPException):
+                    raise
                 logger.error(f"PDF parse error: {e}")
                 raise HTTPException(status_code=400, detail="Invalid or corrupted PDF")
 
@@ -363,20 +393,30 @@ async def upload_document(request: Request, file: UploadFile = File(...)):
             if DocxDocument is None:
                 raise HTTPException(status_code=503, detail="DOCX processing not available")
             try:
-                doc = DocxDocument(BytesIO(content))
-                extracted_text = "\n".join(
-                    para.text
-                    for para in doc.paragraphs
-                    if para.text.strip()
-                )
-            except Exception:
+                validate_docx_archive_safety(temp_path)
+
+                def parse_docx():
+                    doc = DocxDocument(temp_path)
+                    if len(doc.paragraphs) > MAX_DOCX_PARAGRAPHS:
+                        raise HTTPException(status_code=413, detail="DOCX exceeds the maximum allowed paragraph count")
+                    return "\n".join(
+                        para.text
+                        for para in doc.paragraphs
+                        if para.text.strip()
+                    )
+
+                extracted_text = await _run_bounded_parser(parse_docx)
+            except Exception as e:
+                if isinstance(e, HTTPException):
+                    raise
                 raise HTTPException(
                     status_code=400,
                     detail="Invalid or corrupted DOCX file."
                 )
 
         elif file_extension == '.txt':
-            extracted_text = content.decode('utf-8')
+            with open(temp_path, 'r', encoding='utf-8') as text_file:
+                extracted_text = text_file.read(10000)
 
         # Truncate extracted text to avoid sending huge payloads to models
         extracted_text = extracted_text[:10000]
@@ -390,6 +430,12 @@ async def upload_document(request: Request, file: UploadFile = File(...)):
     except Exception as e:
         logger.error(f"Upload error: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail="Failed to process document")
+    finally:
+        if temp_path and os.path.exists(temp_path):
+            try:
+                os.unlink(temp_path)
+            except OSError:
+                pass
 
 
 @app.post("/summarize")
