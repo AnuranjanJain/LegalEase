@@ -2,11 +2,13 @@ import math
 import time
 from typing import Dict, List
 
+
 class SimpleRateLimiter:
     def __init__(self, calls: int, period: int):
         self.calls = calls
         self.period = period
         self.storage: Dict[str, List[float]] = {}
+
     def check(self, key: str):
         now = time.time()
         window = now - self.period
@@ -22,6 +24,7 @@ class SimpleRateLimiter:
                 "remaining": 0,
                 "retry_after": max(1, retry_after)
             }
+
         timestamps.append(now)
         self.storage[key] = timestamps
         return {
@@ -29,3 +32,7 @@ class SimpleRateLimiter:
             "remaining": max(0, self.calls - len(timestamps)),
             "retry_after": 0,
         }
+
+    def is_allowed(self, key: str) -> bool:
+        return self.check(key)["allowed"]
+
