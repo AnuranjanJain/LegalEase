@@ -1,4 +1,5 @@
 import { Shield, Lock, Eye, Database, Globe, Mail } from 'lucide-react';
+import { siteConfig } from '../config/site';
 
 interface Section {
   icon: JSX.Element;
@@ -130,11 +131,11 @@ export function PrivacyPage() {
               Our Data Protection Officer is available to address any concerns you may have.
             </p>
             <a
-              href="mailto:privacy@legalease.io"
+              href={`mailto:${siteConfig.contactEmail}`}
               className="inline-flex items-center gap-2 px-6 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-500 text-white text-sm font-semibold transition-colors"
             >
               <Mail size={14} />
-              privacy@legalease.io
+              {siteConfig.contactEmail}
             </a>
           </div>
         </div>
