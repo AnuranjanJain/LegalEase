@@ -571,6 +571,20 @@ By contributing, you agree to maintain a respectful and inclusive environment.
 
 
 
+## ♿ Accessibility
+
+LegalEase is committed to web accessibility best practices:
+
+- **Reduced Motion Support**: Custom animations (`slide-up`, `spin-slow`) and CSS transitions are automatically disabled when users enable the `prefers-reduced-motion: reduce` system setting. This ensures a comfortable experience for users with motion sensitivity or vestibular disorders.
+- **Semantic Color Tokens**: Success, warning, error, and info states use accessible color contrasts (see #184).
+- **Keyboard Navigation**: All interactive elements are keyboard-accessible.
+
+To enable reduced motion on your system:
+- **macOS**: System Settings → Accessibility → Display → Reduce motion
+- **Windows**: Settings → Accessibility → Visual effects → Animation effects
+- **Linux**: Varies by desktop environment (GNOME: Accessibility → Reduce Animation)
+
+
 ## License
 
 This project is intended for demonstration purposes. Please ensure proper licensing for any production use.
