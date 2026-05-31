@@ -69,6 +69,12 @@ const FAQS: ReadonlyArray<FaqItem> = Object.freeze([
 export function HomePage() {
   const [activeDemoClause, setActiveDemoClause] = useState<'term' | 'indem' | 'ip'>('term');
   const [expandedFaq, setExpandedFaq] = useState<number | null>(null);
+  const btnPrimary = "inline-flex items-center justify-center px-8 py-3.5 text-base font-semibold rounded-xl text-white bg-primary-600 hover:bg-blue-700 shadow-[0_0_20px_rgba(37,99,235,0.2)] transition-all duration-300";
+  const btnSecondary = "inline-flex items-center justify-center px-8 py-3.5 border border-gray-300 dark:border-gray-700 text-base font-semibold rounded-xl text-gray-700 dark:text-gray-200 bg-white dark:bg-gray-800/40 hover:bg-gray-100 dark:hover:bg-gray-800 backdrop-blur-sm transition-all duration-300";
+  const btnTab = (isActive: boolean) => 
+  `py-1.5 px-2 text-xs font-semibold rounded-md transition-all ${
+    isActive ? 'bg-primary-600 text-white shadow-sm' : 'text-gray-600 hover:text-gray-900 dark:text-gray-400 dark:hover:text-white'
+  }`;
 
   return (
     <div className="overflow-hidden bg-background-light dark:bg-background-dark text-gray-800 dark:text-gray-200">
@@ -106,17 +112,11 @@ export function HomePage() {
               </p>
 
               <div className="flex flex-col sm:flex-row justify-center lg:justify-start gap-4">
-                <NavLink
-                  to="/documents"
-                  className="inline-flex items-center justify-center px-8 py-3.5 text-base font-semibold rounded-xl text-white bg-primary-600 hover:bg-primary-500 shadow-[0_0_20px_rgba(37,99,235,0.2)] dark:shadow-[0_0_20px_rgba(37,99,235,0.4)] hover:shadow-[0_0_30px_rgba(37,99,235,0.4)] dark:hover:shadow-[0_0_30px_rgba(37,99,235,0.6)] transition-all duration-300"
-                >
+                <NavLink to="/documents" className={btnPrimary}>
                   Get Started Free
                   <ArrowRight className="ml-2 h-5 w-5 animate-pulse" />
                 </NavLink>
-                <NavLink
-                  to="/chatbot"
-                  className="inline-flex items-center justify-center px-8 py-3.5 border border-gray-300 dark:border-gray-700 text-base font-semibold rounded-xl text-gray-700 dark:text-gray-200 bg-white dark:bg-gray-800/40 hover:bg-gray-50 dark:hover:bg-gray-800/80 backdrop-blur-sm transition-all duration-300"
-                >
+                <NavLink to="/chatbot" className={btnSecondary}>
                   <MessageSquare size={18} className="mr-2 text-primary-600 dark:text-primary-400" />
                   Try Live Chatbot
                 </NavLink>
@@ -151,26 +151,24 @@ export function HomePage() {
                 </div>
 
                 {/* Demo Tab Toggles */}
-                <div className="grid grid-cols-3 gap-1 p-2 bg-gray-100/80 dark:bg-gray-900/50 rounded-lg m-2 border border-gray-200 dark:border-gray-850">
-                  <button 
-                    onClick={() => setActiveDemoClause('term')}
-                    className={`py-1.5 px-2 text-xs font-semibold rounded-md transition-all ${activeDemoClause === 'term' ? 'bg-primary-600 text-white shadow-sm' : 'text-gray-600 hover:text-gray-900 dark:text-gray-400 dark:hover:text-white'}`}
-                  >
-                    Termination
+                <button 
+                onClick={() => setActiveDemoClause('term')}
+                className={btnTab(activeDemoClause === 'term')}
+                >
+                  Termination
                   </button>
                   <button 
-                    onClick={() => setActiveDemoClause('indem')}
-                    className={`py-1.5 px-2 text-xs font-semibold rounded-md transition-all ${activeDemoClause === 'indem' ? 'bg-primary-600 text-white shadow-sm' : 'text-gray-600 hover:text-gray-900 dark:text-gray-400 dark:hover:text-white'}`}
+                  onClick={() => setActiveDemoClause('indem')}
+                  className={btnTab(activeDemoClause === 'indem')}
                   >
                     Indemnity
-                  </button>
-                  <button 
+                    </button>
+                    <button 
                     onClick={() => setActiveDemoClause('ip')}
-                    className={`py-1.5 px-2 text-xs font-semibold rounded-md transition-all ${activeDemoClause === 'ip' ? 'bg-primary-600 text-white shadow-sm' : 'text-gray-600 hover:text-gray-900 dark:text-gray-400 dark:hover:text-white'}`}
-                  >
-                    IP Assignment
-                  </button>
-                </div>
+                    className={btnTab(activeDemoClause === 'ip')}
+                    >
+                      IP Assignment
+                      </button>
 
                 {/* Document Display Panel */}
                 <div className="p-4 space-y-4 text-left">
