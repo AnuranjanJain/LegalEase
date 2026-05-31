@@ -83,7 +83,8 @@ describe('API Service', () => {
       await api.get('/test');
 
       expect(mockFetch).toHaveBeenCalledWith(
-        expect.stringContaining('/test')
+        expect.stringContaining('/test'),
+        expect.any(Object)
       );
     });
 
