@@ -170,14 +170,15 @@ async def test_upload_endpoint_unsupported_file():
 async def test_rate_limiting_on_chat():
     """Test that rate limiting works on chat endpoint"""
     import backend.main
-    
+
+    os.environ["ALLOW_DEV"] = "true"
+
     # Patch the limiter directly
     orig_limiter = backend.main.key_limiter
     backend.main.key_limiter = backend.main.SimpleRateLimiter(2, 60)
-    
+
     headers = {"x-api-key": "dev-token"}
     payload = {"message": "Hello"}
-    
 
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as ac:
         # First two requests should succeed (or return 503 if AI unavailable)
