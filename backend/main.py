@@ -197,36 +197,38 @@ key_limiter = SimpleRateLimiter(
 
 # API keys and dev mode
 API_KEYS = [k.strip() for k in os.getenv("API_KEYS", "").split(",") if k.strip()]
-# Require explicit DEV_API_KEY configuration — no guessable default
-DEV_API_KEY = os.getenv("DEV_API_KEY", "")
+DEV_API_KEY = os.getenv("DEV_API_KEY")
 ALLOW_DEV = os.getenv("ALLOW_DEV", "false").lower() in ("1", "true", "yes")
-
-if not API_KEYS:
-    logger.warning(
-        "API_KEYS is not configured. "
-        "Authentication fallback behavior is active."
-    )
+ENVIRONMENT = os.getenv("ENVIRONMENT", "").strip().lower()
+IS_DEVELOPMENT_ENV = ENVIRONMENT == "development"
+DEV_AUTH_ENABLED = False
 
 if ALLOW_DEV:
-    if not DEV_API_KEY:
-        logger.error(
-            "ALLOW_DEV is enabled but DEV_API_KEY is not set. "
-            "Refusing to start with insecure configuration. "
-            "Set DEV_API_KEY to a strong, unique value."
-        )
-        raise RuntimeError(
-            "ALLOW_DEV=true requires DEV_API_KEY to be explicitly configured."
-        )
-    if API_KEYS:
+    logger.warning(
+        "Development authentication requested. Do not use in production."
+    )
+    if not IS_DEVELOPMENT_ENV:
         logger.warning(
-            "ALLOW_DEV is enabled alongside API_KEYS. "
-            "Dev auth fallback is active — do not use in production."
+            "Development authentication blocked because ENVIRONMENT is not set to development."
+        )
+    elif not DEV_API_KEY:
+        logger.warning(
+            "Development authentication blocked because DEV_API_KEY is not configured."
+        )
+    elif API_KEYS:
+        logger.warning(
+            "Development authentication blocked because API_KEYS are configured and production API key validation remains authoritative."
         )
     else:
+        DEV_AUTH_ENABLED = True
         logger.warning(
-            "Development API authentication is enabled. "
-            "Do not use in production."
+            "Development authentication enabled in a development environment. Do not use in production."
         )
+
+if not API_KEYS and not DEV_AUTH_ENABLED:
+    logger.warning(
+        "API_KEYS is not configured and development authentication is unavailable."
+    )
 
 
 class ChatRequest(BaseModel):
@@ -251,16 +253,19 @@ def _validate_api_key(request: Request) -> str:
     if not api_key:
         raise HTTPException(status_code=401, detail="Missing API key")
 
-    api_keys = API_KEYS
-    allow_dev = ALLOW_DEV
-    dev_api_key = DEV_API_KEY
+    if api_key in API_KEYS:
+        return api_key
 
-    if api_keys and api_key not in api_keys:
-        if allow_dev and api_key == dev_api_key:
-            return api_key
+    if DEV_AUTH_ENABLED and api_key == DEV_API_KEY:
+        return api_key
+
+    if API_KEYS:
         raise HTTPException(status_code=403, detail="Invalid API key")
 
-    return api_key
+    logger.warning(
+        "API key validation failed because no valid production keys are configured and development authentication is disabled."
+    )
+    raise HTTPException(status_code=403, detail="Invalid API key")
 
 
 def _get_client_ip(request: Request) -> str:
