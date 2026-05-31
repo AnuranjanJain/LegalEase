@@ -7,18 +7,48 @@ yarn-error.log*
 pnpm-debug.log*
 lerna-debug.log*
 
+# Dependencies
 node_modules
+
+# Build outputs
 dist
 dist-ssr
-*.local
+coverage/
+
+# Environment files
 .env
 .env.*
 !.env.example
+*.local
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+
+# Virtual environments
+.venv/
+venv/
+env/
+ENV/
+backend/.venv/
+backend/venv/
+
+# Python cache and reports
+backend/__pycache__/
+backend/.coverage
+backend/coverage.xml
+backend/.flake8
+
+# Database files
+*.db
 
 # Editor directories and files
 .vscode/*
 !.vscode/extensions.json
-.idea
+.idea/
 .DS_Store
 *.suo
 *.ntvs*
@@ -28,17 +58,3 @@ dist-ssr
 
 # Vite artifacts
 stats.html
-
-# Python
-__pycache__/
-*.py[cod]
-*$py.class
-*.so
-.Python
-backend/__pycache__/
-# Coverage reports
-coverage/
-backend/.coverage
-backend/coverage.xml
-backend/.flake8
-*.db
