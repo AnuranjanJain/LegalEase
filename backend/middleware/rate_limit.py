@@ -48,7 +48,16 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
             return await call_next(request)
         ip = get_client_ip(request)
         result = ip_limiter.check(ip)
-        if not result["allowed"]:
+        if isinstance(result, dict):
+            allowed = bool(result.get("allowed", False))
+            remaining = int(result.get("remaining", 0) or 0)
+            retry_after = int(result.get("retry_after", 0) or 0)
+        else:
+            allowed = bool(result)
+            remaining = RATE_LIMIT_IP_CALLS if allowed else 0
+            retry_after = 0
+
+        if not allowed:
             return JSONResponse(
                 status_code=429,
                 content={
@@ -57,10 +66,10 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
                 headers={
                     "X-RateLimit-Limit": str(RATE_LIMIT_IP_CALLS),
                     "X-RateLimit-Remaining": "0",
-                    "Retry-After": str(result["retry_after"]),
+                    "Retry-After": str(retry_after),
                 }
             )
-        response=await call_next(request)
+        response = await call_next(request)
         response.headers["X-RateLimit-Limit"] = str(RATE_LIMIT_IP_CALLS)
-        response.headers["X-RateLimit-Remaining"] = str(result["remaining"])
-        return response    
+        response.headers["X-RateLimit-Remaining"] = str(remaining)
+        return response
