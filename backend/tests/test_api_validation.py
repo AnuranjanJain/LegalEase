@@ -7,112 +7,74 @@ import backend.main
 @pytest.mark.unit
 def test_validate_api_key_with_bearer_token():
     """Test API key validation with Bearer token"""
-    from unittest.mock import Mock
+    import os
+    from unittest.mock import Mock, patch
     
     # Mock request with Bearer token
     request = Mock()
     request.headers = {"authorization": "Bearer test-api-key"}
     
-    # Set backend configuration directly
-    orig_keys = backend.main.API_KEYS
-    orig_allow_dev = backend.main.ALLOW_DEV
-    backend.main.API_KEYS = ["test-api-key"]
-    backend.main.ALLOW_DEV = False
-    
-    try:
+    with patch.dict(os.environ, {"API_KEYS": "test-api-key", "ALLOW_DEV": "false"}):
         result = _validate_api_key(request)
         assert result == "test-api-key"
-    finally:
-        # Clean up
-        backend.main.API_KEYS = orig_keys
-        backend.main.ALLOW_DEV = orig_allow_dev
 
 
 @pytest.mark.unit
 def test_validate_api_key_with_x_api_key():
     """Test API key validation with X-API-Key header"""
-    from unittest.mock import Mock
+    import os
+    from unittest.mock import Mock, patch
     
     request = Mock()
     request.headers = {"x-api-key": "test-api-key"}
     
-    orig_keys = backend.main.API_KEYS
-    orig_allow_dev = backend.main.ALLOW_DEV
-    backend.main.API_KEYS = ["test-api-key"]
-    backend.main.ALLOW_DEV = False
-    
-    try:
+    with patch.dict(os.environ, {"API_KEYS": "test-api-key", "ALLOW_DEV": "false"}):
         result = _validate_api_key(request)
         assert result == "test-api-key"
-    finally:
-        backend.main.API_KEYS = orig_keys
-        backend.main.ALLOW_DEV = orig_allow_dev
 
 
 @pytest.mark.unit
 def test_validate_api_key_missing():
     """Test API key validation when key is missing"""
-    from unittest.mock import Mock
+    import os
+    from unittest.mock import Mock, patch
     
     request = Mock()
     request.headers = {}
     
-    orig_allow_dev = backend.main.ALLOW_DEV
-    backend.main.ALLOW_DEV = False
-    
-    try:
+    with patch.dict(os.environ, {"ALLOW_DEV": "false"}):
         with pytest.raises(HTTPException) as exc_info:
             _validate_api_key(request)
         assert exc_info.value.status_code == 401
-    finally:
-        backend.main.ALLOW_DEV = orig_allow_dev
 
 
 @pytest.mark.unit
 def test_validate_api_key_invalid():
     """Test API key validation with invalid key"""
-    from unittest.mock import Mock
+    import os
+    from unittest.mock import Mock, patch
     
     request = Mock()
     request.headers = {"authorization": "Bearer invalid-key"}
     
-    orig_keys = backend.main.API_KEYS
-    orig_allow_dev = backend.main.ALLOW_DEV
-    backend.main.API_KEYS = ["valid-key"]
-    backend.main.ALLOW_DEV = False
-    
-    try:
+    with patch.dict(os.environ, {"API_KEYS": "valid-key", "ALLOW_DEV": "false"}):
         with pytest.raises(HTTPException) as exc_info:
             _validate_api_key(request)
         assert exc_info.value.status_code == 403
-    finally:
-        backend.main.API_KEYS = orig_keys
-        backend.main.ALLOW_DEV = orig_allow_dev
 
 
 @pytest.mark.unit
 def test_validate_api_key_dev_mode():
     """Test API key validation with dev mode enabled"""
-    from unittest.mock import Mock
+    import os
+    from unittest.mock import Mock, patch
     
     request = Mock()
     request.headers = {"x-api-key": "dev-token"}
     
-    orig_keys = backend.main.API_KEYS
-    orig_dev_key = backend.main.DEV_API_KEY
-    orig_allow_dev = backend.main.ALLOW_DEV
-    
-    backend.main.API_KEYS = []
-    backend.main.DEV_API_KEY = "dev-token"
-    backend.main.ALLOW_DEV = True
-    
-    try:
+    with patch.dict(os.environ, {"API_KEYS": "", "DEV_API_KEY": "dev-token", "ALLOW_DEV": "true"}):
         result = _validate_api_key(request)
         assert result == "dev-token"
-    finally:
-        backend.main.API_KEYS = orig_keys
-        backend.main.DEV_API_KEY = orig_dev_key
-        backend.main.ALLOW_DEV = orig_allow_dev
 
 
 @pytest.mark.unit

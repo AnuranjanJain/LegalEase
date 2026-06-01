@@ -1,4 +1,4 @@
-from fastapi import FastAPI, HTTPException, UploadFile, File, Request
+from fastapi import Depends, FastAPI, HTTPException, UploadFile, File, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, StreamingResponse
 from pydantic import BaseModel
@@ -13,6 +13,7 @@ from dotenv import load_dotenv
 
 from backend.database import engine, Base
 from backend.routers import auth_routes
+from backend.auth import validate_token_or_api_key
 from backend.utils.limiter import SimpleRateLimiter
 
 # Optional imports (wrap in try/except so server can start without optional deps)
@@ -221,8 +222,9 @@ def _validate_api_key(request: Request) -> str:
     if not api_key:
         raise HTTPException(status_code=401, detail="Missing API key")
 
-    if api_key in API_KEYS:
-        return api_key
+    api_keys = [k.strip() for k in os.getenv("API_KEYS", "").split(",") if k.strip()]
+    allow_dev = os.getenv("ALLOW_DEV", "false").lower() in ("1", "true", "yes")
+    dev_api_key = os.getenv("DEV_API_KEY", "dev-token")
 
     if DEV_AUTH_ENABLED and api_key == DEV_API_KEY:
         return api_key
@@ -234,14 +236,6 @@ def _validate_api_key(request: Request) -> str:
         "API key validation failed because no valid production keys are configured and development authentication is disabled."
     )
     raise HTTPException(status_code=403, detail="Invalid API key")
-
-
-def _get_client_ip(request: Request) -> str:
-    forwarded_for = request.headers.get("x-forwarded-for")
-    if forwarded_for:
-        return forwarded_for.split(",", 1)[0].strip()
-    return request.client.host if request.client else "unknown"
-
 
 @app.post("/chat")
 async def chat(request: Request, payload: ChatRequest):
@@ -288,9 +282,7 @@ async def chat(request: Request, payload: ChatRequest):
 
 
 @app.post("/upload")
-async def upload_document(request: Request, file: UploadFile = File(...)):
-    # Auth
-    api_key = _validate_api_key(request)
+async def upload_document(request: Request, file: UploadFile = File(...), identity: str = Depends(validate_token_or_api_key)):
     # Content-Length pre-check
     try:
         content_length = int(request.headers.get("content-length", "0"))
@@ -352,7 +344,7 @@ async def upload_document(request: Request, file: UploadFile = File(...)):
             extracted_text = content.decode('utf-8')
 
         # Truncate extracted text to avoid sending huge payloads to models
-        extracted_text = extracted_text[:10000]
+        extracted_text = extracted_text[:500000]
 
         return {"filename": filename, "text": extracted_text}
 
@@ -366,9 +358,7 @@ async def upload_document(request: Request, file: UploadFile = File(...)):
 
 
 @app.post("/summarize")
-async def summarize(request: Request, payload: SummarizeRequest):
-    # Auth
-    api_key = _validate_api_key(request)
+async def summarize(request: Request, payload: SummarizeRequest, identity: str = Depends(validate_token_or_api_key)):
 
     # Sanitize input
     sanitized_text = sanitize_text(payload.text)
