@@ -237,14 +237,6 @@ def _validate_api_key(request: Request) -> str:
     )
     raise HTTPException(status_code=403, detail="Invalid API key")
 
-
-def _get_client_ip(request: Request) -> str:
-    forwarded_for = request.headers.get("x-forwarded-for")
-    if forwarded_for:
-        return forwarded_for.split(",", 1)[0].strip()
-    return request.client.host if request.client else "unknown"
-
-
 @app.post("/chat")
 async def chat(request: Request, payload: ChatRequest):
     # Auth
