@@ -6,7 +6,7 @@ import { Header } from '../../components/Header';
 
 // Setup mocks
 const mockToggleDarkMode = vi.fn();
-let mockIsDarkMode = false;
+const mockIsDarkMode = false;
 vi.mock('../../hooks/useDarkMode', () => ({
   useDarkMode: () => ({
     isDarkMode: mockIsDarkMode,
