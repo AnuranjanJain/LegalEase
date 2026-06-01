@@ -1,4 +1,5 @@
 import { Shield, Lock, Server, Key, Activity, CheckCircle2, Mail } from 'lucide-react';
+import { siteConfig } from '../config/site';
 
 interface Section {
   icon: JSX.Element;
@@ -156,11 +157,11 @@ export function SecurityPage() {
               We take all security reports seriously. Please disclose responsibly and we will respond within 24 hours.
             </p>
             <a
-              href="mailto:security@legalease.io"
+              href={`mailto:${siteConfig.securityEmail}`}
               className="inline-flex items-center gap-2 px-6 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-sm font-semibold transition-colors"
             >
               <Mail size={14} />
-              security@legalease.io
+              {siteConfig.securityEmail}
             </a>
           </div>
         </div>

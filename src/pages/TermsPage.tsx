@@ -1,4 +1,5 @@
 import { Scale, FileText, AlertTriangle, UserCheck, Ban, RefreshCw, Mail } from 'lucide-react';
+import { siteConfig, formatLegalDate } from '../config/site';
 
 interface Section {
   icon: JSX.Element;
@@ -103,7 +104,7 @@ export function TermsPage() {
           <p className="text-gray-500 dark:text-gray-400 max-w-2xl mx-auto text-base leading-relaxed">
             Please read these terms carefully before using LegalEase. By accessing our platform you agree to be bound by the conditions outlined below.
           </p>
-          <p className="text-xs text-gray-400 dark:text-gray-500 mt-4">Last updated: May 22, 2026</p>
+          <p className="text-xs text-gray-400 dark:text-gray-500 mt-4">Last updated: {formatLegalDate(siteConfig.legalLastUpdated)}</p>
         </div>
       </section>
 
@@ -142,11 +143,11 @@ export function TermsPage() {
               Reach out to our legal team with any questions or concerns regarding these terms.
             </p>
             <a
-              href="mailto:legal@legalease.io"
+              href={`mailto:${siteConfig.legalEmail}`}
               className="inline-flex items-center gap-2 px-6 py-2.5 rounded-xl bg-purple-600 hover:bg-purple-500 text-white text-sm font-semibold transition-colors"
             >
               <Mail size={14} />
-              legal@legalease.io
+              {siteConfig.legalEmail}
             </a>
           </div>
         </div>
