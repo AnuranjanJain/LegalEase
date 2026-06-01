@@ -39,6 +39,7 @@ LegalEase helps users by:
 - Usage
 - Testing
 - Configuration
+- [Tailwind Theme Guide](docs/tailwind-theme-guide.md)
 - Security
 - Contributing
 - Code of Conduct
@@ -389,13 +390,20 @@ npm run dev
 
 ## Customization
 
+### Tailwind Theme
+
+For a complete guide to all custom theme values (colors, fonts, animations, container settings), see the **[Tailwind Theme Guide](docs/tailwind-theme-guide.md)**.
+
 ### Colors
-The primary color scheme can be modified in the Tailwind config:
+The primary color scheme can be modified in the Tailwind config (`tailwind.config.js`):
 ```javascript
 colors: {
-    "primary": "#197fe6",        // Main brand color
-    "background-light": "#f6f7f8", // Light theme background
-    "background-dark": "#111921",   // Dark theme background
+    primary: { DEFAULT: '#2563EB', /* ...shades */ },  // Brand blue
+    success: { DEFAULT: '#16A34A', /* ...shades */ },  // Positive states
+    warning: { DEFAULT: '#CA8A04', /* ...shades */ },  // Caution states
+    error:   { DEFAULT: '#DC2626', /* ...shades */ },  // Error states
+    info:    { DEFAULT: '#0EA5E9', /* ...shades */ },  // Informational
+    background: { light: '#F3F4F6', dark: '#111827' }, // Page backgrounds
 }
 ```
 
