@@ -1,4 +1,4 @@
-from fastapi import FastAPI, HTTPException, UploadFile, File, Request
+from fastapi import Depends, FastAPI, HTTPException, UploadFile, File, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, StreamingResponse
 from pydantic import BaseModel
@@ -13,6 +13,7 @@ from dotenv import load_dotenv
 
 from backend.database import engine, Base
 from backend.routers import auth_routes
+from backend.auth import validate_token_or_api_key
 from backend.utils.limiter import SimpleRateLimiter
 
 # Optional imports (wrap in try/except so server can start without optional deps)
@@ -289,9 +290,7 @@ async def chat(request: Request, payload: ChatRequest):
 
 
 @app.post("/upload")
-async def upload_document(request: Request, file: UploadFile = File(...)):
-    # Auth
-    api_key = _validate_api_key(request)
+async def upload_document(request: Request, file: UploadFile = File(...), identity: str = Depends(validate_token_or_api_key)):
     # Content-Length pre-check
     try:
         content_length = int(request.headers.get("content-length", "0"))
@@ -367,9 +366,7 @@ async def upload_document(request: Request, file: UploadFile = File(...)):
 
 
 @app.post("/summarize")
-async def summarize(request: Request, payload: SummarizeRequest):
-    # Auth
-    api_key = _validate_api_key(request)
+async def summarize(request: Request, payload: SummarizeRequest, identity: str = Depends(validate_token_or_api_key)):
 
     # Sanitize input
     sanitized_text = sanitize_text(payload.text)

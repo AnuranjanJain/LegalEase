@@ -84,9 +84,7 @@ describe('API Service', () => {
 
       expect(mockFetch).toHaveBeenCalledWith(
         expect.stringContaining('/test'),
-        expect.objectContaining({
-          headers: expect.any(Object),
-        })
+        expect.objectContaining({ headers: expect.any(Object) })
       );
     });
 

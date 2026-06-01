@@ -170,33 +170,40 @@ async def test_upload_endpoint_unsupported_file():
 @pytest.mark.asyncio
 async def test_rate_limiting_on_chat():
     """Test that rate limiting works on chat endpoint"""
-    import backend.middleware.rate_limit
-    from backend.utils.limiter import SimpleRateLimiter
-    
-    # Patch the IP limiter used by the middleware
-    orig_limiter = backend.middleware.rate_limit.ip_limiter
-    backend.middleware.rate_limit.ip_limiter = SimpleRateLimiter(2, 60)
-    
+    import backend.main
+
+    os.environ["ALLOW_DEV"] = "true"
+
+    # Patch the limiter directly
+    orig_limiter = backend.main.key_limiter
+    backend.main.key_limiter = backend.main.SimpleRateLimiter(2, 60)
+
     headers = {"x-api-key": "dev-token"}
     payload = {"message": "Hello"}
-    
 
-    try:
-        async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as ac:
-            # First two requests should succeed (or return 503 if AI unavailable)
-            r1 = await ac.post("/chat", json=payload, headers=headers)
-            r2 = await ac.post("/chat", json=payload, headers=headers)
-            
-            # Third request should be rate limited
-            r3 = await ac.post("/chat", json=payload, headers=headers)
-            assert r3.status_code == 429
-    finally:
-        backend.middleware.rate_limit.ip_limiter = orig_limiter
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as ac:
+        # First two requests should succeed (or return 503 if AI unavailable)
+        r1 = await ac.post("/chat", json=payload, headers=headers)
+        r2 = await ac.post("/chat", json=payload, headers=headers)
         
-    if "ALLOW_DEV" in os.environ:
-        del os.environ["ALLOW_DEV"]
+        # Third request should be rate limited
+        r3 = await ac.post("/chat", json=payload, headers=headers)
+        assert r3.status_code == 429
+    
     if "RATE_LIMIT_KEY_CALLS" in os.environ:
         del os.environ["RATE_LIMIT_KEY_CALLS"]
     if "RATE_LIMIT_PERIOD" in os.environ:
         del os.environ["RATE_LIMIT_PERIOD"]
+
+    try:
+        async with AsyncClient(app=app, base_url="http://test") as ac:
+            r1 = await ac.post("/chat", json=payload, headers=headers)
+            r2 = await ac.post("/chat", json=payload, headers=headers)
+
+            r3 = await ac.post("/chat", json=payload, headers=headers)
+            assert r3.status_code == 429
+    finally:
+        backend.main.key_limiter = orig_limiter
+        if "ALLOW_DEV" in os.environ:
+            del os.environ["ALLOW_DEV"]
 
