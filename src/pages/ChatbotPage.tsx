@@ -1,4 +1,5 @@
 import { Send, User, Bot, Paperclip, X, FileText, Sparkles, RefreshCcw, PlusCircle, Trash2, History, Copy, Check } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
 import { api } from '../services/api';
 import { ChatStorageService, ChatMessage, ChatSessionMetadata } from '../services/storage';
 import { useRef, useState, useEffect, useCallback } from 'react';
@@ -25,6 +26,7 @@ function buildConversationHistory(msgs: ChatMessage[]) {
 }
 
 export function ChatbotPage() {
+  const navigate = useNavigate();
   const [messages, setMessages] = useState<ChatMessage[]>([makeGreeting()]);
   const [activeSessionId, setActiveSessionId] = useState<string | null>(null);
   const [sessions, setSessions] = useState<ChatSessionMetadata[]>([]);
@@ -145,7 +147,11 @@ export function ChatbotPage() {
   }
 };
 
-  const handleSend = async () => {
+  const handleSend = async (event?: React.FormEvent<HTMLFormElement>) => {
+    if (event) {
+      event.preventDefault();
+    }
+
     if (!input.trim()) return;
 
     const userMessage: ChatMessage = {
@@ -253,11 +259,25 @@ export function ChatbotPage() {
   };
 
   return (
-    <div className="flex flex-col h-[calc(100vh-64px)] bg-gray-50 dark:bg-gray-900 border-l border-gray-200 dark:border-gray-800 relative">
+    <div className="fixed bottom-6 right-6 z-50 w-[min(420px,95vw)] max-h-[90vh] rounded-[32px] border border-gray-200 bg-gray-50 shadow-2xl dark:border-gray-800 dark:bg-gray-900 overflow-hidden">
+      <div className="flex items-center justify-between gap-3 border-b border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-950 px-4 py-3">
+        <div>
+          <p className="text-sm font-semibold text-gray-900 dark:text-gray-100">LegalEase Chatbot</p>
+          <p className="text-xs text-gray-500 dark:text-gray-400">Ask legal questions anytime</p>
+        </div>
+        <button
+          type="button"
+          onClick={() => navigate('/')}
+          className="inline-flex h-9 w-9 items-center justify-center rounded-full border border-gray-200 text-gray-600 transition hover:bg-gray-100 hover:text-gray-900 dark:border-gray-700 dark:text-gray-300 dark:hover:bg-gray-800 dark:hover:text-white"
+          aria-label="Close chatbot"
+        >
+          <X size={16} />
+        </button>
+      </div>
 
       {/* Session panel */}
       {showSessions && (
-        <div className="absolute top-0 left-0 right-0 z-10 bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 shadow-md max-h-64 overflow-y-auto">
+        <div className="absolute top-16 left-0 right-0 z-20 bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 shadow-md max-h-64 overflow-y-auto">
           <div className="flex items-center justify-between px-4 py-2 border-b border-gray-100 dark:border-gray-700">
             <span className="text-sm font-semibold text-gray-700 dark:text-gray-300">Conversations</span>
             <button onClick={() => setShowSessions(false)} className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-200">
@@ -290,7 +310,7 @@ export function ChatbotPage() {
       )}
 
       {/* Message list */}
-      <div className="flex-grow overflow-y-auto px-6 py-8 space-y-6 relative z-10">
+      <div className="flex-1 min-h-0 overflow-y-auto px-4 sm:px-6 py-6 space-y-6 relative z-10">
         {messages.map((msg: ChatMessage) => {
           const isUser = msg.sender === 'user';
           
@@ -365,7 +385,7 @@ export function ChatbotPage() {
         {isTyping ? "LegalEase AI is writing an answer..." : ""}
       </div>
 
-      <div className="p-4 bg-white dark:bg-gray-800 border-t border-gray-200 dark:border-gray-800">
+      <div className="p-4 bg-white dark:bg-gray-800 border-t border-gray-200 dark:border-gray-800 sticky bottom-0 z-10">
         {uploadedDoc && (
           <div className="mb-3 flex items-center justify-between bg-primary/5 dark:bg-primary/10 p-2 rounded-lg border border-primary/20">
             <div className="flex items-center gap-2 overflow-hidden">
@@ -374,13 +394,14 @@ export function ChatbotPage() {
             </div>
             <div className="flex items-center gap-2">
               <button
+                type="button"
                 onClick={handleSummarize}
                 className="text-xs flex items-center gap-1 bg-primary/10 hover:bg-primary/20 text-primary px-2 py-1 rounded transition-colors"
               >
                 <Sparkles size={12} />
                 Summarize
               </button>
-              <button onClick={() => setUploadedDoc(null)} className="text-gray-400 hover:text-red-500 transition-colors">
+              <button type="button" onClick={() => setUploadedDoc(null)} className="text-gray-400 hover:text-red-500 transition-colors">
                 <X size={16} />
               </button>
             </div>
@@ -389,76 +410,88 @@ export function ChatbotPage() {
 
         <LegalMapping description={input} onSelect={(s) => setInput(prev => (prev ? prev + '\n\n' + `${s.section} — ${s.title}: ${s.summary}` : `${s.section} — ${s.title}: ${s.summary}`))} />
 
-        <div className="flex items-center gap-2">
-          <input
-            type="file"
-            ref={fileInputRef}
-            onChange={handleFileUpload}
-            className="hidden"
-            accept=".pdf,.docx,.txt"
-          />
-          <button
-            onClick={() => fileInputRef.current?.click()}
-            disabled={isUploading}
-            className="p-2 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 transition-colors"
-            title="Attach Document"
-          >
-            {isUploading ? <RefreshCcw size={20} className="animate-spin" /> : <Paperclip size={20} />}
-          </button>
-
-          <button
-            onClick={() => setShowSessions(prev => !prev)}
-            className={`p-2 transition-colors ${showSessions ? 'text-primary' : 'text-gray-400 hover:text-gray-600 dark:hover:text-gray-300'}`}
-            title="Conversation history"
-          >
-            <History size={20} />
-          </button>
-
-          <button
-            onClick={handleNewConversation}
-            className="p-2 text-gray-400 hover:text-primary dark:hover:text-primary transition-colors"
-            title="New conversation"
-          >
-            <PlusCircle size={20} />
-          </button>
-
-          <button
-            onClick={handleClearConversation}
-            className="p-2 text-gray-400 hover:text-red-500 transition-colors hidden sm:block"
-            title="Clear conversation"
-          >
-            <Trash2 size={20} />
-          </button>
-
-          <div className="flex-1 relative">
-            {/* Dynamic Context Badge Indicator */}
-            {uploadedDoc && (
-              <span 
-                className="absolute right-3 top-2.5 bg-green-100 dark:bg-green-900/30 text-green-800 dark:text-green-300 text-[10px] font-semibold px-2 py-0.5 rounded-full flex items-center gap-1.5 border border-green-200 dark:border-green-800/50 animate-pulse z-10"
-                role="status"
-              >
-                <span className="w-1.5 h-1.5 bg-green-500 rounded-full"></span>
-                Active Document Context
-              </span>
-            )}
-
-            {/* Accessible Multi-line Text Area for Enter / Shift+Enter management */}
-            <textarea
-              className="w-full pl-4 pr-36 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent bg-gray-50 dark:bg-gray-700 text-gray-900 dark:text-white placeholder-gray-500 dark:placeholder-gray-400 resize-none max-h-32 min-h-[40px] block align-bottom leading-normal"
-              placeholder={uploadedDoc ? "Ask about this document..." : "Ask a legal question..."}
-              rows={1}
-              value={input}
-              onChange={(e) => setInput(e.target.value)}
-              onKeyDown={(e) => e.key === 'Enter' && !isTyping && handleSend()}
+        <div className="flex flex-col gap-3">
+          <div className="flex flex-wrap items-center gap-2">
+            <input
+              type="file"
+              ref={fileInputRef}
+              onChange={handleFileUpload}
+              className="hidden"
+              accept=".pdf,.docx,.txt"
             />
+            <button
+              type="button"
+              onClick={() => fileInputRef.current?.click()}
+              disabled={isUploading}
+              className="p-2 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 transition-colors"
+              title="Attach Document"
+            >
+              {isUploading ? <RefreshCcw size={20} className="animate-spin" /> : <Paperclip size={20} />}
+            </button>
+
+            <button
+              type="button"
+              onClick={() => setShowSessions(prev => !prev)}
+              className={`p-2 transition-colors ${showSessions ? 'text-primary' : 'text-gray-400 hover:text-gray-600 dark:hover:text-gray-300'}`}
+              title="Conversation history"
+            >
+              <History size={20} />
+            </button>
+
+            <button
+              type="button"
+              onClick={handleNewConversation}
+              className="p-2 text-gray-400 hover:text-primary dark:hover:text-primary transition-colors"
+              title="New conversation"
+            >
+              <PlusCircle size={20} />
+            </button>
+
+            <button
+              type="button"
+              onClick={handleClearConversation}
+              className="p-2 text-gray-400 hover:text-red-500 transition-colors hidden sm:block"
+              title="Clear conversation"
+            >
+              <Trash2 size={20} />
+            </button>
           </div>
-          <button
-            onClick={handleSend}
-            disabled={!input.trim() || isTyping}
-            className="bg-primary text-white p-2 rounded-lg hover:bg-primary/90 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-          >
-            <Send size={20} />
-          </button>
+
+          <form onSubmit={handleSend} className="flex flex-col gap-3 sm:flex-row sm:items-end">
+            <div className="flex-1 relative">
+              {uploadedDoc && (
+                <span 
+                  className="absolute right-3 top-2.5 bg-green-100 dark:bg-green-900/30 text-green-800 dark:text-green-300 text-[10px] font-semibold px-2 py-0.5 rounded-full flex items-center gap-1.5 border border-green-200 dark:border-green-800/50 animate-pulse z-10"
+                  role="status"
+                >
+                  <span className="w-1.5 h-1.5 bg-green-500 rounded-full"></span>
+                  Active Document Context
+                </span>
+              )}
+
+              <textarea
+                className="w-full pl-4 pr-36 py-3 border border-gray-300 dark:border-gray-600 rounded-2xl focus:ring-2 focus:ring-primary focus:border-transparent bg-gray-50 dark:bg-gray-700 text-gray-900 dark:text-white placeholder-gray-500 dark:placeholder-gray-400 resize-none max-h-40 min-h-[72px] block align-bottom leading-relaxed"
+                placeholder={uploadedDoc ? "Ask about this document..." : "Ask a legal question..."}
+                rows={2}
+                value={input}
+                onChange={(e) => setInput(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' && !e.shiftKey && !isTyping) {
+                    e.preventDefault();
+                    handleSend();
+                  }
+                }}
+              />
+            </div>
+            <button
+              type="submit"
+              aria-label="Send message"
+              disabled={!input.trim() || isTyping}
+              className="bg-primary text-white p-2 rounded-lg hover:bg-primary/90 disabled:opacity-50 disabled:cursor-not-allowed transition-colors w-full sm:w-auto"
+            >
+              <Send size={20} />
+            </button>
+          </form>
         </div>
       </div>
     </div>

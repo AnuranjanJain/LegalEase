@@ -1,3 +1,9 @@
+import os
+from dotenv import load_dotenv
+
+# Load environment variables FIRST, before any backend imports
+load_dotenv(os.path.join(os.path.dirname(__file__), '.env'))
+
 from fastapi import Depends, FastAPI, HTTPException, UploadFile, File, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, StreamingResponse
@@ -5,12 +11,9 @@ from pydantic import BaseModel
 from datetime import datetime
 from typing import Optional
 from io import BytesIO
-import os
 import logging
 import time
 import uuid
-
-from dotenv import load_dotenv
 
 from backend.database import engine, Base
 from backend.routers import auth_routes
@@ -46,9 +49,6 @@ logging.basicConfig(
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
 )
 logger = logging.getLogger(__name__)
-
-# Load environment variables
-load_dotenv()
 
 # Track application start time for uptime calculation
 _app_start_time = time.monotonic()
@@ -253,11 +253,8 @@ def _validate_api_key(request: Request) -> str:
     raise HTTPException(status_code=403, detail="Invalid API key")
 
 @app.post("/chat")
-async def chat(request: Request, payload: ChatRequest):
-    # Auth
-    api_key = _validate_api_key(request)
-
-    if not key_limiter.check(api_key)["allowed"]:
+async def chat(payload: ChatRequest, identity: str = Depends(validate_token_or_api_key)):
+    if not key_limiter.check(identity)["allowed"]:
         raise HTTPException(status_code=429, detail="Rate limit exceeded")
 
     # Sanitize inputs
