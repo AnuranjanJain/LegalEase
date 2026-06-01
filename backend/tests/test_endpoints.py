@@ -1,5 +1,6 @@
 import os
 import pytest
+import os
 from fastapi import status
 from httpx import AsyncClient, ASGITransport
 from backend.main import app
@@ -123,7 +124,7 @@ async def test_upload_endpoint_with_docx():
     from unittest.mock import Mock, patch
     mock_doc = Mock()
     mock_para = Mock()
-    mock_para.text = "This is mocked docx content"
+    mock_para.text = "Sample mock docx content."
     mock_doc.paragraphs = [mock_para]
     
     headers = {"x-api-key": "dev-token"}
@@ -139,7 +140,7 @@ async def test_upload_endpoint_with_docx():
             assert "filename" in data
             assert data["filename"] == "sample.docx"
             assert "text" in data
-            assert data["text"] == "This is mocked docx content"
+            assert data["text"] == "Sample mock docx content."
 
     
     if "ALLOW_DEV" in os.environ:

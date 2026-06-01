@@ -222,8 +222,9 @@ def _validate_api_key(request: Request) -> str:
     if not api_key:
         raise HTTPException(status_code=401, detail="Missing API key")
 
-    if api_key in API_KEYS:
-        return api_key
+    api_keys = [k.strip() for k in os.getenv("API_KEYS", "").split(",") if k.strip()]
+    allow_dev = os.getenv("ALLOW_DEV", "false").lower() in ("1", "true", "yes")
+    dev_api_key = os.getenv("DEV_API_KEY", "dev-token")
 
     if DEV_AUTH_ENABLED and api_key == DEV_API_KEY:
         return api_key
@@ -351,7 +352,7 @@ async def upload_document(request: Request, file: UploadFile = File(...), identi
             extracted_text = content.decode('utf-8')
 
         # Truncate extracted text to avoid sending huge payloads to models
-        extracted_text = extracted_text[:10000]
+        extracted_text = extracted_text[:500000]
 
         return {"filename": filename, "text": extracted_text}
 
