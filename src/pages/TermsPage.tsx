@@ -1,4 +1,5 @@
 import { Scale, FileText, AlertTriangle, UserCheck, Ban, RefreshCw, Mail } from 'lucide-react';
+import { siteConfig } from '../config/site';
 
 interface Section {
   icon: JSX.Element;
@@ -142,11 +143,11 @@ export function TermsPage() {
               Reach out to our legal team with any questions or concerns regarding these terms.
             </p>
             <a
-              href="mailto:legal@legalease.io"
+              href={`mailto:${siteConfig.legalEmail}`}
               className="inline-flex items-center gap-2 px-6 py-2.5 rounded-xl bg-purple-600 hover:bg-purple-500 text-white text-sm font-semibold transition-colors"
             >
               <Mail size={14} />
-              legal@legalease.io
+              {siteConfig.legalEmail}
             </a>
           </div>
         </div>
