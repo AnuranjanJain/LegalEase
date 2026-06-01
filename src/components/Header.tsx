@@ -49,7 +49,7 @@ export function Header() {
     { name: 'Home', path: '/' },
     { name: 'Dashboard', path: '/dashboard' },
     { name: 'Documents', path: '/documents' },
-    { name: 'Chatbot', path: '/chatbot' },
+    { name: 'Legal Resources', path: '/documentation' },
   ];
 
   return (

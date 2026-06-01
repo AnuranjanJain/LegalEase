@@ -4,14 +4,17 @@ export default {
     "./index.html",
     "./src/**/*.{js,ts,jsx,tsx}",
   ],
+  // Safelist dynamically-constructed classes for runtime severity indicators
   safelist: [
   {
     pattern:
       /(bg|text|border)-(red|green|blue|yellow|gray|purple|indigo)-(100|200|300|400|500|600|700)/,
   },
 ],
+  // Dark mode via 'class' strategy — toggle by adding/removing 'dark' on <html>
   darkMode: 'class',
   theme: {
+    // Centered container with responsive padding and custom 2xl breakpoint (1400px)
     container: {
       center: true,
       padding: {
@@ -30,7 +33,10 @@ export default {
       },
     },
     extend: {
+      // Semantic color tokens — use these instead of raw Tailwind colors
+      // for consistent theming across light/dark modes
       colors: {
+        // Primary brand color — buttons, links, key interactive elements
         primary: {
           DEFAULT: '#2563EB',
           50: '#eff6ff',
@@ -45,6 +51,7 @@ export default {
           900: '#1e3a8a',
           950: '#172554',
         },
+        // Positive states — confirmations, successful operations
         success: {
           DEFAULT: '#16A34A',
           50: '#f0fdf4',
@@ -59,6 +66,7 @@ export default {
           900: '#14532d',
           950: '#052e16',
         },
+        // Caution states — pending actions, attention-required
         warning: {
           DEFAULT: '#CA8A04',
           50: '#fefce8',
@@ -73,6 +81,7 @@ export default {
           900: '#713f12',
           950: '#422006',
         },
+        // Error states — destructive actions, critical alerts
         error: {
           DEFAULT: '#DC2626',
           50: '#fef2f2',
@@ -87,6 +96,7 @@ export default {
           900: '#7f1d1d',
           950: '#450a0a',
         },
+        // Informational states — tips, neutral alerts
         info: {
           DEFAULT: '#0EA5E9',
           50: '#f0f9ff',
@@ -101,17 +111,20 @@ export default {
           900: '#0c4a6e',
           950: '#082f49',
         },
+        // Page backgrounds for light/dark themes
         background: {
           light: '#F3F4F6',
           dark: '#111827',
         }
       },
+      // Display font for headings and hero text
       fontFamily: {
         display: ['Inter', 'sans-serif'],
       },
+      // Custom animations — see docs/tailwind-theme-guide.md
       animation: {
-        'slide-up': 'slideUp 0.2s ease-out',
-        'spin-slow': 'spin 3s linear infinite',
+        'slide-up': 'slideUp 0.2s ease-out',  // Toast notifications, modals
+        'spin-slow': 'spin 3s linear infinite', // Decorative loading spinners
       },
       keyframes: {
         slideUp: {
