@@ -225,19 +225,19 @@ def _validate_api_key(request: Request) -> str:
     if not api_key:
         raise HTTPException(status_code=401, detail="Missing API key")
 
+    # Read from environment dynamically (allows test mocking)
     api_keys = [k.strip() for k in os.getenv("API_KEYS", "").split(",") if k.strip()]
     allow_dev = os.getenv("ALLOW_DEV", "false").lower() in ("1", "true", "yes")
     dev_api_key = os.getenv("DEV_API_KEY", "dev-token")
 
-    if DEV_AUTH_ENABLED and api_key == DEV_API_KEY:
+    # Check production API keys first
+    if api_key in api_keys:
         return api_key
-
-    if API_KEYS:
-        raise HTTPException(status_code=403, detail="Invalid API key")
-
-    logger.warning(
-        "API key validation failed because no valid production keys are configured and development authentication is disabled."
-    )
+    
+    # Check dev mode (only if no production keys are configured)
+    if not api_keys and allow_dev and api_key == dev_api_key:
+        return api_key
+    
     raise HTTPException(status_code=403, detail="Invalid API key")
 
 @app.post("/chat")
