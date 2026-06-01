@@ -1,6 +1,8 @@
 import { Shield, Lock, Eye, Database, Globe, Mail } from 'lucide-react';
 import { siteConfig, formatLegalDate } from '../config/site';
 
+const { compliance } = siteConfig;
+
 interface Section {
   icon: JSX.Element;
   title: string;
@@ -39,7 +41,9 @@ const sections: Section[] = [
       'All data is encrypted in transit using TLS 1.3 and at rest using AES-256 bank-grade encryption.',
       'Your uploaded documents are processed in isolated pipelines and are never exposed to shared infrastructure.',
       'We enforce strict role-based access controls — only authorized personnel can access operational logs.',
-      'LegalEase is SOC-2 Type II certified and undergoes regular third-party penetration testing.',
+      compliance.soc2Certified
+        ? `LegalEase is SOC-2 ${compliance.soc2Type} certified and undergoes regular third-party penetration testing (${compliance.penTestFrequency}).`
+        : 'LegalEase follows industry-standard security practices and undergoes regular security assessments.',
     ],
   },
   {

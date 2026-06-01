@@ -1,6 +1,8 @@
 import { Shield, Lock, Server, Key, Activity, CheckCircle2, Mail } from 'lucide-react';
 import { siteConfig } from '../config/site';
 
+const { compliance } = siteConfig;
+
 interface Section {
   icon: JSX.Element;
   title: string;
@@ -25,9 +27,11 @@ const sections: Section[] = [
     title: 'Infrastructure Security',
     color: 'emerald',
     content: [
-      'LegalEase operates on SOC-2 Type II certified cloud infrastructure with dedicated network isolation per tenant.',
+      compliance.soc2Certified
+        ? `LegalEase operates on SOC-2 ${compliance.soc2Type} certified cloud infrastructure with dedicated network isolation per tenant.`
+        : 'LegalEase operates on secure cloud infrastructure with dedicated network isolation per tenant.',
       'Each document is processed in an ephemeral, sandboxed container that is destroyed immediately after analysis completes.',
-      'We perform daily automated vulnerability scans and monthly third-party penetration testing of all production systems.',
+      `We perform ${compliance.vulnScanFrequency} automated vulnerability scans and ${compliance.penTestFrequency} third-party penetration testing of all production systems.`,
       'Infrastructure is distributed across multiple availability zones with automatic failover to ensure 99.99% uptime SLAs.',
     ],
   },
@@ -49,7 +53,7 @@ const sections: Section[] = [
     content: [
       'Our Security Operations Center (SOC) monitors all platform activity 24/7 for suspicious patterns and anomalies.',
       'In the event of a security incident, our response team is alerted within 60 seconds via automated alerting pipelines.',
-      'Affected customers are notified within 72 hours of any confirmed data breach, in compliance with GDPR Article 33.',
+      `Affected customers are notified within ${compliance.breachNotificationHours} hours of any confirmed data breach, in compliance with GDPR Article 33.`,
       'We conduct full post-incident reviews and publish security advisories to keep our users informed and protected.',
     ],
   },
@@ -58,7 +62,9 @@ const sections: Section[] = [
     title: 'Compliance & Certifications',
     color: 'rose',
     content: [
-      'LegalEase is SOC-2 Type II certified, demonstrating our commitment to availability, confidentiality, and processing integrity.',
+      compliance.soc2Certified
+        ? `LegalEase is SOC-2 ${compliance.soc2Type} certified, demonstrating our commitment to availability, confidentiality, and processing integrity.`
+        : 'LegalEase follows industry-standard security practices to ensure availability, confidentiality, and processing integrity.',
       'We are fully compliant with GDPR (EU), CCPA (California), HIPAA (healthcare data), and ISO/IEC 27001 information security standards.',
       'Our compliance posture is audited annually by independent third-party assessors.',
       'We maintain a detailed audit trail of all document processing activity for a minimum of 7 years.',
@@ -81,7 +87,9 @@ interface TrustBadge {
 }
 
 const trustBadges: TrustBadge[] = [
-  { label: 'SOC-2 Type II', sub: 'Certified', color: 'text-blue-600 dark:text-blue-400' },
+  ...(compliance.soc2Certified
+    ? [{ label: `SOC-2 ${compliance.soc2Type}`, sub: 'Certified', color: 'text-blue-600 dark:text-blue-400' }]
+    : []),
   { label: 'GDPR', sub: 'Compliant', color: 'text-emerald-600 dark:text-emerald-400' },
   { label: 'HIPAA', sub: 'Compliant', color: 'text-purple-600 dark:text-purple-400' },
   { label: 'ISO 27001', sub: 'Certified', color: 'text-amber-600 dark:text-amber-400' },

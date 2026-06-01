@@ -25,6 +25,15 @@ export const siteConfig = {
 
   /** ISO date string displayed as "Last updated" on legal pages. */
   legalLastUpdated: "2026-05-22",
+
+  /** Compliance certifications — source of truth for legal/security pages */
+  compliance: {
+    soc2Certified: true,
+    soc2Type: "Type II",
+    penTestFrequency: "monthly",
+    vulnScanFrequency: "daily",
+    breachNotificationHours: 72,
+  },
 } as const;
 
 /**
