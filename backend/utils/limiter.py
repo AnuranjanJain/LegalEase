@@ -17,18 +17,19 @@ class SimpleRateLimiter:
         remaining = self.calls - len(timestamps)
         if remaining <= 0:
             oldest_timestamp = timestamps[0] if timestamps else now
-            retry_after = max(0, math.ceil(oldest_timestamp + self.period - now))
+            retry_after = max(0, int(math.ceil(timestamps[0] + self.period - now)))
+
             return {
                 "allowed": False,
                 "remaining": 0,
-                "retry_after": retry_after,
+                "retry_after": max(1, retry_after)
             }
 
         timestamps.append(now)
         self.storage[key] = timestamps
         return {
             "allowed": True,
-            "remaining": self.calls - len(timestamps),
+            "remaining": max(0, self.calls - len(timestamps)),
             "retry_after": 0,
         }
 
