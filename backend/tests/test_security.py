@@ -1,5 +1,5 @@
+import os
 import pytest
-from fastapi import status
 from httpx import AsyncClient, ASGITransport
 
 from backend.main import app
@@ -14,10 +14,14 @@ async def test_missing_api_key_rejected():
 
 @pytest.mark.asyncio
 async def test_upload_too_large_rejected():
-    # Use dev token for auth header
+    os.environ["ALLOW_DEV"] = "true"
     headers = {"x-api-key": "dev-token"}
     big = b"0" * (26 * 1024 * 1024)
     files = {"file": ("big.pdf", big, "application/pdf")}
-    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as ac:
-        r = await ac.post("/upload", files=files, headers=headers)
-        assert r.status_code in (413, 400)
+    try:
+        async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as ac:
+            r = await ac.post("/upload", files=files, headers=headers)
+            assert r.status_code in (413, 400)
+    finally:
+        if "ALLOW_DEV" in os.environ:
+            del os.environ["ALLOW_DEV"]

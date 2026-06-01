@@ -3,14 +3,17 @@ import { api } from '../services/api';
 import { ChatStorageService, ChatMessage, ChatSessionMetadata } from '../services/storage';
 import { useRef, useState, useEffect, useCallback } from 'react';
 import { useToast } from '../contexts/ToastContext';
+import LegalMapping from '../components/LegalMapping';
 
-const DEFAULT_GREETING: ChatMessage = {
-  id: 'default-greeting',
-  text: "Hello! I'm LegalEase AI. How can I help you understand your legal documents today?",
-  sender: 'bot',
-  time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-  timestamp: new Date().toISOString(),
-};
+function makeGreeting(): ChatMessage {
+  return {
+    id: 'default-greeting',
+    text: "Hello! I'm LegalEase AI. How can I help you understand your legal documents today?",
+    sender: 'bot',
+    time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+    timestamp: new Date().toISOString(),
+  };
+}
 
 const MAX_CONTEXT_MESSAGES = 10;
 
@@ -22,7 +25,7 @@ function buildConversationHistory(msgs: ChatMessage[]) {
 }
 
 export function ChatbotPage() {
-  const [messages, setMessages] = useState<ChatMessage[]>([DEFAULT_GREETING]);
+  const [messages, setMessages] = useState<ChatMessage[]>([makeGreeting()]);
   const [activeSessionId, setActiveSessionId] = useState<string | null>(null);
   const [sessions, setSessions] = useState<ChatSessionMetadata[]>([]);
   const [input, setInput] = useState('');
@@ -56,7 +59,7 @@ export function ChatbotPage() {
       const sessionData = ChatStorageService.getSession(savedId);
       if (sessionData) {
         setActiveSessionId(savedId);
-        setMessages(sessionData.messages.length > 0 ? sessionData.messages : [DEFAULT_GREETING]);
+        setMessages(sessionData.messages.length > 0 ? sessionData.messages : [makeGreeting()]);
         setUploadedDoc(sessionData.documentContext ?? null);
         return;
       }
@@ -65,7 +68,7 @@ export function ChatbotPage() {
     const newSession = ChatStorageService.createSession('New Conversation');
     setActiveSessionId(newSession.id);
     setSessions(ChatStorageService.getSessions());
-    setMessages([DEFAULT_GREETING]);
+    setMessages([makeGreeting()]);
   }, []);
 
   const persistSession = useCallback((msgs: ChatMessage[], docCtx: typeof uploadedDoc, sessionId: string | null) => {
@@ -96,7 +99,7 @@ export function ChatbotPage() {
   const handleNewConversation = () => {
     const newSession = ChatStorageService.createSession('New Conversation');
     setActiveSessionId(newSession.id);
-    setMessages([DEFAULT_GREETING]);
+    setMessages([makeGreeting()]);
     setUploadedDoc(null);
     setSessions(ChatStorageService.getSessions());
     setShowSessions(false);
@@ -107,7 +110,7 @@ export function ChatbotPage() {
     if (!sessionData) return;
     ChatStorageService.setActiveSessionId(id);
     setActiveSessionId(id);
-    setMessages(sessionData.messages.length > 0 ? sessionData.messages : [DEFAULT_GREETING]);
+    setMessages(sessionData.messages.length > 0 ? sessionData.messages : [makeGreeting()]);
     setUploadedDoc(sessionData.documentContext ?? null);
     setShowSessions(false);
   };
@@ -127,9 +130,20 @@ export function ChatbotPage() {
   };
 
   const handleClearConversation = () => {
-    setMessages([DEFAULT_GREETING]);
-    setUploadedDoc(null);
-  };
+  const freshGreeting = makeGreeting();
+  setMessages([freshGreeting]);
+  setUploadedDoc(null);
+
+  if (activeSessionId) {
+    ChatStorageService.saveSession({
+      id: activeSessionId,
+      title: 'New Conversation',
+      messages: [freshGreeting],
+      documentContext: undefined,
+    });
+    setSessions(ChatStorageService.getSessions());
+  }
+};
 
   const handleSend = async () => {
     if (!input.trim()) return;
@@ -372,6 +386,8 @@ export function ChatbotPage() {
             </div>
           </div>
         )}
+
+        <LegalMapping description={input} onSelect={(s) => setInput(prev => (prev ? prev + '\n\n' + `${s.section} — ${s.title}: ${s.summary}` : `${s.section} — ${s.title}: ${s.summary}`))} />
 
         <div className="flex items-center gap-2">
           <input
