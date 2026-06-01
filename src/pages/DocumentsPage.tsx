@@ -1,10 +1,10 @@
 import { useState, useRef, useEffect, useMemo } from 'react';
-import {
-  UploadCloud, FileText, Trash2, Eye, Search,
-  Grid, List, CheckCircle, ArrowRight, RefreshCcw, AlertCircle
+import { 
+  UploadCloud, FileText, Trash2, Eye, Search, 
+  Grid, List, CheckCircle, ArrowRight, RefreshCcw,
+  X, MessageSquare, Download, AlertCircle
 } from 'lucide-react';
-import { StorageService, Document } from '../services/storage';
-import { api } from '../services/api';
+import { StorageService, Document, ChatStorageService } from '../services/storage';
 import { useToast } from '../contexts/ToastContext';
 import { useNavigate } from 'react-router-dom';
 import { ShareButton } from '../components/ShareButton';
@@ -17,6 +17,7 @@ export function DocumentsPage() {
   const [selectedTypeFilter, setSelectedTypeFilter] = useState<'All' | 'PDF' | 'DOCX' | 'TXT'>('All');
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
   const [shareDoc, setShareDoc] = useState<Document | null>(null);
+  const [selectedAuditDoc, setSelectedAuditDoc] = useState<Document | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const { showToast } = useToast();
   const navigate = useNavigate();
@@ -28,41 +29,28 @@ export function DocumentsPage() {
 
   /** Upload each file to the backend for real AI extraction. */
   const processFiles = (files: FileList) => {
-    Array.from(files).forEach(async (file) => {
-      const fileExtension = file.name.split('.').pop()?.toLowerCase() || 'txt';
+    if (files.length === 0) return;
+    
+    // Process the first file and navigate to /processing
+    const file = files[0];
+    const fileExtension = file.name.split('.').pop()?.toLowerCase() || 'txt';
+    
+    const newDoc: Document = {
+      id: `doc_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+      name: file.name,
+      type: fileExtension,
+      size: file.size,
+      uploadDate: new Date().toISOString(),
+      status: 'processing'
+    };
 
-      const newDoc: Document = {
-        id: `doc_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
-        name: file.name,
-        type: fileExtension,
-        size: file.size,
-        uploadDate: new Date().toISOString(),
-        status: 'processing',
-      };
+    // Save to StorageService and update state
+    StorageService.saveDocument(newDoc);
+    setDocuments(StorageService.getDocuments());
+    showToast(`Initializing processing pipeline for "${file.name}"...`, 'info');
 
-      StorageService.saveDocument(newDoc);
-      setDocuments(StorageService.getDocuments());
-      showToast(`Uploading "${file.name}"...`, 'info');
-
-      try {
-        const formData = new FormData();
-        formData.append('file', file);
-
-        const data = await api.upload<{ filename: string; text: string }>('/upload', formData);
-
-        newDoc.status = 'processed';
-        newDoc.processedDate = new Date().toISOString();
-        newDoc.extractedText = data.text;
-        StorageService.saveDocument(newDoc);
-        setDocuments(StorageService.getDocuments());
-        showToast(`Document "${data.filename}" successfully analyzed by AI!`, 'success');
-      } catch {
-        newDoc.status = 'error';
-        StorageService.saveDocument(newDoc);
-        setDocuments(StorageService.getDocuments());
-        showToast(`Failed to process "${file.name}". Please try again.`, 'error');
-      }
-    });
+    // Navigate to processing page, passing the document details and the real File object
+    navigate('/processing', { state: { docId: newDoc.id, file } });
   };
 
   const handleDragOver = (e: React.DragEvent<HTMLDivElement>) => {
@@ -141,14 +129,57 @@ export function DocumentsPage() {
     };
   };
 
+  const getMockSummary = (doc: Document): string => {
+    if (doc.summary) return doc.summary;
+    if (doc.id === 'doc_1') {
+      return `## Unified Executive Brief\n\nThis is a cognitive AI audit of the **Lease Agreement - Apartment 4B.pdf** (Apartment lease contract).\n\n### Key Terms & Obligations\n- **Parties:** Landlord vs. Tenant (Apartment 4B).\n- **Security Deposit:** 1.5 Months rent, due prior to move-in.\n- **Monthly Rent:** $2,450.00 USD, payable on the 1st of each calendar month.\n- **Late Fees:** 5% penalty charged if rent is unpaid after 5 grace days.\n\n### Potential Risks & Recommendations\n1. **Maintenance Clause:** The tenant is responsible for minor repairs under $100. This is a common but slightly unfavorable boilerplate term.\n2. **Termination Clause:** Requires 60 days advance written notice; automatic renewal is active. Keep a reminder to submit termination notices timely.`;
+    }
+    if (doc.id === 'doc_3') {
+      return `## Unified Executive Brief\n\nThis is a cognitive AI audit of the **Privacy Policy Update.pdf**.\n\n### Core Changes & Disclosures\n- **Data Harvesting:** The update introduces third-party advertising cookie mappings.\n- **Opt-Out Mechanism:** Users can opt-out by navigating to Account Preferences -> Privacy Control.\n- **Data Retention:** Personally Identifiable Information (PII) is kept for 5 years after account deletion.\n\n### Compliance Risks\n- **GDPR Alignment:** Retention of data for 5 years without an active service relationship is a medium compliance risk.\n- **Consent Mechanism:** The site uses "opt-out" rather than "opt-in" for marketing profiling, which could be challenged under strict European data laws.`;
+    }
+    return `## Unified Executive Brief\n\nNo summary exists for this document. Try running a summary audit by uploading the document again.`;
+  };
+
   const handleReviewDetails = (doc: Document) => {
     if (doc.status === 'processing') {
       showToast('Document analysis is in progress. Please wait...', 'warning');
-      navigate('/processing');
+      navigate('/processing', { state: { docId: doc.id } });
+    } else if (doc.status === 'failed' || doc.status === 'error') {
+      showToast('This document audit has failed. Please try re-uploading.', 'error');
     } else {
-      showToast(`Initiating cognitive audit review for "${doc.name}"`, 'success');
-      navigate('/dashboard');
+      showToast(`Opening cognitive audit report for "${doc.name}"`, 'success');
+      setSelectedAuditDoc({
+        ...doc,
+        summary: getMockSummary(doc)
+      });
     }
+  };
+
+  const handleChatWithAssistant = (doc: Document) => {
+    if (!doc) return;
+    
+    // Create a new session or set context in ChatStorageService
+    const session = ChatStorageService.createSession(`Audit chat: ${doc.name}`);
+    session.documentContext = { name: doc.name, text: doc.text || doc.summary || '' };
+    ChatStorageService.saveSession(session);
+    
+    showToast(`Pre-loading "${doc.name}" context into AI chatbot...`, 'success');
+    navigate('/chatbot');
+  };
+
+  const handleDownloadSummary = (doc: Document) => {
+    const summaryText = doc.summary || getMockSummary(doc);
+    if (!summaryText) return;
+    
+    const blob = new Blob([summaryText], { type: 'text/markdown;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.setAttribute('download', `${doc.name.split('.')[0]}_AI_Summary_Report.md`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    showToast('AI Summary report downloaded successfully!', 'success');
   };
 
   return (
@@ -308,7 +339,7 @@ export function DocumentsPage() {
                             <RefreshCcw size={10} className="animate-spin" />
                             AI Auditing
                           </span>
-                        ) : doc.status === 'error' ? (
+                        ) : (doc.status === 'error' || doc.status === 'failed') ? (
                           <span className="inline-flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-full bg-red-500/10 text-red-500 border border-red-500/20">
                             <AlertCircle size={10} />
                             Failed
@@ -435,7 +466,7 @@ export function DocumentsPage() {
                                 <RefreshCcw size={10} className="animate-spin" />
                                 Processing
                               </span>
-                            ) : doc.status === 'error' ? (
+                            ) : (doc.status === 'error' || doc.status === 'failed') ? (
                               <span className="inline-flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-full bg-red-500/10 text-red-500 border border-red-500/20">
                                 <AlertCircle size={10} />
                                 Failed
@@ -503,6 +534,82 @@ export function DocumentsPage() {
         document={shareDoc}
         onClose={() => setShareDoc(null)}
       />
+
+      {/* Cognitive Audit Brief Modal */}
+      {selectedAuditDoc && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-gray-950/60 backdrop-blur-sm animate-fade-in">
+          <div className="relative w-full max-w-3xl bg-white dark:bg-gray-950 rounded-2xl shadow-2xl border border-gray-200 dark:border-gray-800 overflow-hidden flex flex-col max-h-[85vh] animate-scale-up">
+            
+            {/* Modal Header */}
+            <div className="flex items-center justify-between p-6 border-b border-gray-150 dark:border-gray-850 bg-gray-50/50 dark:bg-gray-900/20">
+              <div className="flex items-center gap-3">
+                <div className="p-2.5 rounded-lg bg-primary-600/10 text-primary-600 dark:text-primary-400">
+                  <FileText size={24} />
+                </div>
+                <div>
+                  <h3 className="text-base font-extrabold text-gray-900 dark:text-white truncate max-w-lg">
+                    {selectedAuditDoc.name}
+                  </h3>
+                  <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
+                    Cognitive AI Audit Report · {(selectedAuditDoc.size / 1024).toFixed(1)} KB
+                  </p>
+                </div>
+              </div>
+              <button 
+                onClick={() => setSelectedAuditDoc(null)}
+                className="p-2 text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-900 transition-colors"
+                aria-label="Close modal"
+              >
+                <X size={18} />
+              </button>
+            </div>
+
+            {/* Modal Body */}
+            <div className="p-6 md:p-8 overflow-y-auto flex-grow text-left space-y-6 scrollbar-thin scrollbar-thumb-gray-200 dark:scrollbar-thumb-gray-850">
+              
+              {/* Ready Badge & Overview */}
+              <div className="flex items-center gap-2 p-3 bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 border border-emerald-500/15 rounded-xl text-xs font-bold w-fit">
+                <CheckCircle size={16} />
+                <span>AI Cognitive Audit Audit Ready</span>
+              </div>
+
+              {/* Summary Text Content */}
+              <div className="prose prose-sm dark:prose-invert max-w-none text-gray-700 dark:text-gray-200 whitespace-pre-line leading-relaxed text-sm">
+                {selectedAuditDoc.summary}
+              </div>
+
+            </div>
+
+            {/* Modal Footer */}
+            <div className="p-4 md:p-6 bg-gray-50/50 dark:bg-gray-900/20 border-t border-gray-150 dark:border-gray-850 flex flex-col sm:flex-row items-center justify-between gap-3">
+              <div className="flex items-center gap-2 w-full sm:w-auto">
+                <button
+                  onClick={() => handleChatWithAssistant(selectedAuditDoc)}
+                  className="flex-grow sm:flex-none inline-flex items-center justify-center gap-2 px-5 py-2.5 text-xs font-bold text-white bg-primary-600 hover:bg-primary-500 rounded-xl shadow-lg shadow-primary-500/20 hover:scale-[1.02] active:scale-95 transition-all"
+                >
+                  <MessageSquare size={14} />
+                  <span>Chat with AI Assistant</span>
+                </button>
+                <button
+                  onClick={() => handleDownloadSummary(selectedAuditDoc)}
+                  className="flex-grow sm:flex-none inline-flex items-center justify-center gap-2 px-4 py-2.5 text-xs font-bold text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-900 hover:bg-gray-50 dark:hover:bg-gray-850 border border-gray-250 dark:border-gray-850 rounded-xl transition-all"
+                >
+                  <Download size={14} />
+                  <span>Download Brief</span>
+                </button>
+              </div>
+              
+              <button
+                onClick={() => setSelectedAuditDoc(null)}
+                className="w-full sm:w-auto px-5 py-2.5 text-xs font-bold text-gray-500 dark:text-gray-400 hover:text-gray-800 dark:hover:text-white transition-colors"
+              >
+                Close Report
+              </button>
+            </div>
+
+          </div>
+        </div>
+      )}
     </div>
   );
 }

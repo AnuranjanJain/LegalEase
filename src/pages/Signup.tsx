@@ -77,9 +77,17 @@ export function SignupPage() {
 
         {/* Card */}
         <div className="bg-white/70 dark:bg-gray-950/40 backdrop-blur-md rounded-2xl border border-gray-150 dark:border-gray-850 p-8 shadow-sm">
-          <div className="mb-6">
+          <div className="mb-6 flex flex-col gap-5 justify-center items-start">
+            <Link
+            to="/"
+            className='transition-transform duration-300 hover:-translate-x-2'
+          >
+           ← Back to home
+          </Link>
+          <div>
             <h2 className="text-2xl font-extrabold tracking-tight text-gray-900 dark:text-white">Create an account</h2>
             <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">Get started with LegalEase today</p>
+          </div>
           </div>
 
           {error && (
