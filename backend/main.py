@@ -2,17 +2,19 @@ from fastapi import Depends, FastAPI, HTTPException, UploadFile, File, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, StreamingResponse
 from pydantic import BaseModel
+from datetime import datetime
+from typing import Optional
+from io import BytesIO
 import os
 import logging
-from io import BytesIO
-from typing import Optional
-
+import time
 import uuid
 
 from dotenv import load_dotenv
 
 from backend.database import engine, Base
 from backend.routers import auth_routes
+from backend.routers import legal_routes
 from backend.auth import validate_token_or_api_key
 from backend.utils.limiter import SimpleRateLimiter
 
@@ -47,6 +49,9 @@ logger = logging.getLogger(__name__)
 
 # Load environment variables
 load_dotenv()
+
+# Track application start time for uptime calculation
+_app_start_time = time.monotonic()
 
 app = FastAPI()
 
@@ -109,6 +114,8 @@ Base.metadata.create_all(bind=engine)
 
 # Include authentication router
 app.include_router(auth_routes.router)
+# Include legal mapping router
+app.include_router(legal_routes.router)
 
 
 # Enable CORS for frontend communication
@@ -210,6 +217,14 @@ class ChatRequest(BaseModel):
 class SummarizeRequest(BaseModel):
     text: str
 
+
+class HealthResponse(BaseModel):
+    status: str
+    uptime_seconds: float
+    timestamp: str
+    details: Optional[dict] = None
+
+
 def _validate_api_key(request: Request) -> str:
     # Accept header `Authorization: Bearer <key>` or `X-API-Key`
     auth = request.headers.get("authorization") or ""
@@ -222,10 +237,12 @@ def _validate_api_key(request: Request) -> str:
     if not api_key:
         raise HTTPException(status_code=401, detail="Missing API key")
 
+    # Read from environment dynamically (allows test mocking)
     api_keys = [k.strip() for k in os.getenv("API_KEYS", "").split(",") if k.strip()]
     allow_dev = os.getenv("ALLOW_DEV", "false").lower() in ("1", "true", "yes")
     dev_api_key = os.getenv("DEV_API_KEY", "dev-token")
 
+<<<<<<< HEAD
     if allow_dev and api_key == dev_api_key:
         return api_key
 
@@ -237,6 +254,16 @@ def _validate_api_key(request: Request) -> str:
     logger.warning(
         "API key validation failed because no valid production keys are configured and development authentication is disabled."
     )
+=======
+    # Check production API keys first
+    if api_key in api_keys:
+        return api_key
+    
+    # Check dev mode (only if no production keys are configured)
+    if not api_keys and allow_dev and api_key == dev_api_key:
+        return api_key
+    
+>>>>>>> upstream/main
     raise HTTPException(status_code=403, detail="Invalid API key")
 
 @app.post("/chat")
@@ -372,9 +399,27 @@ async def summarize(request: Request, payload: SummarizeRequest, identity: str =
     return {"summary": summary}
 
 
-@app.get("/health")
+@app.get("/health", response_model=HealthResponse)
 async def health():
-    return ai_service.check_health()
+    """
+    Health check endpoint with structured response.
+    Returns HTTP 503 when the service is degraded.
+    """
+    health_data = ai_service.check_health()
+    uptime = time.monotonic() - _app_start_time
+    timestamp = datetime.utcnow().isoformat() + "Z"
+
+    response = HealthResponse(
+        status=health_data.get("status", "unknown"),
+        uptime_seconds=round(uptime, 2),
+        timestamp=timestamp,
+        details=health_data.get("details"),
+    )
+
+    if response.status == "degraded":
+        raise HTTPException(status_code=503, detail=response.model_dump())
+
+    return response
 
 
 if __name__ == "__main__":
