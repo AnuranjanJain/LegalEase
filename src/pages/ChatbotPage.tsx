@@ -253,7 +253,7 @@ export function ChatbotPage() {
   };
 
   return (
-    <div className="flex flex-col h-[calc(100vh-64px)] bg-gray-50 dark:bg-gray-900 border-l border-gray-200 dark:border-gray-800 relative">
+    <div className="flex flex-col h-[calc(100vh-64px)] bg-gray-50 dark:bg-gray-900 border-l border-gray-200 dark:border-gray-800 relative overflow-hidden">
 
       {/* Session panel */}
       {showSessions && (
@@ -290,7 +290,7 @@ export function ChatbotPage() {
       )}
 
       {/* Message list */}
-      <div className="flex-grow overflow-y-auto px-6 py-8 space-y-6 relative z-10">
+      <div className="flex-grow overflow-y-auto px-3 sm:px-6 py-4 sm:py-8 space-y-4 sm:space-y-6 relative z-10">
         {messages.map((msg: ChatMessage) => {
           const isUser = msg.sender === 'user';
           
@@ -299,7 +299,7 @@ export function ChatbotPage() {
               key={msg.id} 
               className={`flex w-full ${isUser ? 'justify-end' : 'justify-start'} animate-slide-up`}
             >
-              <div className={`flex items-start max-w-[80%] gap-3 ${isUser ? 'flex-row-reverse' : 'flex-row'}`}>
+              <div className={`flex items-start max-w-[85%] sm:max-w-[80%] gap-2 sm:gap-3 ${isUser ? 'flex-row-reverse' : 'flex-row'}`}>
                 
                 {/* Glowing Avatar Circles */}
                 <div className={`flex-shrink-0 h-9 w-9 rounded-xl flex items-center justify-center shadow-md ${
@@ -311,7 +311,7 @@ export function ChatbotPage() {
                 </div>
 
                 {/* Message Bubble Card */}
-                <div className={`p-4 rounded-2xl shadow-sm text-left leading-relaxed relative group ${
+                <div className={`p-3 sm:p-4 rounded-2xl shadow-sm text-left leading-relaxed relative group ${
                   isUser 
                     ? 'bg-primary text-white rounded-tr-none' 
                     : 'bg-white/80 dark:bg-gray-900/60 backdrop-blur-md text-gray-900 dark:text-gray-150 rounded-tl-none border border-gray-150 dark:border-gray-800'
@@ -365,7 +365,7 @@ export function ChatbotPage() {
         {isTyping ? "LegalEase AI is writing an answer..." : ""}
       </div>
 
-      <div className="p-4 bg-white dark:bg-gray-800 border-t border-gray-200 dark:border-gray-800">
+      <div className="p-3 sm:p-4 bg-white dark:bg-gray-800 border-t border-gray-200 dark:border-gray-800">
         {uploadedDoc && (
           <div className="mb-3 flex items-center justify-between bg-primary/5 dark:bg-primary/10 p-2 rounded-lg border border-primary/20">
             <div className="flex items-center gap-2 overflow-hidden">
@@ -444,12 +444,12 @@ export function ChatbotPage() {
 
             {/* Accessible Multi-line Text Area for Enter / Shift+Enter management */}
             <textarea
-              className="w-full pl-4 pr-36 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent bg-gray-50 dark:bg-gray-700 text-gray-900 dark:text-white placeholder-gray-500 dark:placeholder-gray-400 resize-none max-h-32 min-h-[40px] block align-bottom leading-normal"
+              className="w-full pl-3 sm:pl-4 pr-28 sm:pr-36 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent bg-gray-50 dark:bg-gray-700 text-gray-900 dark:text-white placeholder-gray-500 dark:placeholder-gray-400 resize-none max-h-32 min-h-[40px] block align-bottom leading-normal text-sm sm:text-base"
               placeholder={uploadedDoc ? "Ask about this document..." : "Ask a legal question..."}
               rows={1}
               value={input}
               onChange={(e) => setInput(e.target.value)}
-              onKeyDown={(e) => e.key === 'Enter' && !isTyping && handleSend()}
+              onKeyDown={(e) => e.key === 'Enter' && !e.shiftKey && (e.preventDefault(), handleSend())}
             />
           </div>
           <button
