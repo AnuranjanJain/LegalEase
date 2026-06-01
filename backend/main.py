@@ -164,47 +164,9 @@ RATE_LIMIT_IP_CALLS = int(os.getenv("RATE_LIMIT_IP_CALLS", "60"))
 RATE_LIMIT_KEY_CALLS = int(os.getenv("RATE_LIMIT_KEY_CALLS", "300"))
 
 
-# Defaults: 60 requests per minute per IP, 30 per minute per API key
+# Defaults: 60 requests per minute per IP, 300 per minute per API key
 ip_limiter = SimpleRateLimiter(calls=RATE_LIMIT_IP_CALLS, period=RATE_LIMIT_PERIOD)
 key_limiter = SimpleRateLimiter(calls=RATE_LIMIT_KEY_CALLS, period=RATE_LIMIT_PERIOD)
-
-
-
-
-# API keys and dev mode
-API_KEYS = [k.strip() for k in os.getenv("API_KEYS", "").split(",") if k.strip()]
-DEV_API_KEY = os.getenv("DEV_API_KEY")
-ALLOW_DEV = os.getenv("ALLOW_DEV", "false").lower() in ("1", "true", "yes")
-ENVIRONMENT = os.getenv("ENVIRONMENT", "").strip().lower()
-IS_DEVELOPMENT_ENV = ENVIRONMENT == "development"
-DEV_AUTH_ENABLED = False
-
-if ALLOW_DEV:
-    logger.warning(
-        "Development authentication requested. Do not use in production."
-    )
-    if not IS_DEVELOPMENT_ENV:
-        logger.warning(
-            "Development authentication blocked because ENVIRONMENT is not set to development."
-        )
-    elif not DEV_API_KEY:
-        logger.warning(
-            "Development authentication blocked because DEV_API_KEY is not configured."
-        )
-    elif API_KEYS:
-        logger.warning(
-            "Development authentication blocked because API_KEYS are configured and production API key validation remains authoritative."
-        )
-    else:
-        DEV_AUTH_ENABLED = True
-        logger.warning(
-            "Development authentication enabled in a development environment. Do not use in production."
-        )
-
-if not API_KEYS and not DEV_AUTH_ENABLED:
-    logger.warning(
-        "API_KEYS is not configured and development authentication is unavailable."
-    )
 
 
 class ChatRequest(BaseModel):
@@ -225,39 +187,10 @@ class HealthResponse(BaseModel):
     details: Optional[dict] = None
 
 
-def _validate_api_key(request: Request) -> str:
-    # Accept header `Authorization: Bearer <key>` or `X-API-Key`
-    auth = request.headers.get("authorization") or ""
-    api_key = ""
-    if auth.lower().startswith("bearer "):
-        api_key = auth.split(" ", 1)[1].strip()
-    else:
-        api_key = request.headers.get("x-api-key", "").strip()
-
-    if not api_key:
-        raise HTTPException(status_code=401, detail="Missing API key")
-
-    # Read from environment dynamically (allows test mocking)
-    api_keys = [k.strip() for k in os.getenv("API_KEYS", "").split(",") if k.strip()]
-    allow_dev = os.getenv("ALLOW_DEV", "false").lower() in ("1", "true", "yes")
-    dev_api_key = os.getenv("DEV_API_KEY", "dev-token")
-
-    # Check production API keys first
-    if api_key in api_keys:
-        return api_key
-    
-    # Check dev mode (only if no production keys are configured)
-    if not api_keys and allow_dev and api_key == dev_api_key:
-        return api_key
-    
-    raise HTTPException(status_code=403, detail="Invalid API key")
-
 @app.post("/chat")
-async def chat(request: Request, payload: ChatRequest):
-    # Auth
-    api_key = _validate_api_key(request)
-
-    if not key_limiter.check(api_key)["allowed"]:
+async def chat(request: Request, payload: ChatRequest, identity: str = Depends(validate_token_or_api_key)):
+    # Rate limiting using the authenticated identity
+    if not key_limiter.check(identity)["allowed"]:
         raise HTTPException(status_code=429, detail="Rate limit exceeded")
 
     # Sanitize inputs
