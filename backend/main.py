@@ -34,7 +34,8 @@ from backend.core.exceptions import (
     AIError, ValidationError, ProviderError, TimeoutError, ServiceUnavailableError
 )
 from backend.core.validation import (
-    validate_chat_input, validate_summarize_input, sanitize_text, validate_mime_and_bytes
+    validate_chat_input, validate_summarize_input, sanitize_text, validate_mime_and_bytes,
+    MAX_PDF_PAGES, MAX_DOCX_PARAGRAPHS, MAX_EXTRACTED_TEXT_CHARS
 )
 from backend.services.ai_service import ai_service, correlation_id_var
 
@@ -333,8 +334,19 @@ async def upload_document(request: Request, file: UploadFile = File(...), identi
                 raise HTTPException(status_code=503, detail="PDF processing not available")
             try:
                 doc = fitz.open(stream=content, filetype="pdf")
+                # Resource hardening: limit page count
+                if doc.page_count > MAX_PDF_PAGES:
+                    doc.close()
+                    raise HTTPException(
+                        status_code=413,
+                        detail=f"PDF exceeds maximum page limit ({doc.page_count} > {MAX_PDF_PAGES})"
+                    )
                 for page in doc:
                     extracted_text += page.get_text()
+                    # Early exit if we've extracted enough text
+                    if len(extracted_text) >= MAX_EXTRACTED_TEXT_CHARS:
+                        break
+                doc.close()
             except Exception as e:
                 logger.error(f"PDF parse error: {e}")
                 raise HTTPException(status_code=400, detail="Invalid or corrupted PDF")
@@ -344,11 +356,20 @@ async def upload_document(request: Request, file: UploadFile = File(...), identi
                 raise HTTPException(status_code=503, detail="DOCX processing not available")
             try:
                 doc = DocxDocument(BytesIO(content))
-                extracted_text = "\n".join(
-                    para.text
-                    for para in doc.paragraphs
-                    if para.text.strip()
-                )
+                # Resource hardening: limit paragraph count
+                paragraph_count = 0
+                for para in doc.paragraphs:
+                    if para.text.strip():
+                        extracted_text += para.text + "\n"
+                        paragraph_count += 1
+                        if paragraph_count > MAX_DOCX_PARAGRAPHS:
+                            raise HTTPException(
+                                status_code=413,
+                                detail=f"DOCX exceeds maximum paragraph limit ({paragraph_count} > {MAX_DOCX_PARAGRAPHS})"
+                            )
+                        # Early exit if we've extracted enough text
+                        if len(extracted_text) >= MAX_EXTRACTED_TEXT_CHARS:
+                            break
             except Exception:
                 raise HTTPException(
                     status_code=400,
@@ -359,7 +380,7 @@ async def upload_document(request: Request, file: UploadFile = File(...), identi
             extracted_text = content.decode('utf-8')
 
         # Truncate extracted text to avoid sending huge payloads to models
-        extracted_text = extracted_text[:500000]
+        extracted_text = extracted_text[:MAX_EXTRACTED_TEXT_CHARS]
 
         return {"filename": filename, "text": extracted_text}
 
