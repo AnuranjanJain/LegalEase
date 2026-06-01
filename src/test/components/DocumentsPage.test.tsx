@@ -213,9 +213,9 @@ describe('DocumentsPage Component', () => {
       fireEvent.change(input!, { target: { files: [file] } });
     });
 
-    expect(mockShowToast).toHaveBeenCalledWith('Uploading "test.txt"...', 'info');
+    expect(mockShowToast).toHaveBeenCalledWith('Initializing processing pipeline for "test.txt"...', 'info');
     expect(StorageService.saveDocument).toHaveBeenCalled();
-    expect(api.upload).toHaveBeenCalled();
+    expect(mockNavigate).toHaveBeenCalledWith('/processing', { state: { docId: expect.any(String), file } });
   });
 
   it('handles drag over, drag leave, and drop events on the upload area', async () => {
@@ -251,7 +251,7 @@ describe('DocumentsPage Component', () => {
       });
     });
 
-    expect(mockShowToast).toHaveBeenCalledWith('Uploading "agreement.pdf"...', 'info');
+    expect(mockShowToast).toHaveBeenCalledWith('Initializing processing pipeline for "agreement.pdf"...', 'info');
   });
 
   it('navigates to dashboard or processing on document review click', async () => {
@@ -262,20 +262,20 @@ describe('DocumentsPage Component', () => {
       </MemoryRouter>
     );
 
-    // Clicking processed document "Lease Agreement.pdf" navigates to dashboard
+    // Clicking processed document "Lease Agreement.pdf" opens audit report (no navigate)
     const leaseTitle = screen.getByText('Lease Agreement.pdf');
     await act(async () => {
       await user.click(leaseTitle);
     });
-    expect(mockNavigate).toHaveBeenCalledWith('/dashboard');
-    expect(mockShowToast).toHaveBeenCalledWith('Initiating cognitive audit review for "Lease Agreement.pdf"', 'success');
+    expect(mockNavigate).not.toHaveBeenCalled();
+    expect(mockShowToast).toHaveBeenCalledWith('Opening cognitive audit report for "Lease Agreement.pdf"', 'success');
 
     // Clicking processing document "Work NDA.docx" navigates to processing page
     const ndaTitle = screen.getByText('Work NDA.docx');
     await act(async () => {
       await user.click(ndaTitle);
     });
-    expect(mockNavigate).toHaveBeenCalledWith('/processing');
+    expect(mockNavigate).toHaveBeenCalledWith('/processing', { state: { docId: 'doc_2' } });
     expect(mockShowToast).toHaveBeenCalledWith('Document analysis is in progress. Please wait...', 'warning');
   });
 });

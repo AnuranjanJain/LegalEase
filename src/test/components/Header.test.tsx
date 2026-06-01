@@ -72,7 +72,7 @@ describe('Header Component', () => {
     expect(screen.getAllByRole('link', { name: /home/i }).length).toBeGreaterThan(0);
     expect(screen.getAllByRole('link', { name: /dashboard/i }).length).toBe(2);
     expect(screen.getAllByRole('link', { name: /documents/i }).length).toBe(2);
-    expect(screen.getAllByRole('link', { name: /chatbot/i }).length).toBe(2);
+    expect(screen.getAllByRole('link', { name: /legal resources/i }).length).toBe(2);
   });
 
   it('triggers toggleDarkMode when the theme toggle button is clicked', async () => {
