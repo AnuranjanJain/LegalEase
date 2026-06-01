@@ -1,4 +1,4 @@
-import { Send, User, Bot, Paperclip, X, FileText, Sparkles, RefreshCcw, PlusCircle, Trash2, History } from 'lucide-react';
+import { Send, User, Bot, Paperclip, X, FileText, Sparkles, RefreshCcw, PlusCircle, Trash2, History, Copy, Check } from 'lucide-react';
 import { api } from '../services/api';
 import { ChatStorageService, ChatMessage, ChatSessionMetadata } from '../services/storage';
 import { useRef, useState, useEffect, useCallback } from 'react';
@@ -26,19 +26,28 @@ export function ChatbotPage() {
   const [activeSessionId, setActiveSessionId] = useState<string | null>(null);
   const [sessions, setSessions] = useState<ChatSessionMetadata[]>([]);
   const [input, setInput] = useState('');
-
   const [isTyping, setIsTyping] = useState(false);
   const [uploadedDoc, setUploadedDoc] = useState<{ name: string; text: string } | null>(null);
   const [isUploading, setIsUploading] = useState(false);
   const [showSessions, setShowSessions] = useState(false);
+  
+  // State to track which message ID was copied to show the checkmark temporarily
+  const [copiedId, setCopiedId] = useState<string | null>(null);
+  
   const { showToast } = useToast();
   const fileInputRef = useRef<HTMLInputElement>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
-  // Migrate old chatHistory key and restore the active session on mount
+  // Clipboard handler
+  const handleCopy = (text: string, id: string) => {
+    navigator.clipboard.writeText(text);
+    setCopiedId(id);
+    showToast('Copied to clipboard!', 'success');
+    setTimeout(() => setCopiedId(null), 2000); // Revert back to copy icon after 2 seconds
+  };
+
   useEffect(() => {
     ChatStorageService.migrateOldChatHistory();
-
     const savedId = ChatStorageService.getActiveSessionId();
     const allSessions = ChatStorageService.getSessions();
     setSessions(allSessions);
@@ -53,14 +62,12 @@ export function ChatbotPage() {
       }
     }
 
-    // No active session — create a fresh one
     const newSession = ChatStorageService.createSession('New Conversation');
     setActiveSessionId(newSession.id);
     setSessions(ChatStorageService.getSessions());
     setMessages([DEFAULT_GREETING]);
   }, []);
 
-  // Persist the active session whenever messages or document context change
   const persistSession = useCallback((msgs: ChatMessage[], docCtx: typeof uploadedDoc, sessionId: string | null) => {
     if (!sessionId) return;
     const firstUser = msgs.find(m => m.sender === 'user');
@@ -82,7 +89,6 @@ export function ChatbotPage() {
     }
   }, [messages, uploadedDoc, activeSessionId, persistSession]);
 
-  // Auto-scroll to latest message
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages, isTyping]);
@@ -291,12 +297,25 @@ export function ChatbotPage() {
                 </div>
 
                 {/* Message Bubble Card */}
-                <div className={`p-4 rounded-2xl shadow-sm text-left leading-relaxed ${
+                <div className={`p-4 rounded-2xl shadow-sm text-left leading-relaxed relative group ${
                   isUser 
                     ? 'bg-primary text-white rounded-tr-none' 
                     : 'bg-white/80 dark:bg-gray-900/60 backdrop-blur-md text-gray-900 dark:text-gray-150 rounded-tl-none border border-gray-150 dark:border-gray-800'
                 }`}>
-                  <p className="text-sm font-medium whitespace-pre-wrap">{msg.text}</p>
+                  
+                  {/* Dedicated Copy Button for AI/Bot responses */}
+                  {!isUser && (
+                    <button 
+                      onClick={() => handleCopy(msg.text, msg.id)}
+                      className="absolute top-2 right-2 p-1 text-gray-400 hover:text-primary dark:hover:text-primary-400 transition-colors opacity-0 group-hover:opacity-100 focus:opacity-100"
+                      title="Copy to clipboard"
+                      aria-label="Copy response text"
+                    >
+                      {copiedId === msg.id ? <Check size={14} className="text-green-500" /> : <Copy size={14} />}
+                    </button>
+                  )}
+
+                  <p className="text-sm font-medium whitespace-pre-wrap pr-4">{msg.text}</p>
                   <p className={`text-[9px] font-semibold mt-2 ${isUser ? 'text-blue-100 text-right' : 'text-gray-400 dark:text-gray-500'}`}>
                     {msg.time}
                   </p>

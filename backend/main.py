@@ -1,4 +1,4 @@
-from fastapi import FastAPI, HTTPException, UploadFile, File, Request
+from fastapi import Depends, FastAPI, HTTPException, UploadFile, File, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, StreamingResponse
 from pydantic import BaseModel
@@ -7,13 +7,14 @@ import logging
 from io import BytesIO
 from typing import Optional
 
-import time
 import uuid
 
 from dotenv import load_dotenv
 
 from backend.database import engine, Base
 from backend.routers import auth_routes
+from backend.auth import validate_token_or_api_key
+from backend.utils.limiter import SimpleRateLimiter
 
 # Optional imports (wrap in try/except so server can start without optional deps)
 try:
@@ -151,82 +152,52 @@ MAX_UPLOAD_SIZE = int(os.getenv("MAX_UPLOAD_SIZE", str(25 * 1024 * 1024)))  # 25
 CHUNK_SIZE = 1024 * 1024
 
 
-
-# Simple in-memory rate limiter (per-IP and per-key)
-class SimpleRateLimiter:
-    def __init__(self, calls: int = 60, period: int = 60, env_calls_key: Optional[str] = None, env_period_key: Optional[str] = None):
-        self.calls = calls
-        self.period = period
-        self.env_calls_key = env_calls_key
-        self.env_period_key = env_period_key
-        self.storage = {}
-
-    def is_allowed(self, key: str) -> bool:
-        calls = self.calls
-        period = self.period
-        if self.env_calls_key:
-            calls = int(os.getenv(self.env_calls_key, str(self.calls)))
-        if self.env_period_key:
-            period = int(os.getenv(self.env_period_key, str(self.period)))
-
-        now = time.time()
-        window = now - period
-        arr = self.storage.get(key, [])
-        # prune
-        arr = [t for t in arr if t > window]
-        if len(arr) >= calls:
-            self.storage[key] = arr
-            return False
-        arr.append(now)
-        self.storage[key] = arr
-        return True
+RATE_LIMIT_PERIOD = int(os.getenv("RATE_LIMIT_PERIOD", "60"))
+RATE_LIMIT_IP_CALLS = int(os.getenv("RATE_LIMIT_IP_CALLS", "60"))
+RATE_LIMIT_KEY_CALLS = int(os.getenv("RATE_LIMIT_KEY_CALLS", "300"))
 
 
 # Defaults: 60 requests per minute per IP, 30 per minute per API key
-ip_limiter = SimpleRateLimiter(
-    calls=60, period=60,
-    env_calls_key="RATE_LIMIT_IP_CALLS", env_period_key="RATE_LIMIT_PERIOD"
-)
-key_limiter = SimpleRateLimiter(
-    calls=300, period=60,
-    env_calls_key="RATE_LIMIT_KEY_CALLS", env_period_key="RATE_LIMIT_PERIOD"
-)
+ip_limiter = SimpleRateLimiter(calls=RATE_LIMIT_IP_CALLS, period=RATE_LIMIT_PERIOD)
+key_limiter = SimpleRateLimiter(calls=RATE_LIMIT_KEY_CALLS, period=RATE_LIMIT_PERIOD)
 
 
 
 
 # API keys and dev mode
 API_KEYS = [k.strip() for k in os.getenv("API_KEYS", "").split(",") if k.strip()]
-# Require explicit DEV_API_KEY configuration — no guessable default
-DEV_API_KEY = os.getenv("DEV_API_KEY", "")
+DEV_API_KEY = os.getenv("DEV_API_KEY")
 ALLOW_DEV = os.getenv("ALLOW_DEV", "false").lower() in ("1", "true", "yes")
-
-if not API_KEYS:
-    logger.warning(
-        "API_KEYS is not configured. "
-        "Authentication fallback behavior is active."
-    )
+ENVIRONMENT = os.getenv("ENVIRONMENT", "").strip().lower()
+IS_DEVELOPMENT_ENV = ENVIRONMENT == "development"
+DEV_AUTH_ENABLED = False
 
 if ALLOW_DEV:
-    if not DEV_API_KEY:
-        logger.error(
-            "ALLOW_DEV is enabled but DEV_API_KEY is not set. "
-            "Refusing to start with insecure configuration. "
-            "Set DEV_API_KEY to a strong, unique value."
-        )
-        raise RuntimeError(
-            "ALLOW_DEV=true requires DEV_API_KEY to be explicitly configured."
-        )
-    if API_KEYS:
+    logger.warning(
+        "Development authentication requested. Do not use in production."
+    )
+    if not IS_DEVELOPMENT_ENV:
         logger.warning(
-            "ALLOW_DEV is enabled alongside API_KEYS. "
-            "Dev auth fallback is active — do not use in production."
+            "Development authentication blocked because ENVIRONMENT is not set to development."
+        )
+    elif not DEV_API_KEY:
+        logger.warning(
+            "Development authentication blocked because DEV_API_KEY is not configured."
+        )
+    elif API_KEYS:
+        logger.warning(
+            "Development authentication blocked because API_KEYS are configured and production API key validation remains authoritative."
         )
     else:
+        DEV_AUTH_ENABLED = True
         logger.warning(
-            "Development API authentication is enabled. "
-            "Do not use in production."
+            "Development authentication enabled in a development environment. Do not use in production."
         )
+
+if not API_KEYS and not DEV_AUTH_ENABLED:
+    logger.warning(
+        "API_KEYS is not configured and development authentication is unavailable."
+    )
 
 
 class ChatRequest(BaseModel):
@@ -251,16 +222,20 @@ def _validate_api_key(request: Request) -> str:
     if not api_key:
         raise HTTPException(status_code=401, detail="Missing API key")
 
-    api_keys = API_KEYS
-    allow_dev = ALLOW_DEV
-    dev_api_key = DEV_API_KEY
+    api_keys = [k.strip() for k in os.getenv("API_KEYS", "").split(",") if k.strip()]
+    allow_dev = os.getenv("ALLOW_DEV", "false").lower() in ("1", "true", "yes")
+    dev_api_key = os.getenv("DEV_API_KEY", "dev-token")
 
-    if api_keys and api_key not in api_keys:
-        if allow_dev and api_key == dev_api_key:
-            return api_key
+    if DEV_AUTH_ENABLED and api_key == DEV_API_KEY:
+        return api_key
+
+    if API_KEYS:
         raise HTTPException(status_code=403, detail="Invalid API key")
 
-    return api_key
+    logger.warning(
+        "API key validation failed because no valid production keys are configured and development authentication is disabled."
+    )
+    raise HTTPException(status_code=403, detail="Invalid API key")
 
 
 def _get_client_ip(request: Request) -> str:
@@ -275,7 +250,7 @@ async def chat(request: Request, payload: ChatRequest):
     # Auth
     api_key = _validate_api_key(request)
 
-    if not key_limiter.is_allowed(api_key):
+    if not key_limiter.check(api_key)["allowed"]:
         raise HTTPException(status_code=429, detail="Rate limit exceeded")
 
     # Sanitize inputs
@@ -315,9 +290,7 @@ async def chat(request: Request, payload: ChatRequest):
 
 
 @app.post("/upload")
-async def upload_document(request: Request, file: UploadFile = File(...)):
-    # Auth
-    api_key = _validate_api_key(request)
+async def upload_document(request: Request, file: UploadFile = File(...), identity: str = Depends(validate_token_or_api_key)):
     # Content-Length pre-check
     try:
         content_length = int(request.headers.get("content-length", "0"))
@@ -379,7 +352,7 @@ async def upload_document(request: Request, file: UploadFile = File(...)):
             extracted_text = content.decode('utf-8')
 
         # Truncate extracted text to avoid sending huge payloads to models
-        extracted_text = extracted_text[:10000]
+        extracted_text = extracted_text[:500000]
 
         return {"filename": filename, "text": extracted_text}
 
@@ -393,9 +366,7 @@ async def upload_document(request: Request, file: UploadFile = File(...)):
 
 
 @app.post("/summarize")
-async def summarize(request: Request, payload: SummarizeRequest):
-    # Auth
-    api_key = _validate_api_key(request)
+async def summarize(request: Request, payload: SummarizeRequest, identity: str = Depends(validate_token_or_api_key)):
 
     # Sanitize input
     sanitized_text = sanitize_text(payload.text)
