@@ -13,6 +13,7 @@ from dotenv import load_dotenv
 
 from backend.database import engine, Base
 from backend.routers import auth_routes
+from backend.routers import legal_routes
 from backend.auth import validate_token_or_api_key
 from backend.utils.limiter import SimpleRateLimiter
 
@@ -109,6 +110,8 @@ Base.metadata.create_all(bind=engine)
 
 # Include authentication router
 app.include_router(auth_routes.router)
+# Include legal mapping router
+app.include_router(legal_routes.router)
 
 
 # Enable CORS for frontend communication
@@ -222,19 +225,19 @@ def _validate_api_key(request: Request) -> str:
     if not api_key:
         raise HTTPException(status_code=401, detail="Missing API key")
 
+    # Read from environment dynamically (allows test mocking)
     api_keys = [k.strip() for k in os.getenv("API_KEYS", "").split(",") if k.strip()]
     allow_dev = os.getenv("ALLOW_DEV", "false").lower() in ("1", "true", "yes")
     dev_api_key = os.getenv("DEV_API_KEY", "dev-token")
 
-    if DEV_AUTH_ENABLED and api_key == DEV_API_KEY:
+    # Check production API keys first
+    if api_key in api_keys:
         return api_key
-
-    if API_KEYS:
-        raise HTTPException(status_code=403, detail="Invalid API key")
-
-    logger.warning(
-        "API key validation failed because no valid production keys are configured and development authentication is disabled."
-    )
+    
+    # Check dev mode (only if no production keys are configured)
+    if not api_keys and allow_dev and api_key == dev_api_key:
+        return api_key
+    
     raise HTTPException(status_code=403, detail="Invalid API key")
 
 @app.post("/chat")
