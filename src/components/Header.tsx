@@ -3,6 +3,8 @@ import { NavLink, useNavigate } from 'react-router-dom';
 import { Menu, X, Bell, Moon, Sun, User, Settings, FileText, Shield, Info, LogOut } from 'lucide-react';
 import { useDarkMode } from '../hooks/useDarkMode';
 import { useNotifications, AppNotification } from '../contexts/NotificationContext';
+import { useAuth } from '../contexts/AuthContext';
+import { useToast } from '../contexts/ToastContext';
 
 function timeAgo(date: Date): string {
   const diff = Math.floor((Date.now() - date.getTime()) / 1000);
@@ -26,11 +28,20 @@ export function Header() {
   const notificationRef = useRef<HTMLDivElement>(null);
   const { isDarkMode, toggleDarkMode } = useDarkMode();
   const { notifications, unreadCount, markAllRead, markRead } = useNotifications();
+  const { logout } = useAuth();
+  const { showToast } = useToast();
   const navigate = useNavigate();
 
   const toggleNotificationMenu = () => setIsNotificationOpen((s) => !s);
   const toggleMobileMenu = () => setIsMobileMenuOpen((s) => !s);
   const toggleUserMenu = () => setIsUserMenuOpen((s) => !s);
+
+  const handleSignOut = () => {
+    logout();
+    showToast('Signed out successfully.', 'success');
+    navigate('/login');
+    setIsUserMenuOpen(false);
+  };
 
   useEffect(() => {
     function handleClickOutside(event: MouseEvent) {
@@ -193,7 +204,7 @@ export function Header() {
                   </div>
                   <NavLink to="/profile" className="flex items-center gap-3 px-4 py-2.5 text-sm text-gray-600 dark:text-white/70 hover:bg-gray-100 dark:hover:bg-white/5 rounded-xl transition-colors"><User size={16} /> Profile</NavLink>
                   <NavLink to="/settings" className="flex items-center gap-3 px-4 py-2.5 text-sm text-gray-600 dark:text-white/70 hover:bg-gray-100 dark:hover:bg-white/5 rounded-xl transition-colors"><Settings size={16} /> Settings</NavLink>
-                  <button className="flex items-center gap-3 w-full text-left px-4 py-2.5 mt-1 text-sm text-red-500 font-medium hover:bg-red-50 dark:hover:bg-red-500/10 rounded-xl transition-colors"><LogOut size={16} /> Sign out</button>
+                  <button onClick={handleSignOut} className="flex items-center gap-3 w-full text-left px-4 py-2.5 mt-1 text-sm text-red-500 font-medium hover:bg-red-50 dark:hover:bg-red-500/10 rounded-xl transition-colors"><LogOut size={16} /> Sign out</button>
                 </div>
               )}
             </div>
