@@ -16,6 +16,7 @@ function makeGreeting(): ChatMessage {
 }
 
 const MAX_CONTEXT_MESSAGES = 10;
+const MAX_CHARS = 2000;
 
 function buildConversationHistory(msgs: ChatMessage[]) {
   return msgs
@@ -389,7 +390,7 @@ export function ChatbotPage() {
 
         <LegalMapping description={input} onSelect={(s) => setInput(prev => (prev ? prev + '\n\n' + `${s.section} — ${s.title}: ${s.summary}` : `${s.section} — ${s.title}: ${s.summary}`))} />
 
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 pb-6">
           <input
             type="file"
             ref={fileInputRef}
@@ -444,13 +445,27 @@ export function ChatbotPage() {
 
             {/* Accessible Multi-line Text Area for Enter / Shift+Enter management */}
             <textarea
-              className="w-full pl-4 pr-36 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent bg-gray-50 dark:bg-gray-700 text-gray-900 dark:text-white placeholder-gray-500 dark:placeholder-gray-400 resize-none max-h-32 min-h-[40px] block align-bottom leading-normal"
+              className="w-full pl-3 sm:pl-4 pr-28 sm:pr-36 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent bg-gray-50 dark:bg-gray-700 text-gray-900 dark:text-white placeholder-gray-500 dark:placeholder-gray-400 resize-none max-h-32 min-h-[40px] block align-bottom leading-normal text-sm sm:text-base"
               placeholder={uploadedDoc ? "Ask about this document..." : "Ask a legal question..."}
               rows={1}
               value={input}
-              onChange={(e) => setInput(e.target.value)}
-              onKeyDown={(e) => e.key === 'Enter' && !isTyping && handleSend()}
+              onChange={(e) => setInput(e.target.value.slice(0, MAX_CHARS))}
+              onKeyDown={(e) => e.key === 'Enter' && !e.shiftKey && (e.preventDefault(), handleSend())}
             />
+          </div>
+          {/* Character counter */}
+          <span
+            className={`absolute -bottom-5 right-0 text-[11px] font-medium tabular-nums transition-colors ${
+              input.length >= MAX_CHARS
+                ? 'text-red-500 dark:text-red-400'
+                : input.length >= MAX_CHARS * 0.8
+                ? 'text-amber-500 dark:text-amber-400'
+                : 'text-gray-400 dark:text-gray-500'
+            }`}
+            aria-live="polite"
+          >
+            {input.length}/{MAX_CHARS}
+          </span>
           </div>
           <button
             onClick={handleSend}
