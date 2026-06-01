@@ -1,5 +1,5 @@
 import { Shield, Lock, Eye, Database, Globe, Mail } from 'lucide-react';
-import { siteConfig } from '../config/site';
+import { siteConfig, formatLegalDate } from '../config/site';
 
 interface Section {
   icon: JSX.Element;
@@ -92,7 +92,7 @@ export function PrivacyPage() {
           <p className="text-gray-500 dark:text-gray-400 max-w-2xl mx-auto text-base leading-relaxed">
             We are committed to protecting your personal information and your right to privacy. This policy outlines how LegalEase collects, uses, and safeguards your data.
           </p>
-          <p className="text-xs text-gray-400 dark:text-gray-500 mt-4">Last updated: May 22, 2026</p>
+          <p className="text-xs text-gray-400 dark:text-gray-500 mt-4">Last updated: {formatLegalDate(siteConfig.legalLastUpdated)}</p>
         </div>
       </section>
 
