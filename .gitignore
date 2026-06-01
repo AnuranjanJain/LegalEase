@@ -36,6 +36,7 @@ __pycache__/
 *.so
 .Python
 backend/__pycache__/
+backend/.venv/
 # Coverage reports
 coverage/
 backend/.coverage

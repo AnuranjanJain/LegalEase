@@ -226,10 +226,12 @@ def _validate_api_key(request: Request) -> str:
     allow_dev = os.getenv("ALLOW_DEV", "false").lower() in ("1", "true", "yes")
     dev_api_key = os.getenv("DEV_API_KEY", "dev-token")
 
-    if DEV_AUTH_ENABLED and api_key == DEV_API_KEY:
+    if allow_dev and api_key == dev_api_key:
         return api_key
 
-    if API_KEYS:
+    if api_keys:
+        if api_key in api_keys:
+            return api_key
         raise HTTPException(status_code=403, detail="Invalid API key")
 
     logger.warning(

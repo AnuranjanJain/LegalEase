@@ -1,6 +1,6 @@
 import os
+import uuid
 import pytest
-import os
 from fastapi import status
 from httpx import AsyncClient, ASGITransport
 from backend.main import app
@@ -16,6 +16,33 @@ async def test_health_endpoint_ok():
         assert "status" in data
         assert data["status"] in ["ok", "degraded"]
         assert "details" not in data
+
+
+@pytest.mark.asyncio
+async def test_signup_endpoint_creates_account():
+    email = f"test+{uuid.uuid4()}@example.com"
+    payload = {"email": email, "password": "securePass123"}
+
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as ac:
+        r = await ac.post("/auth/signup", json=payload)
+        assert r.status_code == status.HTTP_201_CREATED
+        data = r.json()
+        assert data["access_token"]
+        assert data["token_type"] == "bearer"
+
+
+@pytest.mark.asyncio
+async def test_signup_endpoint_fails_for_duplicate_email():
+    email = f"test+{uuid.uuid4()}@example.com"
+    payload = {"email": email, "password": "securePass123"}
+
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as ac:
+        first_response = await ac.post("/auth/signup", json=payload)
+        assert first_response.status_code == status.HTTP_201_CREATED
+
+        second_response = await ac.post("/auth/signup", json=payload)
+        assert second_response.status_code == status.HTTP_409_CONFLICT
+        assert second_response.json()["detail"] == "Email already registered"
 
 
 @pytest.mark.asyncio
