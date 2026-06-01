@@ -18,8 +18,11 @@ logger = logging.getLogger(__name__)
 
 SECRET_KEY = os.getenv("JWT_SECRET_KEY")
 if not SECRET_KEY:
-    logger.warning(
-        "JWT_SECRET_KEY is not configured. Authentication features are unavailable."
+    logger.critical(
+        "JWT_SECRET_KEY is not configured. Authentication startup is aborted."
+    )
+    raise RuntimeError(
+        "JWT_SECRET_KEY is required for authentication. Set JWT_SECRET_KEY before starting the application."
     )
 
 ALGORITHM = "HS256"
