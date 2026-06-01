@@ -24,7 +24,7 @@ class AIService:
         self.api_key = os.getenv("BYTEZ_API_KEY")
         self.chat_model_name = os.getenv("CHAT_MODEL", "inference-net/Schematron-3B")
         self.summarize_model_name = os.getenv("SUMMARIZE_MODEL", "inference-net/Schematron-3B")
-        self.max_model_input_chars = int(os.getenv("MAX_MODEL_INPUT_CHARS", "2000"))
+        self.max_model_input_chars = int(os.getenv("MAX_MODEL_INPUT_CHARS", "15000"))
         
         # Resilience parameters
         self.provider_timeout = float(os.getenv("PROVIDER_TIMEOUT", "30.0"))
