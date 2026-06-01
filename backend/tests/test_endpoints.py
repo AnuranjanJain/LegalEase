@@ -20,11 +20,11 @@ async def test_health_endpoint_ok():
         assert data["uptime_seconds"] >= 0
         assert "timestamp" in data
         assert "T" in data["timestamp"]  # ISO 8601 format
-        assert "details" not in data
+        assert "details" in data
+        assert data["details"] is None
 
 
 @pytest.mark.asyncio
-<<<<<<< HEAD
 async def test_signup_endpoint_creates_account():
     email = f"test+{uuid.uuid4()}@example.com"
     payload = {"email": email, "password": "securePass123"}
@@ -49,7 +49,9 @@ async def test_signup_endpoint_fails_for_duplicate_email():
         second_response = await ac.post("/auth/signup", json=payload)
         assert second_response.status_code == status.HTTP_409_CONFLICT
         assert second_response.json()["detail"] == "Email already registered"
-=======
+
+
+@pytest.mark.asyncio
 async def test_health_endpoint_degraded():
     """Test health endpoint returns 503 when service is degraded"""
     from unittest.mock import patch
@@ -63,7 +65,6 @@ async def test_health_endpoint_degraded():
             assert data["detail"]["status"] == "degraded"
             assert "uptime_seconds" in data["detail"]
             assert "timestamp" in data["detail"]
->>>>>>> upstream/main
 
 
 @pytest.mark.asyncio
