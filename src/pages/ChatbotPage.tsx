@@ -3,6 +3,7 @@ import { api } from '../services/api';
 import { ChatStorageService, ChatMessage, ChatSessionMetadata } from '../services/storage';
 import { useRef, useState, useEffect, useCallback } from 'react';
 import { useToast } from '../contexts/ToastContext';
+import LegalMapping from '../components/LegalMapping';
 
 function makeGreeting(): ChatMessage {
   return {
@@ -385,6 +386,8 @@ export function ChatbotPage() {
             </div>
           </div>
         )}
+
+        <LegalMapping description={input} onSelect={(s) => setInput(prev => (prev ? prev + '\n\n' + `${s.section} — ${s.title}: ${s.summary}` : `${s.section} — ${s.title}: ${s.summary}`))} />
 
         <div className="flex items-center gap-2">
           <input

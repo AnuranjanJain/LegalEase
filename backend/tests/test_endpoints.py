@@ -15,7 +15,28 @@ async def test_health_endpoint_ok():
         data = r.json()
         assert "status" in data
         assert data["status"] in ["ok", "degraded"]
+        assert "uptime_seconds" in data
+        assert isinstance(data["uptime_seconds"], (int, float))
+        assert data["uptime_seconds"] >= 0
+        assert "timestamp" in data
+        assert "T" in data["timestamp"]  # ISO 8601 format
         assert "details" not in data
+
+
+@pytest.mark.asyncio
+async def test_health_endpoint_degraded():
+    """Test health endpoint returns 503 when service is degraded"""
+    from unittest.mock import patch
+
+    with patch("backend.main.ai_service") as mock_ai:
+        mock_ai.check_health.return_value = {"status": "degraded"}
+        async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as ac:
+            r = await ac.get("/health")
+            assert r.status_code == 503
+            data = r.json()
+            assert data["detail"]["status"] == "degraded"
+            assert "uptime_seconds" in data["detail"]
+            assert "timestamp" in data["detail"]
 
 
 @pytest.mark.asyncio

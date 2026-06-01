@@ -1,0 +1,23 @@
+[
+  {
+    "section": "IPC 379",
+    "title": "Theft",
+    "keywords": ["theft", "stole", "stolen", "robbed", "steal"],
+    "summary": "Taking someone else's movable property without consent.",
+    "severity": "medium"
+  },
+  {
+    "section": "IPC 375",
+    "title": "Rape",
+    "keywords": ["rape", "sexual assault", "sexual violence"],
+    "summary": "Sexual intercourse by sexual violence or against consent.",
+    "severity": "high"
+  },
+  {
+    "section": "BNS 420",
+    "title": "Cheating",
+    "keywords": ["cheat", "fraud", "scam", "deceit"],
+    "summary": "Cheating and dishonestly inducing delivery of property.",
+    "severity": "medium"
+  }
+]
