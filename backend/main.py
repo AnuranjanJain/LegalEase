@@ -13,6 +13,7 @@ import uuid
 from dotenv import load_dotenv
 
 from backend.database import engine, Base
+from backend.utils.db_health import wait_for_database
 from backend.routers import auth_routes
 from backend.routers import legal_routes
 from backend.auth import validate_token_or_api_key
@@ -54,6 +55,16 @@ load_dotenv()
 _app_start_time = time.monotonic()
 
 app = FastAPI()
+
+
+@app.on_event("startup")
+async def startup_event():
+    """Wait for database to be available on startup."""
+    logger.info("Waiting for database connection...")
+    if not wait_for_database(max_retries=10, delay=1.0):
+        logger.error("Failed to connect to database. Application may not function correctly.")
+    else:
+        logger.info("Database connection established successfully")
 
 
 # Exception Handlers to match standardized error contracts

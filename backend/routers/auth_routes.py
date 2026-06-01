@@ -1,3 +1,4 @@
+import logging
 from datetime import timedelta
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
@@ -5,6 +6,7 @@ from pydantic import BaseModel, EmailStr, Field
 
 from backend.database import get_db
 from backend import models
+from backend.utils.retry import retry_on_database_error
 from backend.auth import (
     verify_password,
     get_password_hash,
@@ -12,6 +14,8 @@ from backend.auth import (
     get_current_user,
     ACCESS_TOKEN_EXPIRE_HOURS
 )
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(
     prefix="/auth",
@@ -36,23 +40,42 @@ class ChangePasswordRequest(BaseModel):
 
 
 @router.post("/signup", status_code=status.HTTP_201_CREATED, response_model=TokenResponse)
+@retry_on_database_error(max_retries=3, delay=0.1, backoff=2.0)
 def signup(user: UserCreate, db: Session = Depends(get_db)):
-    db_user = db.query(models.User).filter(models.User.email == user.email).first()
-    if db_user:
-        raise HTTPException(status_code=400, detail="Email already registered")
+    try:
+        # Check if user already exists
+        db_user = db.query(models.User).filter(models.User.email == user.email).first()
+        if db_user:
+            raise HTTPException(status_code=400, detail="Email already registered")
 
-    hashed_password = get_password_hash(user.password)
-    new_user = models.User(email=user.email, hashed_password=hashed_password)
+        # Hash password and create user
+        hashed_password = get_password_hash(user.password)
+        new_user = models.User(email=user.email, hashed_password=hashed_password)
 
-    db.add(new_user)
-    db.commit()
-    db.refresh(new_user)
+        db.add(new_user)
+        db.commit()
+        db.refresh(new_user)
 
-    access_token = create_access_token(
-        data={"sub": new_user.email},
-        expires_delta=timedelta(hours=ACCESS_TOKEN_EXPIRE_HOURS)
-    )
-    return {"access_token": access_token, "token_type": "bearer"}
+        # Create access token
+        access_token = create_access_token(
+            data={"sub": new_user.email},
+            expires_delta=timedelta(hours=ACCESS_TOKEN_EXPIRE_HOURS)
+        )
+        
+        logger.info(f"User created successfully: {user.email}")
+        return {"access_token": access_token, "token_type": "bearer"}
+        
+    except HTTPException:
+        # Re-raise HTTP exceptions (like 400 for duplicate email)
+        raise
+    except Exception as e:
+        # Log unexpected errors and return 500
+        logger.error(f"Error creating user {user.email}: {str(e)}")
+        db.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="An error occurred during account creation. Please try again."
+        )
 
 
 @router.post("/login", response_model=TokenResponse)
