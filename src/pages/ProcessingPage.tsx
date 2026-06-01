@@ -30,6 +30,38 @@ function chunkText(text: string, windowSize: number = 2000, overlap: number = 20
 
 type StageStatus = 'pending' | 'processing' | 'completed' | 'failed';
 
+// Processing state persistence keys
+const STORAGE_KEY = 'legalease-processing-state';
+
+interface PersistedState {
+  docId: string;
+  stage1Status: StageStatus;
+  stage2Status: StageStatus;
+  stage3Status: StageStatus;
+  stage4Status: StageStatus;
+  totalChunks: number;
+  currentChunkIndex: number;
+  finalSummary: string;
+  errorMessage: string;
+  startTime: number;
+  savedAt: number;
+}
+
+function formatElapsed(ms: number): string {
+  const totalSeconds = Math.floor(ms / 1000);
+  const minutes = Math.floor(totalSeconds / 60);
+  const seconds = totalSeconds % 60;
+  return minutes > 0 ? `${minutes}m ${seconds}s` : `${seconds}s`;
+}
+
+function formatETA(ms: number): string {
+  if (ms <= 0) return 'Almost done';
+  const totalSeconds = Math.ceil(ms / 1000);
+  if (totalSeconds < 60) return `~${totalSeconds}s remaining`;
+  const minutes = Math.ceil(totalSeconds / 60);
+  return `~${minutes}m remaining`;
+}
+
 export function ProcessingPage() {
   const location = useLocation();
   const { showToast } = useToast();
@@ -49,10 +81,46 @@ export function ProcessingPage() {
   const [errorMessage, setErrorMessage] = useState('');
   const [finalSummary, setFinalSummary] = useState('');
 
+  // Elapsed time and ETA tracking
+  const [startTime, setStartTime] = useState<number>(0);
+  const [elapsedMs, setElapsedMs] = useState<number>(0);
+  const [etaMs, setEtaMs] = useState<number | null>(null);
+  const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
   // Run the document processing pipeline
   useEffect(() => {
     if (!docId || !file || hasStarted.current) return;
     hasStarted.current = true;
+
+    // Restore persisted state if available (page refresh recovery)
+    try {
+      const saved = sessionStorage.getItem(STORAGE_KEY);
+      if (saved) {
+        const parsed: PersistedState = JSON.parse(saved);
+        if (parsed.docId === docId && Date.now() - parsed.savedAt < 600_000) {
+          // Restore state if saved within last 10 minutes
+          setStage1Status(parsed.stage1Status);
+          setStage2Status(parsed.stage2Status);
+          setStage3Status(parsed.stage3Status);
+          setStage4Status(parsed.stage4Status);
+          setTotalChunks(parsed.totalChunks);
+          setCurrentChunkIndex(parsed.currentChunkIndex);
+          setFinalSummary(parsed.finalSummary);
+          setErrorMessage(parsed.errorMessage);
+          setStartTime(parsed.startTime);
+          setElapsedMs(Date.now() - parsed.startTime);
+          if (parsed.stage4Status === 'completed' || parsed.stage4Status === 'failed') {
+            hasStarted.current = true;
+            return; // Pipeline already finished, just restore display
+          }
+        }
+      }
+    } catch {
+      // Ignore sessionStorage errors
+    }
+
+    const pipelineStart = Date.now();
+    setStartTime(pipelineStart);
 
     const executePipeline = async () => {
       let extractedText = '';
@@ -153,6 +221,74 @@ export function ProcessingPage() {
 
     executePipeline();
   }, [docId, file, showToast]);
+
+  // Timer: update elapsed time every second while pipeline is running
+  const isPipelineRunning = stage1Status === 'processing' || stage2Status === 'processing' ||
+    stage3Status === 'processing' || stage4Status === 'processing';
+  const isPipelineDone = stage4Status === 'completed' || 
+    stage1Status === 'failed' || stage2Status === 'failed' || 
+    stage3Status === 'failed' || stage4Status === 'failed';
+
+  useEffect(() => {
+    if (startTime === 0 || !isPipelineRunning) return;
+    timerRef.current = setInterval(() => {
+      setElapsedMs(Date.now() - startTime);
+    }, 1000);
+    return () => {
+      if (timerRef.current) clearInterval(timerRef.current);
+    };
+  }, [startTime, isPipelineRunning]);
+
+  // ETA calculation based on progress rate
+  useEffect(() => {
+    if (startTime === 0 || elapsedMs < 3000 || isPipelineDone) {
+      setEtaMs(null);
+      return;
+    }
+    const progress = getOverallProgress();
+    if (progress <= 0) {
+      setEtaMs(null);
+      return;
+    }
+    const rate = progress / elapsedMs;
+    const remaining = (100 - progress) / rate;
+    setEtaMs(remaining);
+  }, [elapsedMs, startTime, stage1Status, stage2Status, stage3Status, stage4Status,
+      currentChunkIndex, totalChunks, isPipelineDone]);
+
+  // Persist processing state to sessionStorage
+  useEffect(() => {
+    if (!docId || startTime === 0) return;
+    const isAnythingStarted = stage1Status !== 'pending';
+    if (!isAnythingStarted) return;
+    const state: PersistedState = {
+      docId,
+      stage1Status,
+      stage2Status,
+      stage3Status,
+      stage4Status,
+      totalChunks,
+      currentChunkIndex,
+      finalSummary,
+      errorMessage,
+      startTime,
+      savedAt: Date.now(),
+    };
+    try {
+      sessionStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+    } catch { /* ignore quota errors */ }
+  }, [docId, stage1Status, stage2Status, stage3Status, stage4Status,
+      totalChunks, currentChunkIndex, finalSummary, errorMessage, startTime]);
+
+  // Clean up sessionStorage when pipeline completes or fails
+  useEffect(() => {
+    if (isPipelineDone && docId) {
+      const timer = setTimeout(() => {
+        try { sessionStorage.removeItem(STORAGE_KEY); } catch { /* ok */ }
+      }, 30_000); // Clean up 30 seconds after completion
+      return () => clearTimeout(timer);
+    }
+  }, [isPipelineDone, docId]);
 
   // Overall pipeline progress percentage calculation
   const getOverallProgress = () => {
@@ -272,6 +408,18 @@ export function ProcessingPage() {
                     style={{ width: `${overallProgress}%` }}
                   ></div>
                 </div>
+                {/* Elapsed time and ETA */}
+                {startTime > 0 && (
+                  <div className="flex justify-between items-center text-[10px] text-gray-400 dark:text-gray-500">
+                    <span>Elapsed: {formatElapsed(elapsedMs)}</span>
+                    {etaMs !== null && !isPipelineDone && (
+                      <span>{formatETA(etaMs)}</span>
+                    )}
+                    {isPipelineDone && (
+                      <span>Total: {formatElapsed(elapsedMs)}</span>
+                    )}
+                  </div>
+                )}
               </div>
 
               {/* Dynamic Step-by-Step Stepper */}
