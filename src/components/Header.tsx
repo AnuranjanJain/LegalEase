@@ -3,8 +3,6 @@ import { NavLink, useNavigate } from 'react-router-dom';
 import { Menu, X, Bell, Moon, Sun, User, Settings, FileText, Shield, Info, LogOut } from 'lucide-react';
 import { useDarkMode } from '../hooks/useDarkMode';
 import { useNotifications, AppNotification } from '../contexts/NotificationContext';
-import { useAuth } from '../contexts/AuthContext';
-import { StorageService } from '../services/storage';
 
 function timeAgo(date: Date): string {
   const diff = Math.floor((Date.now() - date.getTime()) / 1000);
@@ -28,14 +26,7 @@ export function Header() {
   const notificationRef = useRef<HTMLDivElement>(null);
   const { isDarkMode, toggleDarkMode } = useDarkMode();
   const { notifications, unreadCount, markAllRead, markRead } = useNotifications();
-  const { logout } = useAuth();
   const navigate = useNavigate();
-  const profile = StorageService.getProfile();
-
-  const handleLogout = () => {
-    logout();
-    navigate('/login');
-  };
 
   const toggleNotificationMenu = () => setIsNotificationOpen((s) => !s);
   const toggleMobileMenu = () => setIsMobileMenuOpen((s) => !s);
@@ -197,12 +188,12 @@ export function Header() {
               {isUserMenuOpen && (
                 <div className="absolute right-0 mt-4 w-60 rounded-3xl bg-white/90 dark:bg-[#0a0a0a]/90 backdrop-blur-3xl border border-gray-100 dark:border-white/10 shadow-2xl p-2 z-50 animate-in fade-in slide-in-from-top-4">
                   <div className="px-4 py-3 border-b border-gray-100 dark:border-white/5 mb-2">
-                    <p className="text-sm font-medium text-gray-900 dark:text-white">{profile.firstName} {profile.lastName}</p>
-                    <p className="text-xs text-gray-500 dark:text-white/40">{profile.email}</p>
+                    <p className="text-sm font-medium text-gray-900 dark:text-white">Sarah Wilson</p>
+                    <p className="text-xs text-gray-500 dark:text-white/40">sarah.w@example.com</p>
                   </div>
                   <NavLink to="/profile" className="flex items-center gap-3 px-4 py-2.5 text-sm text-gray-600 dark:text-white/70 hover:bg-gray-100 dark:hover:bg-white/5 rounded-xl transition-colors"><User size={16} /> Profile</NavLink>
                   <NavLink to="/settings" className="flex items-center gap-3 px-4 py-2.5 text-sm text-gray-600 dark:text-white/70 hover:bg-gray-100 dark:hover:bg-white/5 rounded-xl transition-colors"><Settings size={16} /> Settings</NavLink>
-                  <button onClick={handleLogout} className="flex items-center gap-3 w-full text-left px-4 py-2.5 mt-1 text-sm text-red-500 font-medium hover:bg-red-50 dark:hover:bg-red-500/10 rounded-xl transition-colors"><LogOut size={16} /> Sign out</button>
+                  <button className="flex items-center gap-3 w-full text-left px-4 py-2.5 mt-1 text-sm text-red-500 font-medium hover:bg-red-50 dark:hover:bg-red-500/10 rounded-xl transition-colors"><LogOut size={16} /> Sign out</button>
                 </div>
               )}
             </div>

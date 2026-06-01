@@ -160,15 +160,6 @@ export function LoginPage() {
                 </>
               )}
             </button>
-
-            <div className="text-center">
-              <Link
-                to="/forgot-password"
-                className="text-sm text-gray-500 dark:text-gray-400 hover:text-primary transition-colors"
-              >
-                Forgot your password?
-              </Link>
-            </div>
           </form>
 
           <div className="mt-6 pt-6 border-t border-gray-150 dark:border-gray-850/60 text-center">
