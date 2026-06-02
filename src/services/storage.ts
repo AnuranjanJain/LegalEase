@@ -5,7 +5,10 @@ export interface Document {
   size: number;
   uploadDate: string;
   processedDate?: string;
-  status: 'processed' | 'processing';
+  status: 'processed' | 'processing' | 'failed' | 'error';
+  text?: string;
+  extractedText?: string;
+  summary?: string;
 }
 
 export interface UserProfile {
@@ -65,17 +68,29 @@ const STORAGE_KEYS = {
   CHAT_SESSION_PREFIX: 'le_chat_session_',
 };
 
+function getEmailFromToken(token: string): string | null {
+  try {
+    const parts = token.split('.');
+    if (parts.length !== 3) return null;
+
+    const payload = JSON.parse(atob(parts[1]));
+    return payload.sub || null;
+  } catch {
+    return null;
+  }
+}
+
 const getSuffixedKey = (key: string): string => {
   try {
-    const userStr = localStorage.getItem('le_auth_user');
-    if (userStr) {
-      const user = JSON.parse(userStr);
-      if (user && user.email) {
-        return `${key}_${user.email.replace(/[@.]/g, '_')}`;
+    const token = localStorage.getItem('access_token');
+    if (token) {
+      const email = getEmailFromToken(token);
+      if (email) {
+        return `${key}_${email.replace(/[@.]/g, '_')}`;
       }
     }
   } catch (error) {
-    console.error('Error parsing auth user for storage key suffix:', error);
+    console.error('Error parsing auth token for storage key suffix:', error);
   }
   return key;
 };
@@ -110,13 +125,19 @@ export const StorageService = {
     return StorageService.getDocuments().find(d => d.id === id);
   },
 
-  updateDocumentStatus: (id: string, status: 'processed' | 'processing') => {
+  updateDocumentStatus: (id: string, status: 'processed' | 'processing' | 'failed' | 'error', summary?: string, text?: string) => {
     const docs = StorageService.getDocuments();
     const docIndex = docs.findIndex(d => d.id === id);
     if (docIndex !== -1) {
       docs[docIndex].status = status;
       if (status === 'processed') {
         docs[docIndex].processedDate = new Date().toISOString();
+      }
+      if (summary !== undefined) {
+        docs[docIndex].summary = summary;
+      }
+      if (text !== undefined) {
+        docs[docIndex].text = text;
       }
       localStorage.setItem(getSuffixedKey(STORAGE_KEYS.DOCUMENTS), JSON.stringify(docs));
     }
@@ -125,41 +146,7 @@ export const StorageService = {
   getProfile: (): UserProfile => {
     try {
       const profile = localStorage.getItem(getSuffixedKey(STORAGE_KEYS.PROFILE));
-      if (profile) return JSON.parse(profile);
-
-      // If a user is logged in, let's initialize their profile with their own name/email
-      const userStr = localStorage.getItem('le_auth_user');
-      if (userStr) {
-        const user = JSON.parse(userStr);
-        if (user && user.email) {
-          const customProfile: UserProfile = {
-            firstName: user.firstName || '',
-            lastName: user.lastName || '',
-            email: user.email || '',
-            phone: '',
-            bio: 'New LegalEase User',
-            address: {
-              street: '',
-              city: '',
-              state: '',
-              zip: ''
-            },
-            preferences: {
-              language: 'en',
-              timezone: 'EST',
-              notifications: {
-                documents: true,
-                security: true,
-                marketing: false
-              }
-            }
-          };
-          localStorage.setItem(getSuffixedKey(STORAGE_KEYS.PROFILE), JSON.stringify(customProfile));
-          return customProfile;
-        }
-      }
-
-      return StorageService.initSampleProfile();
+      return profile ? JSON.parse(profile) : StorageService.initSampleProfile();
     } catch (error) {
       console.error('Error reading profile from storage:', error);
       return StorageService.initSampleProfile();
@@ -249,8 +236,8 @@ export const ChatStorageService = {
 
   saveSession: (sessionData: ChatSessionData) => {
     try {
-      const sessionKey = getSuffixedKey(STORAGE_KEYS.CHAT_SESSION_PREFIX) + sessionData.id;
-      localStorage.setItem(sessionKey, JSON.stringify(sessionData));
+      const sessionKey = STORAGE_KEYS.CHAT_SESSION_PREFIX + sessionData.id;
+      localStorage.setItem(getSuffixedKey(sessionKey), JSON.stringify(sessionData));
 
       const sessions = ChatStorageService.getSessions();
       const metadata: ChatSessionMetadata = {
@@ -275,8 +262,8 @@ export const ChatStorageService = {
 
   getSession: (id: string): ChatSessionData | null => {
     try {
-      const sessionKey = getSuffixedKey(STORAGE_KEYS.CHAT_SESSION_PREFIX) + id;
-      const sessionData = localStorage.getItem(sessionKey);
+      const sessionKey = STORAGE_KEYS.CHAT_SESSION_PREFIX + id;
+      const sessionData = localStorage.getItem(getSuffixedKey(sessionKey));
       return sessionData ? JSON.parse(sessionData) : null;
     } catch (error) {
       console.error('Error reading chat session from storage:', error);
@@ -298,8 +285,8 @@ export const ChatStorageService = {
 
   deleteSession: (id: string) => {
     try {
-      const sessionKey = getSuffixedKey(STORAGE_KEYS.CHAT_SESSION_PREFIX) + id;
-      localStorage.removeItem(sessionKey);
+      const sessionKey = STORAGE_KEYS.CHAT_SESSION_PREFIX + id;
+      localStorage.removeItem(getSuffixedKey(sessionKey));
 
       const sessions = ChatStorageService.getSessions();
       const filteredSessions = sessions.filter(s => s.id !== id);
@@ -335,8 +322,8 @@ export const ChatStorageService = {
     try {
       const sessions = ChatStorageService.getSessions();
       sessions.forEach(session => {
-        const sessionKey = getSuffixedKey(STORAGE_KEYS.CHAT_SESSION_PREFIX) + session.id;
-        localStorage.removeItem(sessionKey);
+        const sessionKey = STORAGE_KEYS.CHAT_SESSION_PREFIX + session.id;
+        localStorage.removeItem(getSuffixedKey(sessionKey));
       });
       localStorage.removeItem(getSuffixedKey(STORAGE_KEYS.CHAT_SESSIONS));
       localStorage.removeItem(getSuffixedKey(STORAGE_KEYS.CHAT_ACTIVE_ID));
@@ -349,16 +336,21 @@ export const ChatStorageService = {
     try {
       const oldHistory = localStorage.getItem('chatHistory');
       if (oldHistory) {
-        const messages = JSON.parse(oldHistory);
+        const parsedHistory = JSON.parse(oldHistory);
+        if (!Array.isArray(parsedHistory)) {
+          localStorage.removeItem('chatHistory');
+          return;
+        }
+
         const sessionId = crypto.randomUUID();
-        const firstUserMessage = messages.find((m: any) => m.sender === 'user');
+        const firstUserMessage = parsedHistory.find((m: any) => m.sender === 'user');
         const title = firstUserMessage
           ? firstUserMessage.text.substring(0, 50) + (firstUserMessage.text.length > 50 ? '...' : '')
           : 'Migrated Conversation';
 
         const sessionData: ChatSessionData = {
           id: sessionId,
-          messages: messages.map((m: any) => ({
+          messages: parsedHistory.map((m: any) => ({
             ...m,
             id: String(m.id),
             timestamp: m.timestamp || new Date().toISOString()
@@ -372,6 +364,7 @@ export const ChatStorageService = {
       }
     } catch (error) {
       console.error('Error migrating old chat history:', error);
+      localStorage.removeItem('chatHistory');
     }
   }
 };

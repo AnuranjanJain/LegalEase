@@ -1,17 +1,22 @@
-from fastapi import FastAPI, HTTPException, UploadFile, File, Request
+from fastapi import Depends, FastAPI, HTTPException, UploadFile, File, Request
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse, StreamingResponse
 from pydantic import BaseModel
-from rate_limit import RateLimitMiddleware
+from datetime import datetime
+from typing import Optional
+from io import BytesIO
 import os
 import logging
-import base64
-from io import BytesIO
-from typing import Optional
 import time
-import hashlib
-import secrets
-import json
+import uuid
+
 from dotenv import load_dotenv
+
+from backend.database import engine, Base
+from backend.routers import auth_routes
+from backend.routers import legal_routes
+from backend.auth import validate_token_or_api_key
+from backend.utils.limiter import SimpleRateLimiter
 
 # Optional imports (wrap in try/except so server can start without optional deps)
 try:
@@ -24,12 +29,17 @@ try:
 except Exception:
     DocxDocument = None  # type: ignore[assignment,misc]
 
-try:
-    from bytez import Bytez  # pyright: ignore[reportMissingImports]
-except Exception:
-    Bytez = None
-    # Bytez SDK not available or misconfigured; we'll degrade gracefully.
+# Import pipeline exceptions, validations, and service
+from backend.core.exceptions import (
+    AIError, ValidationError, ProviderError, TimeoutError, ServiceUnavailableError
+)
+from backend.core.validation import (
+    validate_chat_input, validate_summarize_input, sanitize_text, validate_mime_and_bytes
+)
+from backend.services.ai_service import ai_service, correlation_id_var
 
+#Middleware import 
+from backend.middleware.rate_limit import RateLimitMiddleware
 # Configure logging
 logging.basicConfig(
     level=logging.INFO,
@@ -40,137 +50,229 @@ logger = logging.getLogger(__name__)
 # Load environment variables
 load_dotenv()
 
+# Track application start time for uptime calculation
+_app_start_time = time.monotonic()
+
 app = FastAPI()
 
-# Add RateLimitMiddleware before CORSMiddleware so it's inner to CORS
-app.add_middleware(RateLimitMiddleware)
+
+# Exception Handlers to match standardized error contracts
+@app.exception_handler(ValidationError)
+async def validation_exception_handler(request: Request, exc: ValidationError):
+    logger.warning(f"[{correlation_id_var.get()}] Validation error: {exc}")
+    return JSONResponse(
+        status_code=400,
+        content={
+            "error": "validation_error",
+            "detail": str(exc),
+            "correlation_id": correlation_id_var.get()
+        }
+    )
+
+
+@app.exception_handler(ProviderError)
+async def provider_exception_handler(request: Request, exc: ProviderError):
+    logger.error(f"[{correlation_id_var.get()}] Upstream provider error: {exc}")
+    return JSONResponse(
+        status_code=502,
+        content={
+            "error": "provider_error",
+            "detail": str(exc),
+            "correlation_id": correlation_id_var.get()
+        }
+    )
+
+
+@app.exception_handler(TimeoutError)
+async def timeout_exception_handler(request: Request, exc: TimeoutError):
+    logger.error(f"[{correlation_id_var.get()}] Request timeout: {exc}")
+    return JSONResponse(
+        status_code=504,
+        content={
+            "error": "timeout_error",
+            "detail": str(exc),
+            "correlation_id": correlation_id_var.get()
+        }
+    )
+
+
+@app.exception_handler(ServiceUnavailableError)
+async def service_unavailable_exception_handler(request: Request, exc: ServiceUnavailableError):
+    logger.error(f"[{correlation_id_var.get()}] Service unavailable: {exc}")
+    return JSONResponse(
+        status_code=503,
+        content={
+            "error": "service_unavailable",
+            "detail": str(exc),
+            "correlation_id": correlation_id_var.get()
+        }
+    )
+
+
+# Create database tables
+Base.metadata.create_all(bind=engine)
+
+# Include authentication router
+app.include_router(auth_routes.router)
+# Include legal mapping router
+app.include_router(legal_routes.router)
+
 
 # Enable CORS for frontend communication
-FRONTEND_URL = os.getenv("FRONTEND_URL", "http://localhost:5173")
+raw_allowed_origins = os.getenv("ALLOWED_ORIGINS") or os.getenv(
+    "FRONTEND_URL",
+    "http://localhost:5173"
+)
+ALLOWED_ORIGINS = [
+    origin.strip()
+    for origin in raw_allowed_origins.split(",")
+    if origin.strip()
+]
+# Rate-limit middleware registered first so that CORSMiddleware
+# (added second) wraps it — ensuring 429 responses include CORS headers.
+app.add_middleware(RateLimitMiddleware)
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[FRONTEND_URL],
+    allow_origins=ALLOWED_ORIGINS,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
+logger.info(f"Allowed frontend origins: {ALLOWED_ORIGINS}")
 
-# Initialize Bytez SDK
-BYTEZ_API_KEY = os.getenv("BYTEZ_API_KEY")
 
-# Initialize Bytez client if available and configured; otherwise degrade gracefully
-client = None
-if BYTEZ_API_KEY and Bytez is not None:
+# Correlation ID middleware to inject trace headers
+@app.middleware("http")
+async def correlation_id_middleware(request: Request, call_next):
+    corr_id = request.headers.get("X-Correlation-ID") or str(uuid.uuid4())
+    token = correlation_id_var.set(corr_id)
     try:
-        client = Bytez(BYTEZ_API_KEY)
-        logger.info("Bytez client initialized")
-    except Exception as e:
-        logger.error(f"Failed to initialize Bytez client: {e}")
-        client = None
-else:
-    logger.warning("BYTEZ_API_KEY not configured or Bytez SDK unavailable. AI features disabled.")
+        response = await call_next(request)
+        response.headers["X-Correlation-ID"] = corr_id
+        return response
+    finally:
+        correlation_id_var.reset(token)
+
 
 # Configuration
 MAX_UPLOAD_SIZE = int(os.getenv("MAX_UPLOAD_SIZE", str(25 * 1024 * 1024)))  # 25 MB default
-MAX_MODEL_INPUT_CHARS = int(os.getenv("MAX_MODEL_INPUT_CHARS", "2000"))
+CHUNK_SIZE = 1024 * 1024
 
-# Rate limiter moved to rate_limit.py
 
-from auth import (
-    validate_token_or_api_key,
-    ACTIVE_SESSIONS,
-    load_users,
-    save_users,
-    hash_password,
-    verify_password,
+ip_limiter = SimpleRateLimiter(
+    limit_env_key="RATE_LIMIT_IP_CALLS",
+    default_calls=60,
+    period_env_key="RATE_LIMIT_PERIOD",
+    default_period=60
+)
+key_limiter = SimpleRateLimiter(
+    limit_env_key="RATE_LIMIT_KEY_CALLS",
+    default_calls=300,
+    period_env_key="RATE_LIMIT_PERIOD",
+    default_period=60
 )
 
-class UserRegister(BaseModel):
-    email: str
-    password: str
-    first_name: str
-    last_name: str
 
-class UserLogin(BaseModel):
-    email: str
-    password: str
+
+
+# API keys and dev mode
+API_KEYS = [k.strip() for k in os.getenv("API_KEYS", "").split(",") if k.strip()]
+DEV_API_KEY = os.getenv("DEV_API_KEY")
+ALLOW_DEV = os.getenv("ALLOW_DEV", "false").lower() in ("1", "true", "yes")
+ENVIRONMENT = os.getenv("ENVIRONMENT", "").strip().lower()
+IS_DEVELOPMENT_ENV = ENVIRONMENT == "development"
+DEV_AUTH_ENABLED = False
+
+if ALLOW_DEV:
+    logger.warning(
+        "Development authentication requested. Do not use in production."
+    )
+    if not IS_DEVELOPMENT_ENV:
+        logger.warning(
+            "Development authentication blocked because ENVIRONMENT is not set to development."
+        )
+    elif not DEV_API_KEY:
+        logger.warning(
+            "Development authentication blocked because DEV_API_KEY is not configured."
+        )
+    elif API_KEYS:
+        logger.warning(
+            "Development authentication blocked because API_KEYS are configured and production API key validation remains authoritative."
+        )
+    else:
+        DEV_AUTH_ENABLED = True
+        logger.warning(
+            "Development authentication enabled in a development environment. Do not use in production."
+        )
+
+if not API_KEYS and not DEV_AUTH_ENABLED:
+    logger.warning(
+        "API_KEYS is not configured and development authentication is unavailable."
+    )
 
 
 class ChatRequest(BaseModel):
     message: str
     context: Optional[str] = None
     conversation_history: Optional[list[dict[str, str]]] = None
+    stream: Optional[bool] = False
 
 
 class SummarizeRequest(BaseModel):
     text: str
 
 
-def _get_client_ip(request: Request) -> str:
-    try:
-        return request.client.host
-    except Exception:
-        return "unknown"
+class HealthResponse(BaseModel):
+    status: str
+    uptime_seconds: float
+    timestamp: str
+    details: Optional[dict] = None
+
 
 @app.post("/chat")
-async def chat(request: Request, payload: ChatRequest):
+async def chat(request: Request, payload: ChatRequest, identity: str = Depends(validate_token_or_api_key)):
     # Auth
-    api_key = validate_token_or_api_key(request)
+    if not key_limiter.check(identity)["allowed"]:
+        raise HTTPException(status_code=429, detail="Rate limit exceeded")
 
-    if client is None:
-        raise HTTPException(status_code=503, detail="AI service unavailable")
+    # Sanitize inputs
+    sanitized_message = sanitize_text(payload.message)
+    sanitized_context = sanitize_text(payload.context) if payload.context else None
 
-    try:
-        model = client.model("inference-net/Schematron-3B")
+    # Early payload validation
+    validate_chat_input(sanitized_message, sanitized_context)
 
-        # Build prompt combining document context and/or conversation history
-        parts = []
-        if payload.context:
-            parts.append(f"Context from document:\n{payload.context}")
-        if payload.conversation_history:
-            history_text = "\n".join([
-                f"{msg['role']}: {msg['content']}"
-                for msg in payload.conversation_history[-10:]
-            ])
-            parts.append(f"Previous conversation:\n{history_text}")
-        parts.append(f"Current question: {payload.message}")
-        prompt = "\n\n".join(parts)
+    # Streaming or standard block handling
+    if payload.stream:
+        async def stream_generator():
+            try:
+                async for chunk in ai_service.generate_chat_response(
+                    message=sanitized_message,
+                    context=sanitized_context,
+                    history=payload.conversation_history,
+                    stream=True
+                ):
+                    yield chunk
+            except Exception as e:
+                logger.error(f"[{correlation_id_var.get()}] Stream generation error: {e}")
+                yield "\n[Error: Inference stream failed]"
 
-        # Truncate to model input limit
-        if len(prompt) > MAX_MODEL_INPUT_CHARS:
-            prompt = prompt[:MAX_MODEL_INPUT_CHARS]
-
-        messages = [{"role": "user", "content": prompt}]
-
-        output = model.run(messages)
-
-        if hasattr(output, 'error') and output.error:
-            logger.error(f"Model error: {output.error}")
-
-            raise HTTPException(
-                status_code=503,
-                detail="AI chatbot service is currently unavailable."
-            )
-
-        return {"response": output.output}
-    except HTTPException:
-        raise
-    except Exception as e:
-        logger.error(
-            f"Error processing chat request: {str(e)}",
-            exc_info=True
+        return StreamingResponse(stream_generator(), media_type="text/event-stream")
+    else:
+        response_gen = ai_service.generate_chat_response(
+            message=sanitized_message,
+            context=sanitized_context,
+            history=payload.conversation_history,
+            stream=False
         )
+        response_text = ""
+        async for chunk in response_gen:
+            response_text += chunk
+        return {"response": response_text}
 
-        raise HTTPException(
-            status_code=503,
-            detail="AI chatbot service is currently unavailable."
-        )
 
 @app.post("/upload")
-async def upload_document(request: Request, file: UploadFile = File(...)):
-    # Auth
-    api_key = validate_token_or_api_key(request)
-
+async def upload_document(request: Request, file: UploadFile = File(...), identity: str = Depends(validate_token_or_api_key)):
     # Content-Length pre-check
     try:
         content_length = int(request.headers.get("content-length", "0"))
@@ -180,15 +282,27 @@ async def upload_document(request: Request, file: UploadFile = File(...)):
         raise HTTPException(status_code=413, detail="Uploaded file is too large")
 
     try:
-        content = await file.read()
-        if len(content) > MAX_UPLOAD_SIZE:
-            raise HTTPException(status_code=413, detail="Uploaded file is too large")
+        chunks = []
+        total_size = 0
+        while True:
+            chunk = await file.read(CHUNK_SIZE)
+            if not chunk:
+                break
+            total_size += len(chunk)
+            if total_size > MAX_UPLOAD_SIZE:
+                raise HTTPException(status_code=413, detail="Uploaded file is too large")
+            chunks.append(chunk)
+
+        content = b"".join(chunks)
 
         filename = file.filename or "unknown"
         file_extension = os.path.splitext(filename)[1].lower()
         extracted_text = ""
 
-        # Validate by magic bytes / simple signatures
+        # Perform MIME-aware preprocessing and signature validation
+        validate_mime_and_bytes(content, file.content_type or "", filename)
+
+        # Process by type
         if file_extension == '.pdf' or content.startswith(b'%PDF-'):
             if fitz is None:
                 raise HTTPException(status_code=503, detail="PDF processing not available")
@@ -205,7 +319,6 @@ async def upload_document(request: Request, file: UploadFile = File(...)):
                 raise HTTPException(status_code=503, detail="DOCX processing not available")
             try:
                 doc = DocxDocument(BytesIO(content))
-
                 extracted_text = "\n".join(
                     para.text
                     for para in doc.paragraphs
@@ -220,131 +333,57 @@ async def upload_document(request: Request, file: UploadFile = File(...)):
         elif file_extension == '.txt':
             extracted_text = content.decode('utf-8')
 
-        else:
-            raise HTTPException(
-                status_code=400,
-                detail="Unsupported file type."
-            )
-
         # Truncate extracted text to avoid sending huge payloads to models
-        extracted_text = extracted_text[:10000]
+        extracted_text = extracted_text[:500000]
 
         return {"filename": filename, "text": extracted_text}
 
+    except ValidationError as e:
+        raise HTTPException(status_code=400, detail=str(e))
     except HTTPException:
         raise
     except Exception as e:
         logger.error(f"Upload error: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail="Failed to process document")
+
+
 @app.post("/summarize")
-async def summarize(request: Request, payload: SummarizeRequest):
-    # Auth
-    api_key = validate_token_or_api_key(request)
+async def summarize(request: Request, payload: SummarizeRequest, identity: str = Depends(validate_token_or_api_key)):
 
-    if client is None:
-        raise HTTPException(status_code=503, detail="AI service unavailable")
+    # Sanitize input
+    sanitized_text = sanitize_text(payload.text)
 
-    try:
-        if client is None:
-            raise HTTPException(
-                status_code=503,
-                detail="Summarization service unavailable because API key is not configured."
-            )
+    # Early payload validation
+    validate_summarize_input(sanitized_text)
 
-        # Use a summarization model from Bytez
+    summary = await ai_service.generate_summary(sanitized_text)
+    return {"summary": summary}
 
-        return {"summary": output.output if hasattr(output, 'output') else str(output)}
-    except HTTPException:
-        raise
-    except Exception as e:
-        logger.error(f"Summarization error: {e}", exc_info=True)
 
-@app.post("/auth/register")
-async def register(payload: UserRegister):
-    users = load_users()
-    email = payload.email.strip().lower()
-    if email in users:
-        raise HTTPException(status_code=400, detail="Email already registered")
-    
-    pwd_hash, salt = hash_password(payload.password)
-    users[email] = {
-        "email": email,
-        "first_name": payload.first_name.strip(),
-        "last_name": payload.last_name.strip(),
-        "password_hash": pwd_hash,
-        "salt": salt
-    }
-    save_users(users)
-    return {"status": "ok", "message": "User registered successfully"}
+@app.get("/health", response_model=HealthResponse, response_model_exclude_none=True)
+async def health():
+    """
+    Health check endpoint with structured response.
+    Returns HTTP 503 when the service is degraded.
+    """
+    health_data = ai_service.check_health()
+    uptime = time.monotonic() - _app_start_time
+    timestamp = datetime.utcnow().isoformat() + "Z"
 
-@app.post("/auth/login")
-async def login(payload: UserLogin):
-    users = load_users()
-    email = payload.email.strip().lower()
-    if email not in users:
-        raise HTTPException(status_code=401, detail="Invalid email or password")
-    
-    user = users[email]
-    if not verify_password(payload.password, user["password_hash"], user["salt"]):
-        raise HTTPException(status_code=401, detail="Invalid email or password")
-    
-    token = secrets.token_hex(32)
-    ACTIVE_SESSIONS[token] = email
-    
-    return {
-        "token": token,
-        "user": {
-            "email": user["email"],
-            "firstName": user["first_name"],
-            "lastName": user["last_name"]
-        }
-    }
+    response = HealthResponse(
+        status=health_data.get("status", "unknown"),
+        uptime_seconds=round(uptime, 2),
+        timestamp=timestamp,
+        details=health_data.get("details"),
+    )
 
-@app.post("/auth/logout")
-async def logout(request: Request):
-    auth = request.headers.get("authorization") or ""
-    token = ""
-    if auth.lower().startswith("bearer "):
-        token = auth.split(" ", 1)[1].strip()
-    
-    if token in ACTIVE_SESSIONS:
-        del ACTIVE_SESSIONS[token]
-        return {"status": "ok", "message": "Logged out successfully"}
-    
-    raise HTTPException(status_code=401, detail="Invalid or missing session token")
+    if response.status == "degraded":
+        raise HTTPException(status_code=503, detail=response.model_dump())
 
-@app.get("/auth/me")
-async def get_me(request: Request):
-    auth = request.headers.get("authorization") or ""
-    token = ""
-    if auth.lower().startswith("bearer "):
-        token = auth.split(" ", 1)[1].strip()
-        
-    if not token or token not in ACTIVE_SESSIONS:
-        raise HTTPException(status_code=401, detail="Not authenticated")
-        
-    email = ACTIVE_SESSIONS[token]
-    users = load_users()
-    user = users.get(email)
-    if not user:
-        raise HTTPException(status_code=404, detail="User not found")
-        
-    return {
-        "email": user["email"],
-        "firstName": user["first_name"],
-        "lastName": user["last_name"]
-    }
+    return response
+
 
 if __name__ == "__main__":
     import uvicorn
+
     uvicorn.run(app, host="0.0.0.0", port=8000)
-
-
-# Health endpoint
-@app.get("/health")
-async def health():
-    status = "ok"
-    details = {"bytez": bool(client)}
-    if not client:
-        status = "degraded"
-    return {"status": status, "details": details}

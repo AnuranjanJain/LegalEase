@@ -69,6 +69,12 @@ const FAQS: ReadonlyArray<FaqItem> = Object.freeze([
 export function HomePage() {
   const [activeDemoClause, setActiveDemoClause] = useState<'term' | 'indem' | 'ip'>('term');
   const [expandedFaq, setExpandedFaq] = useState<number | null>(null);
+  const btnPrimary = "inline-flex items-center justify-center px-8 py-3.5 text-base font-semibold rounded-xl text-white bg-primary-600 hover:bg-blue-700 shadow-[0_0_20px_rgba(37,99,235,0.2)] transition-all duration-300";
+  const btnSecondary = "inline-flex items-center justify-center px-8 py-3.5 border border-gray-300 dark:border-gray-700 text-base font-semibold rounded-xl text-gray-700 dark:text-gray-200 bg-white dark:bg-gray-800/40 hover:bg-gray-100 dark:hover:bg-gray-800 backdrop-blur-sm transition-all duration-300";
+  const btnTab = (isActive: boolean) => 
+  `py-1.5 px-2 text-xs font-semibold rounded-md transition-all ${
+    isActive ? 'bg-primary-600 text-white shadow-sm' : 'text-gray-600 hover:text-gray-900 dark:text-gray-400 dark:hover:text-white'
+  }`;
 
   return (
     <div className="overflow-hidden bg-background-light dark:bg-background-dark text-gray-800 dark:text-gray-200">
@@ -106,17 +112,11 @@ export function HomePage() {
               </p>
 
               <div className="flex flex-col sm:flex-row justify-center lg:justify-start gap-4">
-                <NavLink
-                  to="/documents"
-                  className="inline-flex items-center justify-center px-8 py-3.5 text-base font-semibold rounded-xl text-white bg-primary-600 hover:bg-primary-500 shadow-[0_0_20px_rgba(37,99,235,0.2)] dark:shadow-[0_0_20px_rgba(37,99,235,0.4)] hover:shadow-[0_0_30px_rgba(37,99,235,0.4)] dark:hover:shadow-[0_0_30px_rgba(37,99,235,0.6)] transition-all duration-300"
-                >
+                <NavLink to="/documents" className={btnPrimary}>
                   Get Started Free
                   <ArrowRight className="ml-2 h-5 w-5 animate-pulse" />
                 </NavLink>
-                <NavLink
-                  to="/chatbot"
-                  className="inline-flex items-center justify-center px-8 py-3.5 border border-gray-300 dark:border-gray-700 text-base font-semibold rounded-xl text-gray-700 dark:text-gray-200 bg-white dark:bg-gray-800/40 hover:bg-gray-50 dark:hover:bg-gray-800/80 backdrop-blur-sm transition-all duration-300"
-                >
+                <NavLink to="/chatbot" className={btnSecondary}>
                   <MessageSquare size={18} className="mr-2 text-primary-600 dark:text-primary-400" />
                   Try Live Chatbot
                 </NavLink>
@@ -151,26 +151,24 @@ export function HomePage() {
                 </div>
 
                 {/* Demo Tab Toggles */}
-                <div className="grid grid-cols-3 gap-1 p-2 bg-gray-100/80 dark:bg-gray-900/50 rounded-lg m-2 border border-gray-200 dark:border-gray-850">
-                  <button 
-                    onClick={() => setActiveDemoClause('term')}
-                    className={`py-1.5 px-2 text-xs font-semibold rounded-md transition-all ${activeDemoClause === 'term' ? 'bg-primary-600 text-white shadow-sm' : 'text-gray-600 hover:text-gray-900 dark:text-gray-400 dark:hover:text-white'}`}
-                  >
-                    Termination
+                <button 
+                onClick={() => setActiveDemoClause('term')}
+                className={btnTab(activeDemoClause === 'term')}
+                >
+                  Termination
                   </button>
                   <button 
-                    onClick={() => setActiveDemoClause('indem')}
-                    className={`py-1.5 px-2 text-xs font-semibold rounded-md transition-all ${activeDemoClause === 'indem' ? 'bg-primary-600 text-white shadow-sm' : 'text-gray-600 hover:text-gray-900 dark:text-gray-400 dark:hover:text-white'}`}
+                  onClick={() => setActiveDemoClause('indem')}
+                  className={btnTab(activeDemoClause === 'indem')}
                   >
                     Indemnity
-                  </button>
-                  <button 
+                    </button>
+                    <button 
                     onClick={() => setActiveDemoClause('ip')}
-                    className={`py-1.5 px-2 text-xs font-semibold rounded-md transition-all ${activeDemoClause === 'ip' ? 'bg-primary-600 text-white shadow-sm' : 'text-gray-600 hover:text-gray-900 dark:text-gray-400 dark:hover:text-white'}`}
-                  >
-                    IP Assignment
-                  </button>
-                </div>
+                    className={btnTab(activeDemoClause === 'ip')}
+                    >
+                      IP Assignment
+                      </button>
 
                 {/* Document Display Panel */}
                 <div className="p-4 space-y-4 text-left">
@@ -422,17 +420,17 @@ export function HomePage() {
       </section>
 
       {/* Security Focus Section */}
-      <section className="py-20 px-4 sm:px-6 lg:px-8 bg-gray-50 dark:bg-gray-955 text-gray-900 dark:text-white border-t border-gray-200 dark:border-gray-800/80">
+      <section className="py-20 px-4 sm:px-6 lg:px-8 bg-gray-50 dark:bg-gray-950 text-gray-900 dark:text-white border-t border-gray-200 dark:border-gray-800/80">
         <div className="app-container">
           <div className="grid grid-cols-1 lg:grid-cols-12 gap-12 items-center">
             
             {/* Left Graphics */}
             <div className="lg:col-span-5 relative flex justify-center">
               <div className="absolute w-72 h-72 bg-blue-500/5 dark:bg-blue-500/10 rounded-full filter blur-3xl"></div>
-              <div className="border border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900/50 rounded-2xl p-8 max-w-sm relative z-10 backdrop-blur-md text-left">
+              <div className="border border-gray-200 dark:border-gray-700/80 bg-white dark:bg-gray-900/80 rounded-2xl p-8 max-w-sm relative z-10 backdrop-blur-md text-left">
                 <Lock className="text-primary-600 dark:text-primary-400 h-10 w-10 mb-4" />
-                <h4 className="text-lg font-bold mb-2">Zero-Trust Audits</h4>
-                <p className="text-xs text-gray-550 dark:text-gray-450 leading-relaxed mb-4">
+                <h4 className="text-lg font-bold mb-2 text-gray-900 dark:text-white">Zero-Trust Audits</h4>
+                <p className="text-xs text-gray-600 dark:text-gray-400 leading-relaxed mb-4">
                   We leverage local sandbox extraction pipelines to analyze files. Your contracts never end up saved in generic cloud training corpora.
                 </p>
                 <div className="space-y-2">
@@ -455,22 +453,22 @@ export function HomePage() {
               <h2 className="text-3xl sm:text-4xl font-extrabold tracking-tight mb-6">
                 Your Privacy Is Our Legal Obligation
               </h2>
-              <p className="text-gray-650 dark:text-gray-400 leading-relaxed mb-8">
+              <p className="text-gray-600 dark:text-gray-300 leading-relaxed mb-8">
                 Unlike generic LLM platforms that scrape prompts to feed their neural network iterations, LegalEase enforces strict isolation protocols. Each workspace is sandboxed, safeguarding your firm’s litigation briefs and proprietary agreements from leakage.
               </p>
               <div className="grid grid-cols-2 gap-6">
                 <div className="flex items-start gap-3">
-                  <div className="p-2 bg-gray-100 dark:bg-gray-900 rounded-lg text-primary-650 dark:text-primary-400 mt-1"><Shield size={16} /></div>
+                  <div className="p-2 bg-gray-100 dark:bg-gray-900 rounded-lg text-primary-600 dark:text-primary-400 mt-1"><Shield size={16} /></div>
                   <div>
                     <h5 className="font-semibold text-sm mb-1 text-gray-900 dark:text-white">Full Compliance</h5>
-                    <p className="text-xs text-gray-500">Fully compliant with international GDPR and HIPAA regulations.</p>
+                    <p className="text-xs text-gray-500 dark:text-gray-400">Fully compliant with international GDPR and HIPAA regulations.</p>
                   </div>
                 </div>
                 <div className="flex items-start gap-3">
-                  <div className="p-2 bg-gray-100 dark:bg-gray-900 rounded-lg text-primary-650 dark:text-primary-400 mt-1"><Lock size={16} /></div>
+                  <div className="p-2 bg-gray-100 dark:bg-gray-900 rounded-lg text-primary-600 dark:text-primary-400 mt-1"><Lock size={16} /></div>
                   <div>
                     <h5 className="font-semibold text-sm mb-1 text-gray-900 dark:text-white">Multi-Factor Control</h5>
-                    <p className="text-xs text-gray-500">Secure user authentication limits file visibility strictly to designated team nodes.</p>
+                    <p className="text-xs text-gray-500 dark:text-gray-400">Secure user authentication limits file visibility strictly to designated team nodes.</p>
                   </div>
                 </div>
               </div>
@@ -485,7 +483,7 @@ export function HomePage() {
         <div className="app-container max-w-4xl">
           <div className="text-center mb-16">
             <h2 className="text-3xl font-extrabold text-gray-900 dark:text-white mb-4">Frequently Asked Questions</h2>
-            <p className="text-gray-650 dark:text-gray-450 max-w-xl mx-auto text-sm">
+            <p className="text-gray-600 dark:text-gray-400 max-w-xl mx-auto text-sm">
               Everything you need to know about LegalEase's underlying intelligence, billing safeguards, and data protection.
             </p>
           </div>
@@ -494,11 +492,11 @@ export function HomePage() {
             {FAQS.map((faq, index) => (
               <div 
                 key={index} 
-                className="bg-white dark:bg-gray-800 rounded-xl border border-gray-150 dark:border-gray-750 overflow-hidden transition-all duration-300 shadow-sm text-left"
+                className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 overflow-hidden transition-all duration-300 shadow-sm text-left"
               >
                 <button
                   onClick={() => setExpandedFaq(expandedFaq === index ? null : index)}
-                  className="w-full text-left px-6 py-5 flex items-center justify-between font-semibold text-gray-900 dark:text-white hover:bg-gray-50 dark:hover:bg-gray-705 transition-colors"
+                  className="w-full text-left px-6 py-5 flex items-center justify-between font-semibold text-gray-900 dark:text-white hover:bg-gray-50 dark:hover:bg-gray-700/60 transition-colors"
                 >
                   <span className="text-base">{faq.q}</span>
                   <ChevronDown 
@@ -507,7 +505,7 @@ export function HomePage() {
                   />
                 </button>
                 <div 
-                  className={`transition-all duration-300 overflow-hidden ${expandedFaq === index ? 'max-h-40 border-t border-gray-100 dark:border-gray-700 py-4 px-6 bg-gray-50/50 dark:bg-gray-850/50' : 'max-h-0 py-0'}`}
+                  className={`transition-all duration-300 overflow-hidden ${expandedFaq === index ? 'max-h-40 border-t border-gray-100 dark:border-gray-700 py-4 px-6 bg-gray-50/50 dark:bg-gray-900/40' : 'max-h-0 py-0'}`}
                 >
                   <p className="text-sm leading-relaxed text-gray-600 dark:text-gray-400">
                     {faq.a}

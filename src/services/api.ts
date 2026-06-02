@@ -1,87 +1,69 @@
 const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000';
 
-const getApiKey = (): string => {
-    try {
-        const userToken = localStorage.getItem('le_auth_token');
-        if (userToken) {
-            return userToken;
-        }
-        return (
-            localStorage.getItem('apiKey') ||
-            (import.meta.env.VITE_API_KEY as string | undefined) ||
-            'dev-token'
-        );
-    } catch {
-        return (import.meta.env.VITE_API_KEY as string | undefined) || 'dev-token';
-    }
+const getAuthHeaders = (): Record<string, string> => {
+  const token = localStorage.getItem('access_token');
+  return token ? { 'Authorization': `Bearer ${token}` } : {};
 };
 
+/** Build a user-friendly error from a failed response. */
+async function handleErrorResponse(response: Response, fallbackPrefix: string): Promise<never> {
+  if (response.status === 429) {
+    const retryAfter = response.headers.get('Retry-After');
+    const seconds = retryAfter ? parseInt(retryAfter, 10) : 0;
+    const wait = seconds > 0 ? ` Please wait ${seconds} seconds.` : '';
+    throw new Error(`Too many requests.${wait}`);
+  }
+
+  const errorData = await response.json().catch(() => ({}));
+  throw new Error(errorData.detail || `${fallbackPrefix}: ${response.status}`);
+}
+
 export const api = {
-    post: async <T>(endpoint: string, data: any, conversationHistory?: Array<{role: string, content: string}>): Promise<T> => {
-        try {
-            const requestData = conversationHistory ? { ...data, conversation_history: conversationHistory } : data;
-            const response = await fetch(`${API_BASE_URL}${endpoint}`, {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    Authorization: `Bearer ${getApiKey()}`,
-                },
-                body: JSON.stringify(requestData),
-            });
+  post: async <T>(endpoint: string, data: any, conversationHistory?: Array<{role: string, content: string}>): Promise<T> => {
+    const requestData = conversationHistory ? { ...data, conversation_history: conversationHistory } : data;
+    const response = await fetch(`${API_BASE_URL}${endpoint}`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        ...getAuthHeaders(),
+      },
+      body: JSON.stringify(requestData),
+    });
 
+    if (!response.ok) {
+      await handleErrorResponse(response, 'API error');
+    }
 
-            if (!response.ok) {
-                const errorData = await response.json().catch(() => ({}));
-                throw new Error(errorData.detail || `API error: ${response.status}`);
-            }
+    return response.json();
+  },
 
-            return response.json();
-        } catch (error) {
-            console.error(`API POST error [${endpoint}]:`, error);
-            throw error;
-        }
-    },
+  get: async <T>(endpoint: string): Promise<T> => {
+    const response = await fetch(`${API_BASE_URL}${endpoint}`, {
+      headers: {
+        ...getAuthHeaders(),
+      },
+    });
 
-    get: async <T>(endpoint: string): Promise<T> => {
-        try {
-            const response = await fetch(`${API_BASE_URL}${endpoint}`, {
-                headers: {
-                    Authorization: `Bearer ${getApiKey()}`,
-                },
-            });
+    if (!response.ok) {
+      await handleErrorResponse(response, 'API error');
+    }
 
+    return response.json();
+  },
 
-            if (!response.ok) {
-                const errorData = await response.json().catch(() => ({}));
-                throw new Error(errorData.detail || `API error: ${response.status}`);
-            }
+  upload: async <T>(endpoint: string, formData: FormData): Promise<T> => {
+    const response = await fetch(`${API_BASE_URL}${endpoint}`, {
+      method: 'POST',
+      headers: {
+        ...getAuthHeaders(),
+      },
+      body: formData,
+    });
 
-            return response.json();
-        } catch (error) {
-            console.error(`API GET error [${endpoint}]:`, error);
-            throw error;
-        }
-    },
-    upload: async <T>(endpoint: string, formData: FormData): Promise<T> => {
-        try {
-            const response = await fetch(`${API_BASE_URL}${endpoint}`, {
-                method: 'POST',
-                headers: {
-                    Authorization: `Bearer ${getApiKey()}`,
-                },
-                body: formData,
-            });
+    if (!response.ok) {
+      await handleErrorResponse(response, 'Upload error');
+    }
 
-
-            if (!response.ok) {
-                const errorData = await response.json().catch(() => ({}));
-                throw new Error(errorData.detail || `Upload error: ${response.status}`);
-            }
-
-            return response.json();
-        } catch (error) {
-            console.error(`API Upload error [${endpoint}]:`, error);
-            throw error;
-        }
-    },
+    return response.json();
+  },
 };

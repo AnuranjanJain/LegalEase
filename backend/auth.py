@@ -1,64 +1,95 @@
-import os
-import hashlib
-import secrets
-import json
 import logging
-from typing import Tuple, Dict
-from fastapi import Request, HTTPException, status
+import os
+from datetime import datetime, timedelta
+from typing import Optional
+from fastapi import Depends, HTTPException, Request, status
+from fastapi.security import OAuth2PasswordBearer
+from jose import JWTError, jwt
+import bcrypt
+from sqlalchemy.orm import Session
 from dotenv import load_dotenv
 
-# Configure logging
-logger = logging.getLogger(__name__)
+from backend.database import get_db
+from backend import models
 
-# Load environment variables
 load_dotenv()
 
-# Active sessions mapping token -> email
-ACTIVE_SESSIONS: Dict[str, str] = {}
+logger = logging.getLogger(__name__)
 
-def get_api_keys() -> list:
-    return [k.strip() for k in os.getenv("API_KEYS", "").split(",") if k.strip()]
+SECRET_KEY = os.getenv("JWT_SECRET_KEY")
+if not SECRET_KEY:
+    logger.critical(
+        "JWT_SECRET_KEY is not configured. Authentication startup is aborted."
+    )
+    raise RuntimeError(
+        "JWT_SECRET_KEY is required for authentication. Set JWT_SECRET_KEY before starting the application."
+    )
 
-def get_dev_api_key() -> str:
-    return os.getenv("DEV_API_KEY", "dev-token")
+ALGORITHM = "HS256"
+ACCESS_TOKEN_EXPIRE_HOURS = 24
 
-USERS_FILE = os.path.join(os.path.dirname(__file__), "users.json")
+oauth2_scheme = OAuth2PasswordBearer(tokenUrl="auth/login")
 
-def load_users() -> dict:
-    if not os.path.exists(USERS_FILE):
-        return {}
+
+def _require_secret_key() -> str:
+    if not SECRET_KEY:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Authentication service unavailable.",
+        )
+    return SECRET_KEY
+
+
+def verify_password(plain_password: str, hashed_password: str) -> bool:
+    return bcrypt.checkpw(
+        plain_password.encode("utf-8"),
+        hashed_password.encode("utf-8")
+    )
+
+
+def get_password_hash(password: str) -> str:
+    salt = bcrypt.gensalt()
+    hashed = bcrypt.hashpw(password.encode("utf-8"), salt)
+    return hashed.decode("utf-8")
+
+
+def create_access_token(data: dict, expires_delta: Optional[timedelta] = None) -> str:
+    secret_key = _require_secret_key()
+    to_encode = data.copy()
+    expire = datetime.utcnow() + (expires_delta if expires_delta else timedelta(hours=ACCESS_TOKEN_EXPIRE_HOURS))
+    to_encode.update({"exp": expire})
+    return jwt.encode(to_encode, secret_key, algorithm=ALGORITHM)
+
+
+def get_current_user(token: str = Depends(oauth2_scheme), db: Session = Depends(get_db)):
+    """Decode a JWT and return the matching user, or raise 401."""
+    secret_key = _require_secret_key()
+    credentials_exception = HTTPException(
+        status_code=status.HTTP_401_UNAUTHORIZED,
+        detail="Could not validate credentials",
+        headers={"WWW-Authenticate": "Bearer"},
+    )
     try:
-        with open(USERS_FILE, "r") as f:
-            return json.load(f)
-    except Exception as e:
-        logger.error(f"Error loading users.json: {e}")
-        return {}
+        payload = jwt.decode(token, secret_key, algorithms=[ALGORITHM])
+        email: str = payload.get("sub")
+        if email is None:
+            raise credentials_exception
+    except JWTError:
+        raise credentials_exception
 
-def save_users(users: dict):
-    try:
-        with open(USERS_FILE, "w") as f:
-            json.dump(users, f, indent=4)
-    except Exception as e:
-        logger.error(f"Error saving users.json: {e}")
+    user = db.query(models.User).filter(models.User.email == email).first()
+    if user is None:
+        raise credentials_exception
+    return user
 
-def hash_password(password: str) -> Tuple[str, str]:
-    salt = secrets.token_hex(16)
-    pwd_hash = hashlib.pbkdf2_hmac(
-        'sha256',
-        password.encode('utf-8'),
-        salt.encode('utf-8'),
-        100000
-    ).hex()
-    return pwd_hash, salt
 
-def verify_password(password: str, pwd_hash: str, salt: str) -> bool:
-    compare_hash = hashlib.pbkdf2_hmac(
-        'sha256',
-        password.encode('utf-8'),
-        salt.encode('utf-8'),
-        100000
-    ).hex()
-    return secrets.compare_digest(pwd_hash, compare_hash)
+def _extract_bearer_token(request: Request) -> str:
+    """Pull the bearer token from Authorization or X-API-Key headers."""
+    auth = request.headers.get("authorization") or ""
+    if auth.lower().startswith("bearer "):
+        return auth.split(" ", 1)[1].strip()
+    return request.headers.get("x-api-key", "").strip()
+
 
 def is_dev_allowed() -> bool:
     """
@@ -73,36 +104,45 @@ def is_dev_allowed() -> bool:
     allow_dev = os.getenv("ALLOW_DEV", "true").lower() in ("1", "true", "yes")
     return allow_dev
 
-def validate_token_or_api_key(request: Request) -> str:
+
+def _is_valid_api_key(token: str) -> bool:
+    """Check whether the token is a recognised static API key."""
+    api_keys = [k.strip() for k in os.getenv("API_KEYS", "").split(",") if k.strip()]
+
+    if api_keys and token in api_keys:
+        return True
+    if is_dev_allowed():
+        dev_api_key = os.getenv("DEV_API_KEY", "dev-token")
+        if token == dev_api_key:
+            return True
+    return False
+
+
+def validate_token_or_api_key(request: Request, db: Session = Depends(get_db)) -> str:
     """
-    Centralized validation mechanism used consistently across protected endpoints.
-    Accepts Bearer token in 'Authorization' header or a key in 'X-API-Key' header.
+    Unified auth dependency for protected endpoints.
+    Tries JWT authentication first; falls back to static API key
+    validation for service-to-service callers.
+    Returns the authenticated identity (user email or API key).
     """
-    auth = request.headers.get("authorization") or ""
-    api_key = ""
-    if auth.lower().startswith("bearer "):
-        api_key = auth.split(" ", 1)[1].strip()
-    else:
-        api_key = request.headers.get("x-api-key", "").strip()
+    token = _extract_bearer_token(request)
+    if not token:
+        raise HTTPException(status_code=401, detail="Missing authentication token")
 
-    if not api_key:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Missing API key"
-        )
+    # 1. Try JWT decode
+    if SECRET_KEY:
+        try:
+            payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
+            email: Optional[str] = payload.get("sub")
+            if email:
+                user = db.query(models.User).filter(models.User.email == email).first()
+                if user:
+                    return email
+        except JWTError:
+            pass
 
-    # 1. Check if the token is a valid active user session (from login flow)
-    if api_key in ACTIVE_SESSIONS:
-        return api_key
+    # 2. Fall back to static API key
+    if _is_valid_api_key(token):
+        return token
 
-    # 2. Check if the token matches the configured API keys
-    api_keys = get_api_keys()
-    if api_keys and api_key not in api_keys:
-        if is_dev_allowed() and api_key == get_dev_api_key():
-            return api_key
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Invalid API key"
-        )
-
-    return api_key
+    raise HTTPException(status_code=403, detail="Invalid or expired authentication token")

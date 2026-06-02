@@ -1,247 +1,241 @@
 import pytest
-import os
-import tempfile
-import json
-from unittest.mock import patch
+from sqlalchemy import create_engine
+from sqlalchemy.orm import sessionmaker
+from sqlalchemy.pool import StaticPool
 from fastapi import status
 from httpx import AsyncClient, ASGITransport
 
+from backend.database import Base, get_db
 from backend.main import app
-from auth import ACTIVE_SESSIONS, hash_password, verify_password
+from backend import models
+from backend.auth import (
+    verify_password,
+    get_password_hash,
+    create_access_token,
+    get_current_user,
+)
+
+# Setup in-memory SQLite database engine for testing
+SQLALCHEMY_DATABASE_URL = "sqlite:///:memory:"
+
+engine = create_engine(
+    SQLALCHEMY_DATABASE_URL,
+    connect_args={"check_same_thread": False},
+    poolclass=StaticPool,
+)
+TestingSessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
+
+
+@pytest.fixture(name="db_session")
+def fixture_db_session():
+    # Create the database tables
+    Base.metadata.create_all(bind=engine)
+    db = TestingSessionLocal()
+    try:
+        yield db
+    finally:
+        db.close()
+        # Drop the tables to clean up
+        Base.metadata.drop_all(bind=engine)
 
 
 @pytest.fixture(autouse=True)
-def mock_users_file():
-    """Fixture to redirect USERS_FILE to a temporary JSON file to avoid corrupting local data."""
-    with tempfile.NamedTemporaryFile(suffix=".json", delete=False) as tmp:
-        tmp_path = tmp.name
-        tmp.write(b"{}")
-        
-    with patch("auth.USERS_FILE", tmp_path):
-        yield tmp_path
-        
-    if os.path.exists(tmp_path):
+def override_get_db(db_session):
+    def _override_get_db():
         try:
-            os.remove(tmp_path)
-        except Exception:
+            yield db_session
+        finally:
             pass
 
-
-@pytest.fixture(autouse=True)
-def clean_sessions():
-    """Fixture to ensure ACTIVE_SESSIONS is clean before and after each test."""
-    ACTIVE_SESSIONS.clear()
+    app.dependency_overrides[get_db] = _override_get_db
     yield
-    ACTIVE_SESSIONS.clear()
+    app.dependency_overrides.pop(get_db, None)
+
+
+def test_password_hashing():
+    password = "MyTestPassword123"
+    hashed = get_password_hash(password)
+    assert hashed != password
+    assert verify_password(password, hashed) is True
+    assert verify_password("WrongPassword", hashed) is False
+
+
+def test_create_access_token():
+    data = {"sub": "test@example.com"}
+    token = create_access_token(data)
+    assert isinstance(token, str)
+    assert len(token) > 0
 
 
 @pytest.mark.asyncio
-async def test_register_success():
-    """Test user registration successfully saves user credentials and hashed password."""
+async def test_signup_success():
     payload = {
-        "email": "test@legalease.ai",
-        "password": "SecurePassword123!",
-        "first_name": "Jane",
-        "last_name": "Doe"
+        "email": "signup_success@legalease.ai",
+        "password": "SecurePassword123"
     }
-    
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as ac:
-        r = await ac.post("/auth/register", json=payload)
+        r = await ac.post("/auth/signup", json=payload)
+        assert r.status_code == 201
+        data = r.json()
+        assert "access_token" in data
+        assert data["token_type"] == "bearer"
+
+
+@pytest.mark.asyncio
+async def test_signup_duplicate_email(db_session):
+    # Pre-register user in DB
+    hashed = get_password_hash("ExistingPassword123")
+    user = models.User(email="existing@legalease.ai", hashed_password=hashed)
+    db_session.add(user)
+    db_session.commit()
+
+    payload = {
+        "email": "existing@legalease.ai",
+        "password": "NewPassword123"
+    }
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as ac:
+        r = await ac.post("/auth/signup", json=payload)
+        assert r.status_code == 400
+        assert r.json()["detail"] == "Email already registered"
+
+
+@pytest.mark.asyncio
+async def test_signup_validation_errors():
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as ac:
+        # Invalid email format
+        r1 = await ac.post("/auth/signup", json={"email": "invalid_email", "password": "validpassword"})
+        assert r1.status_code == 422
+
+        # Password too short (less than 8 chars)
+        r2 = await ac.post("/auth/signup", json={"email": "valid@email.com", "password": "short"})
+        assert r2.status_code == 422
+
+
+@pytest.mark.asyncio
+async def test_login_success(db_session):
+    # Pre-register user in DB
+    hashed = get_password_hash("LoginPassword123")
+    user = models.User(email="login_user@legalease.ai", hashed_password=hashed)
+    db_session.add(user)
+    db_session.commit()
+
+    payload = {
+        "email": "login_user@legalease.ai",
+        "password": "LoginPassword123"
+    }
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as ac:
+        r = await ac.post("/auth/login", json=payload)
         assert r.status_code == 200
         data = r.json()
-        assert data["status"] == "ok"
-        assert "registered successfully" in data["message"]
+        assert "access_token" in data
+        assert data["token_type"] == "bearer"
 
 
 @pytest.mark.asyncio
-async def test_register_duplicate_email_rejected():
-    """Test registering an already registered email returns a 400 bad request error."""
+async def test_login_invalid_password(db_session):
+    # Pre-register user in DB
+    hashed = get_password_hash("LoginPassword123")
+    user = models.User(email="login_user@legalease.ai", hashed_password=hashed)
+    db_session.add(user)
+    db_session.commit()
+
     payload = {
-        "email": "test@legalease.ai",
-        "password": "SecurePassword123!",
-        "first_name": "Jane",
-        "last_name": "Doe"
+        "email": "login_user@legalease.ai",
+        "password": "WrongPassword123"
     }
-    
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as ac:
-        # First registration
-        r1 = await ac.post("/auth/register", json=payload)
-        assert r1.status_code == 200
-        
-        # Duplicate registration
-        r2 = await ac.post("/auth/register", json=payload)
-        assert r2.status_code == 400
-        assert "Email already registered" in r2.json()["detail"]
-
-
-@pytest.mark.asyncio
-async def test_login_success():
-    """Test successful user login returns a valid token and user profile."""
-    # Pre-register user
-    reg_payload = {
-        "email": "login@legalease.ai",
-        "password": "MySecretPassword",
-        "first_name": "Bob",
-        "last_name": "Smith"
-    }
-    
-    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as ac:
-        r_reg = await ac.post("/auth/register", json=reg_payload)
-        assert r_reg.status_code == 200
-        
-        # Login
-        login_payload = {
-            "email": "login@legalease.ai",
-            "password": "MySecretPassword"
-        }
-        r_login = await ac.post("/auth/login", json=login_payload)
-        assert r_login.status_code == 200
-        data = r_login.json()
-        
-        assert "token" in data
-        assert "user" in data
-        assert data["user"]["email"] == "login@legalease.ai"
-        assert data["user"]["firstName"] == "Bob"
-        assert data["user"]["lastName"] == "Smith"
-        
-        # Confirm token is saved in active sessions
-        token = data["token"]
-        assert token in ACTIVE_SESSIONS
-        assert ACTIVE_SESSIONS[token] == "login@legalease.ai"
-
-
-@pytest.mark.asyncio
-async def test_login_invalid_password_rejected():
-    """Test login with incorrect password returns a 401 unauthorized error."""
-    reg_payload = {
-        "email": "login@legalease.ai",
-        "password": "CorrectPassword",
-        "first_name": "Bob",
-        "last_name": "Smith"
-    }
-    
-    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as ac:
-        await ac.post("/auth/register", json=reg_payload)
-        
-        login_payload = {
-            "email": "login@legalease.ai",
-            "password": "IncorrectPassword"
-        }
-        r = await ac.post("/auth/login", json=login_payload)
+        r = await ac.post("/auth/login", json=payload)
         assert r.status_code == 401
-        assert "Invalid email or password" in r.json()["detail"]
+        assert "Incorrect email or password" in r.json()["detail"]
 
 
 @pytest.mark.asyncio
-async def test_login_unregistered_email_rejected():
-    """Test login with unregistered email returns a 401 unauthorized error."""
-    login_payload = {
-        "email": "nonexistent@legalease.ai",
-        "password": "AnyPassword"
+async def test_login_unregistered_email():
+    payload = {
+        "email": "unregistered@legalease.ai",
+        "password": "AnyPassword123"
     }
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as ac:
-        r = await ac.post("/auth/login", json=login_payload)
+        r = await ac.post("/auth/login", json=payload)
         assert r.status_code == 401
-        assert "Invalid email or password" in r.json()["detail"]
+        assert "Incorrect email or password" in r.json()["detail"]
 
 
 @pytest.mark.asyncio
-async def test_get_me_success():
-    """Test retrieving authenticated user profile using a valid session token."""
-    reg_payload = {
-        "email": "me@legalease.ai",
-        "password": "Password123",
-        "first_name": "Alice",
-        "last_name": "Johnson"
+async def test_change_password_success(db_session):
+    # Pre-register user in DB
+    hashed = get_password_hash("OldPassword123")
+    user = models.User(email="change@legalease.ai", hashed_password=hashed)
+    db_session.add(user)
+    db_session.commit()
+
+    # Generate token
+    token = create_access_token({"sub": "change@legalease.ai"})
+
+    payload = {
+        "current_password": "OldPassword123",
+        "new_password": "NewSecurePassword123"
     }
-    
+    headers = {"Authorization": f"Bearer {token}"}
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as ac:
-        await ac.post("/auth/register", json=reg_payload)
-        
-        login_r = await ac.post("/auth/login", json={"email": "me@legalease.ai", "password": "Password123"})
-        token = login_r.json()["token"]
-        
-        # Request user profile
-        headers = {"Authorization": f"Bearer {token}"}
-        r_me = await ac.get("/auth/me", headers=headers)
-        assert r_me.status_code == 200
-        user_info = r_me.json()
-        assert user_info["email"] == "me@legalease.ai"
-        assert user_info["firstName"] == "Alice"
-        assert user_info["lastName"] == "Johnson"
+        r = await ac.post("/auth/change-password", json=payload, headers=headers)
+        assert r.status_code == 200
+        assert r.json()["detail"] == "Password updated successfully"
+
+        # Verify password changed in DB
+        db_session.refresh(user)
+        assert verify_password("NewSecurePassword123", user.hashed_password) is True
 
 
 @pytest.mark.asyncio
-async def test_get_me_invalid_token_rejected():
-    """Test requesting profile with an invalid/nonexistent token returns 401."""
+async def test_change_password_incorrect_current_password(db_session):
+    hashed = get_password_hash("OldPassword123")
+    user = models.User(email="change@legalease.ai", hashed_password=hashed)
+    db_session.add(user)
+    db_session.commit()
+
+    token = create_access_token({"sub": "change@legalease.ai"})
+
+    payload = {
+        "current_password": "WrongOldPassword",
+        "new_password": "NewSecurePassword123"
+    }
+    headers = {"Authorization": f"Bearer {token}"}
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as ac:
-        headers = {"Authorization": "Bearer badtoken123"}
-        r = await ac.get("/auth/me", headers=headers)
+        r = await ac.post("/auth/change-password", json=payload, headers=headers)
         assert r.status_code == 401
-        assert "Not authenticated" in r.json()["detail"]
+        assert "Current password is incorrect" in r.json()["detail"]
 
 
 @pytest.mark.asyncio
-async def test_logout_success():
-    """Test logout successfully invalidates the token and restricts subsequent access."""
-    reg_payload = {
-        "email": "logout@legalease.ai",
-        "password": "Password123",
-        "first_name": "Larry",
-        "last_name": "Logout"
+async def test_change_password_unauthorized():
+    payload = {
+        "current_password": "OldPassword123",
+        "new_password": "NewSecurePassword123"
     }
-    
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as ac:
-        await ac.post("/auth/register", json=reg_payload)
-        
-        login_r = await ac.post("/auth/login", json={"email": "logout@legalease.ai", "password": "Password123"})
-        token = login_r.json()["token"]
-        assert token in ACTIVE_SESSIONS
-        
-        # Logout
-        headers = {"Authorization": f"Bearer {token}"}
-        r_logout = await ac.post("/auth/logout", headers=headers)
-        assert r_logout.status_code == 200
-        assert "Logged out successfully" in r_logout.json()["message"]
-        
-        # Confirm token is deleted from session list
-        assert token not in ACTIVE_SESSIONS
-        
-        # Profile request should now fail
-        r_me = await ac.get("/auth/me", headers=headers)
-        assert r_me.status_code == 401
+        # Missing token
+        r1 = await ac.post("/auth/change-password", json=payload)
+        assert r1.status_code == 401
+
+        # Invalid token
+        headers = {"Authorization": "Bearer invalid_token"}
+        r2 = await ac.post("/auth/change-password", json=payload, headers=headers)
+        assert r2.status_code == 401
 
 
 @pytest.mark.asyncio
-async def test_logout_invalid_token_rejected():
-    """Test logging out with invalid token returns a 401 unauthorized error."""
-    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as ac:
-        headers = {"Authorization": "Bearer non_existent_token"}
-        r = await ac.post("/auth/logout", headers=headers)
-        assert r.status_code == 401
+async def test_protected_endpoint_accept_jwt(db_session):
+    hashed = get_password_hash("MyPassword123")
+    user = models.User(email="protected_user@legalease.ai", hashed_password=hashed)
+    db_session.add(user)
+    db_session.commit()
 
+    token = create_access_token({"sub": "protected_user@legalease.ai"})
+    headers = {"Authorization": f"Bearer {token}"}
 
-@pytest.mark.asyncio
-async def test_protected_endpoints_accept_session_token():
-    """Test that standard protected endpoints (e.g. upload) accept user session token."""
-    reg_payload = {
-        "email": "session@legalease.ai",
-        "password": "Password123",
-        "first_name": "Peter",
-        "last_name": "Parker"
-    }
-    
+    payload = {"message": "Hello"}
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as ac:
-        await ac.post("/auth/register", json=reg_payload)
-        login_r = await ac.post("/auth/login", json={"email": "session@legalease.ai", "password": "Password123"})
-        token = login_r.json()["token"]
-        
-        # Use Bearer token for access
-        headers = {"Authorization": f"Bearer {token}"}
-        content = b"This is sample document text."
-        files = {"file": ("test.txt", content, "text/plain")}
-        
-        r_upload = await ac.post("/upload", files=files, headers=headers)
-        # Should bypass authentication successfully and return 200 since text parsing is available
-        assert r_upload.status_code == 200
-        assert r_upload.json()["filename"] == "test.txt"
+        r = await ac.post("/chat", json=payload, headers=headers)
+        # Should bypass authentication and return 200 or 503 (service unavailable) instead of 401/403
+        assert r.status_code in [200, 503]

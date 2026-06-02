@@ -1,3 +1,51 @@
+# ⚖️ LegalEase
+
+<p align="center">
+  <img src="assets/homepage.png" alt="LegalEase Banner" width="800"/>
+</p>
+
+<p align="center">
+  AI-powered legal document analysis platform that simplifies complex legal documents, provides intelligent summaries, and offers chatbot-based assistance.
+</p>
+
+<p align="center">
+  <img src="https://img.shields.io/github/stars/AnuranjanJain/LegalEase?style=for-the-badge" />
+  <img src="https://img.shields.io/github/forks/AnuranjanJain/LegalEase?style=for-the-badge" />
+  <img src="https://img.shields.io/github/issues/AnuranjanJain/LegalEase?style=for-the-badge" />
+  <img src="https://img.shields.io/github/license/AnuranjanJain/LegalEase?style=for-the-badge" />
+</p>
+
+## 🎯 Why LegalEase?
+
+Legal documents are often difficult for ordinary users to understand because of legal jargon and lengthy clauses.
+
+LegalEase helps users by:
+
+- Simplifying complex legal language
+- Generating concise summaries
+- Highlighting risks and important clauses
+- Providing AI-powered legal assistance
+- Improving accessibility and understanding
+
+## 📚 Table of Contents
+
+- About LegalEase
+- Live Demo
+- Features
+- Screenshots
+- Technology Stack
+- Project Structure
+- Installation
+- Usage
+- Testing
+- Configuration
+- [Tailwind Theme Guide](docs/tailwind-theme-guide.md)
+- Security
+- Contributing
+- Code of Conduct
+- Future Enhancements
+- License
+
 # LegalEase Website
 
 A comprehensive legal document analysis platform that combines AI-powered document processing, chatbot assistance, and user-friendly interfaces.
@@ -342,13 +390,20 @@ npm run dev
 
 ## Customization
 
+### Tailwind Theme
+
+For a complete guide to all custom theme values (colors, fonts, animations, container settings), see the **[Tailwind Theme Guide](docs/tailwind-theme-guide.md)**.
+
 ### Colors
-The primary color scheme can be modified in the Tailwind config:
+The primary color scheme can be modified in the Tailwind config (`tailwind.config.js`):
 ```javascript
 colors: {
-    "primary": "#197fe6",        // Main brand color
-    "background-light": "#f6f7f8", // Light theme background
-    "background-dark": "#111921",   // Dark theme background
+    primary: { DEFAULT: '#2563EB', /* ...shades */ },  // Brand blue
+    success: { DEFAULT: '#16A34A', /* ...shades */ },  // Positive states
+    warning: { DEFAULT: '#CA8A04', /* ...shades */ },  // Caution states
+    error:   { DEFAULT: '#DC2626', /* ...shades */ },  // Error states
+    info:    { DEFAULT: '#0EA5E9', /* ...shades */ },  // Informational
+    background: { light: '#F3F4F6', dark: '#111827' }, // Page backgrounds
 }
 ```
 
@@ -484,6 +539,36 @@ Before starting work:
 
 Thank you for contributing to LegalEase! 🚀
 
+## 🚀 First Time Contributor?
+
+If you're new to open source:
+
+- Look for beginner-friendly issues
+- Read CONTRIBUTING.md
+- Ask questions through Issues
+- Submit your first PR
+
+Every contribution matters!
+
+## 📜 Code of Conduct
+
+Please read our CODE_OF_CONDUCT.md before participating in the community.
+
+By contributing, you agree to maintain a respectful and inclusive environment.
+
+
+## ♿ Accessibility
+
+LegalEase is committed to web accessibility best practices:
+
+- **Reduced Motion Support**: Custom animations (`slide-up`, `spin-slow`) and CSS transitions are automatically disabled when users enable the `prefers-reduced-motion: reduce` system setting. This ensures a comfortable experience for users with motion sensitivity or vestibular disorders.
+- **Semantic Color Tokens**: Success, warning, error, and info states use accessible color contrasts (see #184).
+- **Keyboard Navigation**: All interactive elements are keyboard-accessible.
+
+To enable reduced motion on your system:
+- **macOS**: System Settings → Accessibility → Display → Reduce motion
+- **Windows**: Settings → Accessibility → Visual effects → Animation effects
+- **Linux**: Varies by desktop environment (GNOME: Accessibility → Reduce Animation)
 
 ## License
 
