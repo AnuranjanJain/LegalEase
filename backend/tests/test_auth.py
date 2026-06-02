@@ -4,9 +4,10 @@ import tempfile
 import json
 from unittest.mock import patch
 from fastapi import status
-from httpx import AsyncClient
+from httpx import AsyncClient, ASGITransport
 
-from backend.main import app, ACTIVE_SESSIONS, hash_password, verify_password
+from backend.main import app
+from auth import ACTIVE_SESSIONS, hash_password, verify_password
 
 
 @pytest.fixture(autouse=True)
@@ -16,7 +17,7 @@ def mock_users_file():
         tmp_path = tmp.name
         tmp.write(b"{}")
         
-    with patch("backend.main.USERS_FILE", tmp_path):
+    with patch("auth.USERS_FILE", tmp_path):
         yield tmp_path
         
     if os.path.exists(tmp_path):
@@ -44,7 +45,7 @@ async def test_register_success():
         "last_name": "Doe"
     }
     
-    async with AsyncClient(app=app, base_url="http://test") as ac:
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as ac:
         r = await ac.post("/auth/register", json=payload)
         assert r.status_code == 200
         data = r.json()
@@ -62,7 +63,7 @@ async def test_register_duplicate_email_rejected():
         "last_name": "Doe"
     }
     
-    async with AsyncClient(app=app, base_url="http://test") as ac:
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as ac:
         # First registration
         r1 = await ac.post("/auth/register", json=payload)
         assert r1.status_code == 200
@@ -84,7 +85,7 @@ async def test_login_success():
         "last_name": "Smith"
     }
     
-    async with AsyncClient(app=app, base_url="http://test") as ac:
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as ac:
         r_reg = await ac.post("/auth/register", json=reg_payload)
         assert r_reg.status_code == 200
         
@@ -119,7 +120,7 @@ async def test_login_invalid_password_rejected():
         "last_name": "Smith"
     }
     
-    async with AsyncClient(app=app, base_url="http://test") as ac:
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as ac:
         await ac.post("/auth/register", json=reg_payload)
         
         login_payload = {
@@ -138,7 +139,7 @@ async def test_login_unregistered_email_rejected():
         "email": "nonexistent@legalease.ai",
         "password": "AnyPassword"
     }
-    async with AsyncClient(app=app, base_url="http://test") as ac:
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as ac:
         r = await ac.post("/auth/login", json=login_payload)
         assert r.status_code == 401
         assert "Invalid email or password" in r.json()["detail"]
@@ -154,7 +155,7 @@ async def test_get_me_success():
         "last_name": "Johnson"
     }
     
-    async with AsyncClient(app=app, base_url="http://test") as ac:
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as ac:
         await ac.post("/auth/register", json=reg_payload)
         
         login_r = await ac.post("/auth/login", json={"email": "me@legalease.ai", "password": "Password123"})
@@ -173,7 +174,7 @@ async def test_get_me_success():
 @pytest.mark.asyncio
 async def test_get_me_invalid_token_rejected():
     """Test requesting profile with an invalid/nonexistent token returns 401."""
-    async with AsyncClient(app=app, base_url="http://test") as ac:
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as ac:
         headers = {"Authorization": "Bearer badtoken123"}
         r = await ac.get("/auth/me", headers=headers)
         assert r.status_code == 401
@@ -190,7 +191,7 @@ async def test_logout_success():
         "last_name": "Logout"
     }
     
-    async with AsyncClient(app=app, base_url="http://test") as ac:
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as ac:
         await ac.post("/auth/register", json=reg_payload)
         
         login_r = await ac.post("/auth/login", json={"email": "logout@legalease.ai", "password": "Password123"})
@@ -214,7 +215,7 @@ async def test_logout_success():
 @pytest.mark.asyncio
 async def test_logout_invalid_token_rejected():
     """Test logging out with invalid token returns a 401 unauthorized error."""
-    async with AsyncClient(app=app, base_url="http://test") as ac:
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as ac:
         headers = {"Authorization": "Bearer non_existent_token"}
         r = await ac.post("/auth/logout", headers=headers)
         assert r.status_code == 401
@@ -230,7 +231,7 @@ async def test_protected_endpoints_accept_session_token():
         "last_name": "Parker"
     }
     
-    async with AsyncClient(app=app, base_url="http://test") as ac:
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as ac:
         await ac.post("/auth/register", json=reg_payload)
         login_r = await ac.post("/auth/login", json={"email": "session@legalease.ai", "password": "Password123"})
         token = login_r.json()["token"]

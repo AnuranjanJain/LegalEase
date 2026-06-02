@@ -76,10 +76,14 @@ MAX_MODEL_INPUT_CHARS = int(os.getenv("MAX_MODEL_INPUT_CHARS", "2000"))
 
 # Rate limiter moved to rate_limit.py
 
-# API keys and dev mode
-API_KEYS = [k.strip() for k in os.getenv("API_KEYS", "").split(",") if k.strip()]
-DEV_API_KEY = os.getenv("DEV_API_KEY", "dev-token")
-ALLOW_DEV = os.getenv("ALLOW_DEV", "true").lower() in ("1", "true", "yes")
+from auth import (
+    validate_token_or_api_key,
+    ACTIVE_SESSIONS,
+    load_users,
+    save_users,
+    hash_password,
+    verify_password,
+)
 
 class UserRegister(BaseModel):
     email: str
@@ -91,46 +95,6 @@ class UserLogin(BaseModel):
     email: str
     password: str
 
-# Active sessions mapping token -> email
-ACTIVE_SESSIONS = {}
-
-USERS_FILE = os.path.join(os.path.dirname(__file__), "users.json")
-
-def load_users() -> dict:
-    if not os.path.exists(USERS_FILE):
-        return {}
-    try:
-        with open(USERS_FILE, "r") as f:
-            return json.load(f)
-    except Exception as e:
-        logger.error(f"Error loading users.json: {e}")
-        return {}
-
-def save_users(users: dict):
-    try:
-        with open(USERS_FILE, "w") as f:
-            json.dump(users, f, indent=4)
-    except Exception as e:
-        logger.error(f"Error saving users.json: {e}")
-
-def hash_password(password: str) -> tuple[str, str]:
-    salt = secrets.token_hex(16)
-    pwd_hash = hashlib.pbkdf2_hmac(
-        'sha256',
-        password.encode('utf-8'),
-        salt.encode('utf-8'),
-        100000
-    ).hex()
-    return pwd_hash, salt
-
-def verify_password(password: str, pwd_hash: str, salt: str) -> bool:
-    compare_hash = hashlib.pbkdf2_hmac(
-        'sha256',
-        password.encode('utf-8'),
-        salt.encode('utf-8'),
-        100000
-    ).hex()
-    return secrets.compare_digest(pwd_hash, compare_hash)
 
 class ChatRequest(BaseModel):
     message: str
@@ -148,34 +112,10 @@ def _get_client_ip(request: Request) -> str:
     except Exception:
         return "unknown"
 
-
-def _validate_api_key(request: Request) -> str:
-    # Accept header `Authorization: Bearer <key>` or `X-API-Key`
-    auth = request.headers.get("authorization") or ""
-    api_key = ""
-    if auth.lower().startswith("bearer "):
-        api_key = auth.split(" ", 1)[1].strip()
-    else:
-        api_key = request.headers.get("x-api-key", "").strip()
-
-    if not api_key:
-        raise HTTPException(status_code=401, detail="Missing API key")
-
-    # If the token is a valid active user session, accept it
-    if api_key in ACTIVE_SESSIONS:
-        return api_key
-
-    if API_KEYS and api_key not in API_KEYS:
-        if ALLOW_DEV and api_key == DEV_API_KEY:
-            return api_key
-        raise HTTPException(status_code=403, detail="Invalid API key")
-
-    return api_key
-
 @app.post("/chat")
 async def chat(request: Request, payload: ChatRequest):
     # Auth
-    api_key = _validate_api_key(request)
+    api_key = validate_token_or_api_key(request)
 
     if client is None:
         raise HTTPException(status_code=503, detail="AI service unavailable")
@@ -229,7 +169,7 @@ async def chat(request: Request, payload: ChatRequest):
 @app.post("/upload")
 async def upload_document(request: Request, file: UploadFile = File(...)):
     # Auth
-    api_key = _validate_api_key(request)
+    api_key = validate_token_or_api_key(request)
 
     # Content-Length pre-check
     try:
@@ -299,7 +239,7 @@ async def upload_document(request: Request, file: UploadFile = File(...)):
 @app.post("/summarize")
 async def summarize(request: Request, payload: SummarizeRequest):
     # Auth
-    api_key = _validate_api_key(request)
+    api_key = validate_token_or_api_key(request)
 
     if client is None:
         raise HTTPException(status_code=503, detail="AI service unavailable")

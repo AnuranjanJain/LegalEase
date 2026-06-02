@@ -1,0 +1,37 @@
+{
+    "test@legalease.ai": {
+        "email": "test@legalease.ai",
+        "first_name": "Jane",
+        "last_name": "Doe",
+        "password_hash": "2c07b073dfc905fdc5b173d048448e2101094e8a78958748321a78469869461d",
+        "salt": "8c1202de70e34ac1e65c6430fc08c644"
+    },
+    "login@legalease.ai": {
+        "email": "login@legalease.ai",
+        "first_name": "Bob",
+        "last_name": "Smith",
+        "password_hash": "7b80fa26e83cc8aa7d52acdb9fe3ff9bd0c2a3a9c9205b9d9d1e64bc2a47b098",
+        "salt": "5d3315656c5f71382dd8265c0d82b9f7"
+    },
+    "me@legalease.ai": {
+        "email": "me@legalease.ai",
+        "first_name": "Alice",
+        "last_name": "Johnson",
+        "password_hash": "82f46a82e284aef57c526045a277fc9e746825919ed1358550211a856794e2fe",
+        "salt": "a9b4032092ec79bcc5f54af9b3039ab4"
+    },
+    "logout@legalease.ai": {
+        "email": "logout@legalease.ai",
+        "first_name": "Larry",
+        "last_name": "Logout",
+        "password_hash": "846b18eaaaca198e40d02278e6282351d6d7f7748163d964f6add0a9a965a6a2",
+        "salt": "7a4065e658f867c922c2fa268d49b2c4"
+    },
+    "session@legalease.ai": {
+        "email": "session@legalease.ai",
+        "first_name": "Peter",
+        "last_name": "Parker",
+        "password_hash": "eda7227601237db11e5a04156cd59caa50020983d2ecb50edace4b45a105f06a",
+        "salt": "5f262ef41fb69c42b3522678d5af4e68"
+    }
+}
