@@ -101,7 +101,7 @@ jobs:
                 ref
               });
               
-              const vercelStatus = statuses.find(s => s.context.includes('Vercel') || s.description.includes('Vercel'));
+              const vercelStatus = statuses.find(s => s.context && s.context.toLowerCase().includes('vercel'));
               
               if (vercelStatus) {
                 status = vercelStatus.state;
