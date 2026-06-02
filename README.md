@@ -74,55 +74,87 @@ Explore the LegalEase platform to upload documents,view summaries,and interact w
 ## Project Structure
 
 ```
-legal-ease-website/
-├── index.html                 # Main home page
-├── assets/
-│   ├── css/
-│   │   └── styles.css         # Common styles and animations
-│   └── js/
-│       └── main.js            # JavaScript functionality
-└── pages/
-    ├── dashboard.html         # User dashboard
-    ├── documents.html         # Document upload & management
-    ├── chatbot.html           # AI legal assistant
-    ├── processing.html        # Document processing status
-    └── profile.html           # User profile & settings
+LegalEase/
+├── src/                        # React/TypeScript frontend
+│   ├── components/             # Reusable UI components
+│   │   ├── Header.tsx          # Navigation header
+│   │   ├── Footer.tsx          # Site footer
+│   │   ├── ErrorBoundary.tsx   # Error handling wrapper
+│   │   └── ...
+│   ├── pages/                  # Route-level page components
+│   │   ├── HomePage.tsx        # Landing page
+│   │   ├── DashboardPage.tsx   # User dashboard
+│   │   ├── DocumentsPage.tsx   # Document upload & management
+│   │   ├── ChatbotPage.tsx     # AI legal assistant
+│   │   ├── ProcessingPage.tsx  # Document processing status
+│   │   ├── ProfilePage.tsx     # User profile & settings
+│   │   ├── Login.tsx           # Authentication
+│   │   ├── Signup.tsx          # User registration
+│   │   └── ...
+│   ├── contexts/               # React context providers
+│   ├── hooks/                  # Custom React hooks
+│   ├── layouts/                # Page layout wrappers
+│   ├── services/               # API and storage services
+│   ├── config/                 # Site configuration
+│   └── test/                   # Frontend test suite
+├── backend/                    # Python/FastAPI backend
+│   ├── main.py                 # FastAPI application entry
+│   ├── auth.py                 # Authentication logic
+│   ├── models.py               # Database models
+│   ├── database.py             # Database connection
+│   ├── routers/                # API route handlers
+│   │   ├── auth_routes.py      # Authentication endpoints
+│   │   └── legal_routes.py     # Legal document endpoints
+│   ├── services/               # Business logic services
+│   │   ├── ai_service.py       # AI/LLM integration
+│   │   └── legal_mapping.py    # Legal document mapping
+│   ├── middleware/              # Request middleware
+│   │   └── rate_limit.py       # Rate limiting
+│   ├── core/                   # Core utilities
+│   ├── utils/                  # Helper functions
+│   └── tests/                  # Backend test suite
+├── docs/                       # Project documentation
+├── public/                     # Static assets
+├── tailwind.config.js          # Tailwind CSS configuration
+├── vite.config.ts              # Vite build configuration
+├── tsconfig.json               # TypeScript configuration
+└── package.json                # Frontend dependencies
 ```
 
 ## Features
 
-### 🏠 Home Page (`index.html`)
+### 🏠 Home Page (`HomePage.tsx`)
 - **Hero Section**: Compelling introduction with call-to-action buttons
 - **Features Overview**: Document summary, jargon explanations, and risk alerts
 - **Quick Actions**: Direct access to main features
 - **Security Information**: Trust indicators and compliance details
 - **Responsive Design**: Mobile-friendly layout
 
-### 📊 Dashboard (`pages/dashboard.html`)
+### 📊 Dashboard (`DashboardPage.tsx`)
 - **Statistics Overview**: Document counts, processing status, and time saved
 - **Quick Actions**: Fast access to upload, chat, and processing
 - **Recent Activity**: Timeline of user actions
 - **Recent Documents**: Latest uploaded files with status indicators
 
-### 📄 Document Upload (`pages/documents.html`)
+### 📄 Document Upload (`DocumentsPage.tsx`)
 - **Drag & Drop Interface**: Intuitive file upload experience
 - **File Validation**: Type and size checking (PDF, DOCX, TXT up to 25MB)
 - **Feature Explanation**: Clear description of AI capabilities
 - **Recent Documents**: History with processing status
 
-### 🤖 AI Chatbot (`pages/chatbot.html`)
+### 🤖 AI Chatbot (`ChatbotPage.tsx`)
 - **Interactive Chat Interface**: Real-time conversation with AI
 - **Legal Topics Sidebar**: Quick access to common questions
 - **Message History**: Persistent conversation log
 - **Legal Disclaimer**: Important usage guidelines
 
-### ⚙️ Processing Status (`pages/processing.html`)
+### ⚙️ Processing Status (`ProcessingPage.tsx`)
 - **Real-time Progress**: Step-by-step processing visualization
 - **Animated Progress Bars**: Visual feedback for each stage
 - **Processing History**: Past document processing records
 - **Status Management**: Cancel, retry, and download options
 
-### 👤 User Profile (`pages/profile.html`)
+### 👤 User Profile (`ProfilePage.tsx`)
 - **Personal Information**: Complete profile management
 - **Address Details**: Billing and contact information
 - **Preferences**: Language, timezone, and notification settings
@@ -130,18 +162,25 @@ legal-ease-website/
 
 ## Technology Stack
 
-- **Frontend**: HTML5, CSS3 (Tailwind CSS), JavaScript (ES6+)
-- **Icons**: Material Symbols Outlined
-- **Fonts**: Inter (Google Fonts)
-- **Styling**: Tailwind CSS with custom utility classes
-- **Responsive**: Mobile-first design approach
+- **Frontend**: React 18, TypeScript, Vite
+- **Styling**: Tailwind CSS 3.4 with custom theme extensions
+- **Routing**: React Router DOM 6
+- **Charts**: Recharts
+- **Icons**: Lucide React
+- **Testing**: Vitest, React Testing Library, jsdom
+- **Backend**: Python 3.11+, FastAPI, Uvicorn
+- **Database**: SQLAlchemy (with Supabase support)
+- **Auth**: python-jose (JWT), bcrypt
+- **Document Processing**: PyMuPDF (PDF), python-docx (DOCX)
+- **Rate Limiting**: SlowAPI
+- **Linting**: ESLint (frontend), Flake8 (backend)
 
 ## Key Features
 
 ### 🎨 Design Elements
-- **Consistent Color Scheme**: Primary blue (#197fe6) with light/dark theme support
-- **Material Design Icons**: Google Material Symbols
-- **Smooth Animations**: CSS transitions and JavaScript-powered interactions
+- **Consistent Color Scheme**: Tailwind-based theme with light/dark mode support
+- **Lucide Icons**: Modern, consistent icon set
+- **Smooth Animations**: CSS transitions and React-powered interactions
 - **Accessibility**: Proper ARIA labels and keyboard navigation
 
 ### 📱 Responsive Design
@@ -151,7 +190,7 @@ legal-ease-website/
 
 ### 🔧 Interactive Features
 - **File Upload**: Drag & drop with progress indication
-- **Chat Interface**: Real-time messaging simulation
+- **Chat Interface**: Real-time AI-powered conversation
 - **Processing Animation**: Step-by-step progress visualization
 - **Notifications**: Toast-style messages for user feedback
 
@@ -164,12 +203,52 @@ legal-ease-website/
 
 ## Setup Instructions
 
-1. **Clone or Download**: Get the project files
-2. **Web Server**: Serve the files through a web server (not file://)
-   - Python: `python -m http.server 8000`
-   - Node.js: `npx http-server`
-   - PHP: `php -S localhost:8000`
-3. **Open Browser**: Navigate to `http://localhost:8000`
+### Prerequisites
+- Node.js 18+ and npm (or pnpm)
+- Python 3.11+
+
+### Frontend Setup
+
+```bash
+# Install dependencies
+npm install
+
+# Start development server
+npm run dev
+```
+
+The frontend runs on `http://localhost:5173` by default.
+
+### Backend Setup
+
+```bash
+# Navigate to backend directory
+cd backend
+
+# Create virtual environment
+python -m venv venv
+source venv/bin/activate  # Linux/macOS
+# venv\Scripts\activate   # Windows
+
+# Install dependencies
+pip install -r requirements.txt
+
+# Copy environment variables
+cp .env.example .env
+# Edit .env with your API keys
+
+# Start the server
+uvicorn main:app --reload
+```
+
+The backend runs on `http://localhost:8000` by default.
+
+### Environment Variables
+
+Copy `backend/.env.example` to `backend/.env` and configure:
+- `SUPABASE_URL` — Supabase project URL
+- `SUPABASE_KEY` — Supabase anonymous key
+- `AI_API_KEY` — AI service API key
 
 ## Testing
 
