@@ -101,15 +101,21 @@ jobs:
                 ref
               });
               
+              console.log(`Attempt ${i + 1}: Found ${statuses.length} statuses`);
+              statuses.forEach(s => console.log(`  - ${s.context}: ${s.state}`));
+              
               const vercelStatus = statuses.find(s => s.context && s.context.toLowerCase().includes('vercel'));
               
               if (vercelStatus) {
                 status = vercelStatus.state;
+                console.log(`Vercel status: ${status}`);
+                console.log(`Description: ${vercelStatus.description}`);
+                
                 if (status === 'success') {
                   deploymentUrl = vercelStatus.target_url;
                   break;
                 } else if (status === 'error' || status === 'failure') {
-                  core.setFailed('Vercel deployment failed');
+                  core.setFailed(`Vercel deployment failed: ${vercelStatus.description}`);
                   return;
                 }
               }
