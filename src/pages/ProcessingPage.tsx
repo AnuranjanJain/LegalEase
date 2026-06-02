@@ -7,6 +7,7 @@ import {
 import { api } from '../services/api';
 import { StorageService } from '../services/storage';
 import { useToast } from '../contexts/ToastContext';
+import RiskHighlighter from '../components/RiskHighlighter';
 
 // Word-based sliding window chunking algorithm
 function chunkText(text: string, windowSize: number = 2000, overlap: number = 200): string[] {
@@ -48,6 +49,7 @@ export function ProcessingPage() {
   const [currentChunkIndex, setCurrentChunkIndex] = useState(0);
   const [errorMessage, setErrorMessage] = useState('');
   const [finalSummary, setFinalSummary] = useState('');
+  const [extractedText, setExtractedText] = useState('');
 
   // Run the document processing pipeline
   useEffect(() => {
@@ -67,6 +69,7 @@ export function ProcessingPage() {
 
         const uploadData = await api.upload<{ filename: string; text: string }>('/upload', formData);
         extractedText = uploadData.text;
+        setExtractedText(extractedText);
         setStage1Status('completed');
       } catch (err) {
         setStage1Status('failed');
@@ -466,6 +469,13 @@ export function ProcessingPage() {
                     <span className="font-bold block">Pipeline Failure:</span>
                     <span>{errorMessage || 'An error occurred during text chunking or API models interaction. Please try again.'}</span>
                   </div>
+                </div>
+              )}
+
+              {/* Risk Assessment Panel (shown after pipeline completes) */}
+              {isPipelineCompleted && extractedText && (
+                <div className="animate-slide-up">
+                  <RiskHighlighter documentText={extractedText} />
                 </div>
               )}
 
