@@ -8,7 +8,6 @@ import { StorageService, Document, ChatStorageService } from '../services/storag
 import { useToast } from '../contexts/ToastContext';
 import { useNavigate } from 'react-router-dom';
 
-import { useDocumentProcessing } from '../contexts/DocumentProcessingContext';
 
 import { ShareButton } from '../components/ShareButton';
 import { WhatsAppShareModal } from '../components/WhatsAppShareModal';
@@ -25,7 +24,6 @@ export function DocumentsPage() {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const { showToast } = useToast();
   const navigate = useNavigate();
-  const { processDocument } = useDocumentProcessing();
 
   // Load documents from StorageService on mount
   useEffect(() => {
