@@ -1,4 +1,6 @@
-import { CheckCircle2, Loader2, AlertTriangle, FileText, LayoutList, BrainCircuit, Terminal } from 'lucide-react';
+import { useState, useEffect } from 'react';
+import { CheckCircle2, Loader2, AlertTriangle, FileText, LayoutList, BrainCircuit, Terminal, Clock } from 'lucide-react';
+import { ProcessingMetricsService } from '../contexts/DocumentProcessingContext';
 
 interface ProcessingStepperProps {
   status: 'idle' | 'reading' | 'chunking' | 'summarizing' | 'rendering' | 'completed' | 'failed';
@@ -6,6 +8,17 @@ interface ProcessingStepperProps {
   currentBlock: number;
   totalBlocks: number;
   error?: string;
+  /** Epoch timestamp (ms) when processing started — enables live elapsed time */
+  startedAt?: number;
+}
+
+/** Formats a duration in milliseconds into a compact human-readable string. */
+function formatDuration(ms: number): string {
+  const totalSec = Math.max(0, Math.round(ms / 1000));
+  if (totalSec < 60) return `${totalSec}s`;
+  const min = Math.floor(totalSec / 60);
+  const sec = totalSec % 60;
+  return sec > 0 ? `${min}m ${sec}s` : `${min}m`;
 }
 
 export function ProcessingStepper({
@@ -13,8 +26,28 @@ export function ProcessingStepper({
   progress,
   currentBlock,
   totalBlocks,
-  error
+  error,
+  startedAt
 }: ProcessingStepperProps) {
+
+  // ── Live Elapsed Time Counter ──────────────────────────────────────────
+  const [elapsedMs, setElapsedMs] = useState(0);
+
+  useEffect(() => {
+    if (!startedAt || status === 'completed' || status === 'failed') return;
+    // Immediately set the initial elapsed value
+    setElapsedMs(Date.now() - startedAt);
+    const timer = setInterval(() => setElapsedMs(Date.now() - startedAt), 1000);
+    return () => clearInterval(timer);
+  }, [startedAt, status]);
+
+  // ── Dynamic ETA from historical processing metrics ─────────────────────
+  const estimatedTotalMs = ProcessingMetricsService.getAverageDurationMs();
+  const estimatedRemainingMs =
+    estimatedTotalMs !== null && progress > 0
+      ? Math.max(0, (estimatedTotalMs * (100 - progress)) / 100)
+      : null;
+
   // Define the stages
   const stages = [
     {
@@ -127,6 +160,35 @@ export function ProcessingStepper({
           )}
         </div>
       </div>
+
+      {/* Dynamic Timing Info Bar */}
+      {status !== 'completed' && status !== 'failed' && startedAt && (
+        <div className="flex items-center justify-center gap-4 px-4 py-2.5 rounded-xl bg-gray-50/80 dark:bg-gray-900/40 border border-gray-150 dark:border-gray-800/60 text-center">
+          <div className="flex items-center gap-1.5 text-gray-500 dark:text-gray-400">
+            <Clock size={12} className="text-primary animate-pulse" />
+            <span className="text-[11px] font-semibold">
+              Elapsed: <span className="text-gray-800 dark:text-gray-200">{formatDuration(elapsedMs)}</span>
+            </span>
+          </div>
+          {estimatedRemainingMs !== null && estimatedRemainingMs > 0 ? (
+            <div className="text-[11px] font-semibold text-gray-500 dark:text-gray-400">
+              Est. remaining: <span className="text-primary dark:text-primary-400">{formatDuration(estimatedRemainingMs)}</span>
+            </div>
+          ) : (
+            <div className="text-[11px] font-semibold text-gray-400 dark:text-gray-500 italic">
+              {estimatedTotalMs !== null ? 'Almost done...' : 'Analyzing your document...'}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Completed Timing Summary */}
+      {status === 'completed' && startedAt && (
+        <div className="flex items-center justify-center gap-1.5 text-[11px] font-semibold text-emerald-600 dark:text-emerald-400">
+          <CheckCircle2 size={12} />
+          <span>Completed in {formatDuration(elapsedMs)}</span>
+        </div>
+      )}
 
       {/* List of Stages */}
       <div className="space-y-4">

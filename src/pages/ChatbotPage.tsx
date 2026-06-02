@@ -473,6 +473,7 @@ export function ChatbotPage() {
               currentBlock={activeChatDoc.currentBlock}
               totalBlocks={activeChatDoc.totalBlocks}
               error={activeChatDoc.error}
+              startedAt={activeChatDoc.startedAt}
             />
             
             {(activeChatDoc.status === 'completed' || activeChatDoc.status === 'failed') && (

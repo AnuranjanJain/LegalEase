@@ -1,4 +1,5 @@
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
+import { ProcessingMetricsService } from '../contexts/DocumentProcessingContext';
 import { 
   ArrowRight, FileText, Shield, Zap, Scale, MessageSquare, 
   AlertTriangle, Lock, Globe, FileSearch, CheckCircle2, ChevronDown,
@@ -69,6 +70,18 @@ const FAQS: ReadonlyArray<FaqItem> = Object.freeze([
 export function HomePage() {
   const [activeDemoClause, setActiveDemoClause] = useState<'term' | 'indem' | 'ip'>('term');
   const [expandedFaq, setExpandedFaq] = useState<number | null>(null);
+
+  // ── Dynamic Audit Response Time Metric ──────────────────────────────────
+  const auditResponseLabel = useMemo(() => {
+    const avgMs = ProcessingMetricsService.getAverageDurationMs();
+    if (avgMs === null) return 'Fast';
+    const totalSec = Math.round(avgMs / 1000);
+    if (totalSec < 60) return `~ ${totalSec}s`;
+    const min = Math.floor(totalSec / 60);
+    const sec = totalSec % 60;
+    return sec > 0 ? `~ ${min}m ${sec}s` : `~ ${min}m`;
+  }, []);
+
   const btnPrimary = "inline-flex items-center justify-center px-8 py-3.5 text-base font-semibold rounded-xl text-white bg-primary-600 hover:bg-blue-700 shadow-[0_0_20px_rgba(37,99,235,0.2)] transition-all duration-300";
   const btnSecondary = "inline-flex items-center justify-center px-8 py-3.5 border border-gray-300 dark:border-gray-700 text-base font-semibold rounded-xl text-gray-700 dark:text-gray-200 bg-white dark:bg-gray-800/40 hover:bg-gray-100 dark:hover:bg-gray-800 backdrop-blur-sm transition-all duration-300";
   const btnTab = (isActive: boolean) => 
@@ -223,8 +236,8 @@ export function HomePage() {
               <span className="text-xs font-semibold text-gray-400 dark:text-gray-400 uppercase tracking-wider">AI Accuracy Rate</span>
             </div>
             <div className="p-4 bg-white dark:bg-gray-800 rounded-2xl border border-gray-150 dark:border-gray-700 shadow-sm hover:scale-105 transition-all">
-              <span className="text-3xl font-extrabold text-emerald-600 dark:text-emerald-400 block">&lt; 3 Sec</span>
-              <span className="text-xs font-semibold text-gray-400 dark:text-gray-400 uppercase tracking-wider">Audit Response Time</span>
+              <span className="text-3xl font-extrabold text-emerald-600 dark:text-emerald-400 block">{auditResponseLabel}</span>
+              <span className="text-xs font-semibold text-gray-400 dark:text-gray-400 uppercase tracking-wider">Avg. Audit Response</span>
             </div>
             <div className="p-4 bg-white dark:bg-gray-800 rounded-2xl border border-gray-150 dark:border-gray-700 shadow-sm hover:scale-105 transition-all">
               <span className="text-3xl font-extrabold text-amber-600 dark:text-amber-400 block">50k+</span>

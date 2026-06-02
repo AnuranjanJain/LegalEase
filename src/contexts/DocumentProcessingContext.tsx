@@ -2,6 +2,52 @@ import { createContext, useContext, useState, useCallback, ReactNode } from 'rea
 import { api } from '../services/api';
 import { StorageService, Document } from '../services/storage';
 
+// ── Processing Metrics Service ─────────────────────────────────────────────
+// Persists historical processing durations to localStorage so the UI can
+// compute dynamic time estimates instead of relying on hardcoded claims.
+const METRICS_STORAGE_KEY = 'le_processing_metrics';
+const MAX_HISTORY_ENTRIES = 50;
+
+export interface ProcessingMetricEntry {
+  durationMs: number;
+  fileSizeBytes: number;
+  totalBlocks: number;
+  timestamp: string;
+}
+
+export const ProcessingMetricsService = {
+  getHistory: (): ProcessingMetricEntry[] => {
+    try {
+      const raw = localStorage.getItem(METRICS_STORAGE_KEY);
+      return raw ? JSON.parse(raw) : [];
+    } catch {
+      return [];
+    }
+  },
+
+  record: (entry: ProcessingMetricEntry) => {
+    try {
+      const history = ProcessingMetricsService.getHistory();
+      history.unshift(entry);
+      // Keep only the most recent entries
+      localStorage.setItem(
+        METRICS_STORAGE_KEY,
+        JSON.stringify(history.slice(0, MAX_HISTORY_ENTRIES))
+      );
+    } catch (err) {
+      console.error('Failed to persist processing metric:', err);
+    }
+  },
+
+  /** Returns the average processing duration in milliseconds, or null if no data. */
+  getAverageDurationMs: (): number | null => {
+    const history = ProcessingMetricsService.getHistory();
+    if (history.length === 0) return null;
+    const total = history.reduce((sum, e) => sum + e.durationMs, 0);
+    return total / history.length;
+  },
+};
+
 export interface ProcessingState {
   id: string;
   name: string;
@@ -11,6 +57,10 @@ export interface ProcessingState {
   totalBlocks: number;
   error?: string;
   summary?: string;
+  /** Epoch timestamp (ms) when processing started — used for elapsed time display */
+  startedAt: number;
+  /** File size in bytes — used for size-aware time estimation */
+  fileSizeBytes: number;
 }
 
 interface DocumentProcessingContextType {
@@ -91,7 +141,9 @@ export function DocumentProcessingProvider({ children }: { children: ReactNode }
       status: 'reading',
       progress: 10,
       currentBlock: 0,
-      totalBlocks: 0
+      totalBlocks: 0,
+      startedAt: Date.now(),
+      fileSizeBytes: file.size,
     };
     
     setActiveProcessing((prev) => ({ ...prev, [docId]: initialState }));
@@ -201,10 +253,19 @@ export function DocumentProcessingProvider({ children }: { children: ReactNode }
         summary: finalSummary
       });
 
-      // 4. Set completed state
+      // 4. Set completed state & record processing duration metric
       setActiveProcessing((prev) => {
         const current = prev[docId];
         if (!current) return prev;
+
+        // Persist timing metric for future dynamic estimates
+        ProcessingMetricsService.record({
+          durationMs: Date.now() - current.startedAt,
+          fileSizeBytes: current.fileSizeBytes,
+          totalBlocks,
+          timestamp: new Date().toISOString(),
+        });
+
         return {
           ...prev,
           [docId]: {

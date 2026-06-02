@@ -124,6 +124,7 @@ export function ProcessingPage() {
               currentBlock={activeDoc.currentBlock}
               totalBlocks={activeDoc.totalBlocks}
               error={activeDoc.error}
+              startedAt={activeDoc.startedAt}
             />
 
             {/* Completed state summary preview */}
