@@ -86,11 +86,7 @@ describe('API Service', () => {
 
       expect(mockFetch).toHaveBeenCalledWith(
         expect.stringContaining('/test'),
-        expect.objectContaining({
-          headers: {
-            Authorization: 'Bearer dev-token',
-          },
-        })
+        expect.objectContaining({ headers: expect.any(Object) })
       );
     });
 

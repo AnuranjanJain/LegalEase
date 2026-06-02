@@ -1,7 +1,6 @@
-
 import { useMemo } from 'react';
 import { FileText, Clock, CheckCircle, UploadCloud } from 'lucide-react';
-import { NavLink } from 'react-router-dom';
+import { NavLink, useNavigate } from 'react-router-dom';
 import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip, Legend } from 'recharts';
 import { StorageService } from '../services/storage';
 
@@ -47,9 +46,10 @@ export function DashboardPage() {
   // Accessible UI color definitions matching Tailwind theme profiles
   const COLORS = ['#3B82F6', '#10B981', '#F59E0B', '#EF4444'];
 
+  const navigate = useNavigate();
+
   const handleUploadTrigger = () => {
-    // Put code or navigation here to open file picker modal
-    console.log("Trigger upload flow...");
+    navigate('/documents');
   };
 
   return (
@@ -179,4 +179,3 @@ export function DashboardPage() {
     </div>
   );
 }
- 

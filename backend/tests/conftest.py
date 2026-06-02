@@ -1,11 +1,14 @@
 import os
-os.environ["JWT_SECRET_KEY"] = "test-jwt-secret-key-at-least-32-bytes-long-for-testing"
-os.environ["ENVIRONMENT"] = "development"
-os.environ["ALLOW_DEV"] = "true"
-os.environ["DEV_API_KEY"] = "dev-token"
-
 from pathlib import Path
 import sys
+
+# Automatically set test environment variables before any tests or imports execute
+os.environ["JWT_SECRET_KEY"] = os.getenv("JWT_SECRET_KEY", "testing-secret-key-1234567890-abcdef")
+os.environ["ENVIRONMENT"] = "development"
+os.environ["ALLOW_DEV"] = "true"
+os.environ["STUB_MODE"] = "true"
+os.environ["DEV_API_KEY"] = "dev-token"
+os.environ["MAX_MODEL_INPUT_CHARS"] = "15000"
 
 ROOT = Path(__file__).resolve().parents[2]
 root_path = str(ROOT)

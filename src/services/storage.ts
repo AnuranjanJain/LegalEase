@@ -5,7 +5,8 @@ export interface Document {
   size: number;
   uploadDate: string;
   processedDate?: string;
-  status: 'processed' | 'processing' | 'error';
+  status: 'processed' | 'processing' | 'failed' | 'error';
+  text?: string;
   extractedText?: string;
   summary?: string;
 }
@@ -97,13 +98,19 @@ export const StorageService = {
     return StorageService.getDocuments().find(d => d.id === id);
   },
 
-  updateDocumentStatus: (id: string, status: 'processed' | 'processing' | 'error') => {
+  updateDocumentStatus: (id: string, status: 'processed' | 'processing' | 'failed', summary?: string, text?: string) => {
     const docs = StorageService.getDocuments();
     const docIndex = docs.findIndex(d => d.id === id);
     if (docIndex !== -1) {
       docs[docIndex].status = status;
       if (status === 'processed') {
         docs[docIndex].processedDate = new Date().toISOString();
+      }
+      if (summary !== undefined) {
+        docs[docIndex].summary = summary;
+      }
+      if (text !== undefined) {
+        docs[docIndex].text = text;
       }
       localStorage.setItem(STORAGE_KEYS.DOCUMENTS, JSON.stringify(docs));
     }

@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useCallback, useRef, useEffect, useMemo } from 'react';
 import { 
   Search, Book, FileText, Scale, Gavel, Building2, Download, 
   Bookmark, BookmarkCheck, Eye, X, Zap, ShieldCheck 
@@ -147,14 +147,51 @@ const CATEGORIES: ReadonlyArray<DocCategory> = Object.freeze([
   },
 ]);
 
+const RESOURCE_CARDS = Object.freeze([
+  {
+    id: 'ipc-bns',
+    title: 'IPC / BNS Directory',
+    icon: Book,
+    description: 'Navigate key sections and provisions with quick reference guides for common legal codes.',
+  },
+  {
+    id: 'glossary',
+    title: 'Terminology Glossary',
+    icon: Book,
+    description: 'Understand legal terms, phrases, and definitions used across contracts and proceedings.',
+  },
+  {
+    id: 'faqs',
+    title: 'Frequently Asked Questions',
+    icon: FileText,
+    description: 'Find fast answers to common legal concerns, process steps, and user rights questions.',
+  },
+  {
+    id: 'rights-awareness',
+    title: 'Rights Awareness Guides',
+    icon: ShieldCheck,
+    description: 'Learn your legal rights through clear, accessible guides on protection and compliance.',
+  },
+  {
+    id: 'templates',
+    title: 'Downloadable Templates',
+    icon: Download,
+    description: 'Browse and download ready-made legal forms, agreements, and filing templates.',
+  },
+  {
+    id: 'government-links',
+    title: 'Government Resources',
+    icon: Building2,
+    description: 'Access trusted government legal portals, support services, and regulatory links.',
+  },
+]);
+
 const POPULAR_SUGGESTIONS: ReadonlyArray<string> = Object.freeze([
   "Lease Agreement", 
   "NDA Template", 
   "Bail Application", 
   "Articles of Incorporation"
 ]);
-
-import { useCallback, useRef, useEffect, useMemo } from 'react';
 
 export function DocumentationPage() {
   const [searchQuery, setSearchQuery] = useState('');
@@ -219,10 +256,22 @@ export function DocumentationPage() {
     <div className="app-container py-8 max-w-7xl">
       {/* Header Section */}
       <div className="mb-8">
-        <h1 className="text-3xl font-extrabold text-gray-900 dark:text-white tracking-tight">Legal Documentation Library</h1>
+        <h1 className="text-3xl font-extrabold text-gray-900 dark:text-white tracking-tight">Legal Resources Center</h1>
         <p className="text-gray-600 dark:text-gray-400 text-sm mt-1">
-          Access a curated library of standard legal templates, drafts, and historical constitutional guide files.
+          Your centralized hub for legal self-help content, terminology, rights guides, templates, and official government resources.
         </p>
+      </div>
+
+      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3 mb-10">
+        {RESOURCE_CARDS.map((resource) => (
+          <div key={resource.id} className="rounded-3xl border border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900 p-5 shadow-sm transition hover:shadow-md">
+            <div className="inline-flex h-12 w-12 items-center justify-center rounded-2xl bg-primary-50 text-primary-700 dark:bg-primary-500/10 dark:text-primary-300 mb-4">
+              <resource.icon size={20} />
+            </div>
+            <h2 className="text-lg font-semibold text-gray-900 dark:text-white mb-2">{resource.title}</h2>
+            <p className="text-sm text-gray-600 dark:text-gray-400 leading-relaxed">{resource.description}</p>
+          </div>
+        ))}
       </div>
 
       {/* Search and Filters panel */}
