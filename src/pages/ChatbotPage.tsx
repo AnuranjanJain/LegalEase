@@ -17,6 +17,7 @@ function makeGreeting(): ChatMessage {
 }
 
 const MAX_CONTEXT_MESSAGES = 10;
+const MAX_INPUT_CHARS = 2000; // NEW: Character limit constant added here
 
 function buildConversationHistory(msgs: ChatMessage[]) {
   return msgs
@@ -132,20 +133,20 @@ export function ChatbotPage() {
   };
 
   const handleClearConversation = () => {
-  const freshGreeting = makeGreeting();
-  setMessages([freshGreeting]);
-  setUploadedDoc(null);
+    const freshGreeting = makeGreeting();
+    setMessages([freshGreeting]);
+    setUploadedDoc(null);
 
-  if (activeSessionId) {
-    ChatStorageService.saveSession({
-      id: activeSessionId,
-      title: 'New Conversation',
-      messages: [freshGreeting],
-      documentContext: undefined,
-    });
-    setSessions(ChatStorageService.getSessions());
-  }
-};
+    if (activeSessionId) {
+      ChatStorageService.saveSession({
+        id: activeSessionId,
+        title: 'New Conversation',
+        messages: [freshGreeting],
+        documentContext: undefined,
+      });
+      setSessions(ChatStorageService.getSessions());
+    }
+  };
 
   const handleSend = async (event?: React.FormEvent<HTMLFormElement>) => {
     if (event) {
