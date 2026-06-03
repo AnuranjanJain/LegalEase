@@ -27,21 +27,25 @@ describe('Footer Component', () => {
     expect(screen.getByText('Privacy Policy')).toBeInTheDocument();
   });
 
-  it('renders the social links with the correct labels', () => {
+  it('renders the social links with the correct labels and functional attributes', () => {
     render(
       <MemoryRouter>
         <Footer />
       </MemoryRouter>
     );
 
-    // X logo link should be present with label "X"
+    // X logo link should be present with label "X" and correct functional attributes
     const xLink = screen.getByLabelText('X');
     expect(xLink).toBeInTheDocument();
-    expect(xLink).toHaveAttribute('href', '#');
+    expect(xLink).toHaveAttribute('href', 'https://x.com/legalease');
+    expect(xLink).toHaveAttribute('target', '_blank');
+    expect(xLink).toHaveAttribute('rel', 'noopener noreferrer');
 
-    // LinkedIn link should be present with label "LinkedIn"
+    // LinkedIn link should be present with label "LinkedIn" and correct functional attributes
     const linkedInLink = screen.getByLabelText('LinkedIn');
     expect(linkedInLink).toBeInTheDocument();
-    expect(linkedInLink).toHaveAttribute('href', '#');
+    expect(linkedInLink).toHaveAttribute('href', 'https://linkedin.com/company/legalease');
+    expect(linkedInLink).toHaveAttribute('target', '_blank');
+    expect(linkedInLink).toHaveAttribute('rel', 'noopener noreferrer');
   });
 });
