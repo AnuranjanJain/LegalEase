@@ -168,28 +168,27 @@ async def test_upload_endpoint_with_pdf():
 async def test_upload_endpoint_with_docx():
     """Test upload endpoint with a DOCX file"""
     import os
+    from io import BytesIO
+    from docx import Document
+
     os.environ["ALLOW_DEV"] = "true"
 
-    from unittest.mock import Mock, patch
-    mock_doc = Mock()
-    mock_para = Mock()
-    mock_para.text = "Sample mock docx content."
-    mock_doc.paragraphs = [mock_para]
-    
     headers = {"x-api-key": "dev-token"}
-    # Mock DOCX content (starts with PK magic bytes)
-    content = b"PK\x03\x04\x14\x00\x00\x00\x08\x00"
+    buffer = BytesIO()
+    doc = Document()
+    doc.add_paragraph("Sample mock docx content.")
+    doc.save(buffer)
+    content = buffer.getvalue()
     files = {"file": ("sample.docx", content, "application/vnd.openxmlformats-officedocument.wordprocessingml.document")}
 
-    with patch("backend.main.DocxDocument", return_value=mock_doc):
-        async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as ac:
-            r = await ac.post("/upload", files=files, headers=headers)
-            assert r.status_code == 200
-            data = r.json()
-            assert "filename" in data
-            assert data["filename"] == "sample.docx"
-            assert "text" in data
-            assert data["text"] == "Sample mock docx content."
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as ac:
+        r = await ac.post("/upload", files=files, headers=headers)
+        assert r.status_code == 200
+        data = r.json()
+        assert "filename" in data
+        assert data["filename"] == "sample.docx"
+        assert "text" in data
+        assert data["text"] == "Sample mock docx content."
 
     
     if "ALLOW_DEV" in os.environ:
