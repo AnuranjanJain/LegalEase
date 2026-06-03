@@ -35,6 +35,19 @@ export function Header() {
   const toggleNotificationMenu = () => setIsNotificationOpen((s) => !s);
   const toggleMobileMenu = () => setIsMobileMenuOpen((s) => !s);
   const toggleUserMenu = () => setIsUserMenuOpen((s) => !s);
+  const { logout } = useAuth();
+  const { showToast } = useToast();
+
+  const handleLogout = () => {
+    try {
+      logout();
+      showToast('Logged out successfully!', 'success');
+      setIsUserMenuOpen(false);
+      navigate('/login');
+    } catch {
+      showToast('Failed to log out. Please try again.', 'error');
+    }
+  };
 
   const handleSignOut = () => {
     logout();

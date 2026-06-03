@@ -38,17 +38,20 @@ export function SignupPage() {
         body: JSON.stringify({ email, password }),
       });
 
-      const data = await response.json();
+      const data = await response.json().catch(() => null);
 
       if (!response.ok) {
-        setError(data.detail || 'Signup failed. Please try again.');
+        const message =
+          data?.detail || data?.error || `Signup failed with status ${response.status}. Please try again.`;
+        setError(message);
         return;
       }
 
       // Signup successful — redirect to login
       navigate('/login');
-    } catch {
-      setError('Unable to connect to the server. Please try again.');
+    } catch (err) {
+      console.error('Signup request failed:', err);
+      setError('Unable to connect to the server. Please try again later.');
     } finally {
       setIsLoading(false);
     }
