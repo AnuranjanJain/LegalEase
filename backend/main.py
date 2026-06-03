@@ -245,11 +245,11 @@ def _validate_api_key(request: Request) -> str:
     # Check production API keys first
     if api_key in api_keys:
         return api_key
-    
-    # Check dev mode (only if no production keys are configured)
+
+    # Check dev mode only when production keys are not configured
     if not api_keys and allow_dev and api_key == dev_api_key:
         return api_key
-    
+
     raise HTTPException(status_code=403, detail="Invalid API key")
 
 @app.post("/chat")
