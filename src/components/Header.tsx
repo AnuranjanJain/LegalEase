@@ -3,6 +3,8 @@ import { NavLink, useNavigate } from 'react-router-dom';
 import { Menu, X, Bell, Moon, Sun, User, Settings, FileText, Shield, Info, LogOut } from 'lucide-react';
 import { useDarkMode } from '../hooks/useDarkMode';
 import { useNotifications, AppNotification } from '../contexts/NotificationContext';
+import { useAuth } from '../contexts/AuthContext';
+import { useToast } from '../contexts/ToastContext';
 
 function timeAgo(date: Date): string {
   const diff = Math.floor((Date.now() - date.getTime()) / 1000);
@@ -31,6 +33,19 @@ export function Header() {
   const toggleNotificationMenu = () => setIsNotificationOpen((s) => !s);
   const toggleMobileMenu = () => setIsMobileMenuOpen((s) => !s);
   const toggleUserMenu = () => setIsUserMenuOpen((s) => !s);
+  const { logout } = useAuth();
+  const { showToast } = useToast();
+
+  const handleLogout = () => {
+    try {
+      logout();
+      showToast('Logged out successfully!', 'success');
+      setIsUserMenuOpen(false);
+      navigate('/login');
+    } catch {
+      showToast('Failed to log out. Please try again.', 'error');
+    }
+  };
 
   useEffect(() => {
     function handleClickOutside(event: MouseEvent) {
@@ -193,8 +208,13 @@ export function Header() {
                   </div>
                   <NavLink to="/profile" className="flex items-center gap-3 px-4 py-2.5 text-sm text-gray-600 dark:text-white/70 hover:bg-gray-100 dark:hover:bg-white/5 rounded-xl transition-colors"><User size={16} /> Profile</NavLink>
                   <NavLink to="/settings" className="flex items-center gap-3 px-4 py-2.5 text-sm text-gray-600 dark:text-white/70 hover:bg-gray-100 dark:hover:bg-white/5 rounded-xl transition-colors"><Settings size={16} /> Settings</NavLink>
-                  <button className="flex items-center gap-3 w-full text-left px-4 py-2.5 mt-1 text-sm text-red-500 font-medium hover:bg-red-50 dark:hover:bg-red-500/10 rounded-xl transition-colors"><LogOut size={16} /> Sign out</button>
-                </div>
+                 <button
+  onClick={handleLogout}
+  className="flex items-center gap-3 w-full text-left px-4 py-2.5 mt-1 text-sm text-red-500 font-medium hover:bg-red-50 dark:hover:bg-red-500/10 rounded-xl transition-colors"
+>
+  <LogOut size={16} />
+  Sign out
+</button></div>
               )}
             </div>
           </div>

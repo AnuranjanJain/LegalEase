@@ -16,6 +16,7 @@ function makeGreeting(): ChatMessage {
 }
 
 const MAX_CONTEXT_MESSAGES = 10;
+const MAX_INPUT_CHARS = 2000; // NEW: Character limit constant added here
 
 function buildConversationHistory(msgs: ChatMessage[]) {
   return msgs
@@ -130,20 +131,20 @@ export function ChatbotPage() {
   };
 
   const handleClearConversation = () => {
-  const freshGreeting = makeGreeting();
-  setMessages([freshGreeting]);
-  setUploadedDoc(null);
+    const freshGreeting = makeGreeting();
+    setMessages([freshGreeting]);
+    setUploadedDoc(null);
 
-  if (activeSessionId) {
-    ChatStorageService.saveSession({
-      id: activeSessionId,
-      title: 'New Conversation',
-      messages: [freshGreeting],
-      documentContext: undefined,
-    });
-    setSessions(ChatStorageService.getSessions());
-  }
-};
+    if (activeSessionId) {
+      ChatStorageService.saveSession({
+        id: activeSessionId,
+        title: 'New Conversation',
+        messages: [freshGreeting],
+        documentContext: undefined,
+      });
+      setSessions(ChatStorageService.getSessions());
+    }
+  };
 
   const handleSend = async () => {
     if (!input.trim()) return;
@@ -442,19 +443,32 @@ export function ChatbotPage() {
               </span>
             )}
 
-            {/* Accessible Multi-line Text Area for Enter / Shift+Enter management */}
+            {/* Accessible Multi-line Text Area for Enter / Shift+Enter management WITH COUNTER LIMIT */}
             <textarea
-              className="w-full pl-4 pr-36 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent bg-gray-50 dark:bg-gray-700 text-gray-900 dark:text-white placeholder-gray-500 dark:placeholder-gray-400 resize-none max-h-32 min-h-[40px] block align-bottom leading-normal"
+              className="w-full pl-4 pr-16 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent bg-gray-50 dark:bg-gray-700 text-gray-900 dark:text-white placeholder-gray-500 dark:placeholder-gray-400 resize-none max-h-32 min-h-[40px] block align-bottom leading-normal"
               placeholder={uploadedDoc ? "Ask about this document..." : "Ask a legal question..."}
               rows={1}
+              maxLength={MAX_INPUT_CHARS}
               value={input}
               onChange={(e) => setInput(e.target.value)}
               onKeyDown={(e) => e.key === 'Enter' && !isTyping && handleSend()}
             />
+
+            {/* NEW: Dynamic Character Counter */}
+            <div 
+              className={`absolute bottom-2 right-3 text-[10px] font-medium transition-colors duration-300 pointer-events-none ${
+                input.length >= MAX_INPUT_CHARS ? 'text-red-500 animate-pulse' :
+                input.length >= MAX_INPUT_CHARS * 0.9 ? 'text-orange-500' :
+                'text-gray-400 dark:text-gray-500'
+              }`}
+            >
+              {input.length} / {MAX_INPUT_CHARS}
+            </div>
           </div>
+          
           <button
             onClick={handleSend}
-            disabled={!input.trim() || isTyping}
+            disabled={!input.trim() || isTyping || input.length > MAX_INPUT_CHARS}
             className="bg-primary text-white p-2 rounded-lg hover:bg-primary/90 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
           >
             <Send size={20} />

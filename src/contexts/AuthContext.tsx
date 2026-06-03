@@ -3,7 +3,7 @@ import { createContext, useContext, useState, ReactNode } from 'react';
 interface AuthContextType {
   isAuthenticated: boolean;
   login: (token: string) => void;
-  logout: () => void;
+  logout: () => boolean;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -28,20 +28,17 @@ function isTokenValid(token: string): boolean {
 }
 
 export function AuthProvider({ children }: { children: ReactNode }) {
-  // Pass a function to useState so it synchronously checks localStorage 
-  // on the very first render, preventing the "flash" redirect on refresh.
   const [isAuthenticated, setIsAuthenticated] = useState<boolean>(() => {
     const token = localStorage.getItem('access_token');
-    
+
     if (token && isTokenValid(token)) {
       return true;
     }
-    
-    // If token exists but is invalid/expired, clean it up
+
     if (token) {
       localStorage.removeItem('access_token');
     }
-    
+
     return false;
   });
 
@@ -50,9 +47,20 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setIsAuthenticated(true);
   };
 
-  const logout = () => {
-    localStorage.removeItem('access_token');
-    setIsAuthenticated(false);
+  const logout = (): boolean => {
+    try {
+      localStorage.removeItem('access_token');
+
+      // Clear any other auth-related storage if present
+      sessionStorage.clear();
+
+      setIsAuthenticated(false);
+
+      return true;
+    } catch (error) {
+      console.error('Logout failed:', error);
+      return false;
+    }
   };
 
   return (
@@ -64,8 +72,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
 export function useAuth() {
   const context = useContext(AuthContext);
+
   if (context === undefined) {
     throw new Error('useAuth must be used within an AuthProvider');
   }
+
   return context;
 }
