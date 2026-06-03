@@ -36,3 +36,6 @@ Object.defineProperty(window, 'localStorage', {
 beforeEach(() => {
   (global as any).__localStorageData = {};
 });
+
+// Mock scrollIntoView for jsdom
+Element.prototype.scrollIntoView = vi.fn();
