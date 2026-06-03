@@ -193,8 +193,6 @@ class HealthResponse(BaseModel):
     details: Optional[dict] = None
 
 
-<<<<<<< HEAD
-=======
 def _validate_api_key(request: Request) -> str:
     # Accept header `Authorization: Bearer <key>` or `X-API-Key`
     auth = request.headers.get("authorization") or ""
@@ -280,7 +278,6 @@ async def _run_bounded_parser(parser, content: bytes) -> str:
         )
     except asyncio.TimeoutError:
         raise HTTPException(status_code=413, detail="File is too complex to process safely")
->>>>>>> upstream/main
 @app.post("/chat")
 async def chat(request: Request, payload: ChatRequest, identity: str = Depends(validate_token_or_api_key)):
     # Rate limiting using the authenticated identity
