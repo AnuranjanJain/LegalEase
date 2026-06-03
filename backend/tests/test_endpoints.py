@@ -168,20 +168,30 @@ async def test_upload_endpoint_with_pdf():
 async def test_upload_endpoint_with_docx():
     """Test upload endpoint with a DOCX file"""
     import os
+    import io
+    import zipfile
+    from unittest.mock import Mock, patch
+    
     os.environ["ALLOW_DEV"] = "true"
 
-    from unittest.mock import Mock, patch
     mock_doc = Mock()
     mock_para = Mock()
     mock_para.text = "Sample mock docx content."
     mock_doc.paragraphs = [mock_para]
     
     headers = {"x-api-key": "dev-token"}
-    # Mock DOCX content (starts with PK magic bytes)
-    content = b"PK\x03\x04\x14\x00\x00\x00\x08\x00"
+    
+    # Create a valid minimal ZIP archive to pass safety checks
+    docx_io = io.BytesIO()
+    with zipfile.ZipFile(docx_io, "w") as zf:
+        zf.writestr("word/document.xml", "mock XML content")
+    content = docx_io.getvalue()
+    
     files = {"file": ("sample.docx", content, "application/vnd.openxmlformats-officedocument.wordprocessingml.document")}
 
-    with patch("backend.main.DocxDocument", return_value=mock_doc):
+    # Patch both the library itself and the imported name in main for maximum robustness
+    with patch("docx.Document", return_value=mock_doc, create=True), \
+         patch("backend.main.DocxDocument", return_value=mock_doc, create=True):
         async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as ac:
             r = await ac.post("/upload", files=files, headers=headers)
             assert r.status_code == 200
@@ -191,7 +201,6 @@ async def test_upload_endpoint_with_docx():
             assert "text" in data
             assert data["text"] == "Sample mock docx content."
 
-    
     if "ALLOW_DEV" in os.environ:
         del os.environ["ALLOW_DEV"]
 
