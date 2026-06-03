@@ -1,3 +1,4 @@
+import asyncio
 from fastapi import Depends, FastAPI, HTTPException, UploadFile, File, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, StreamingResponse
@@ -34,7 +35,8 @@ from backend.core.exceptions import (
     AIError, ValidationError, ProviderError, TimeoutError, ServiceUnavailableError
 )
 from backend.core.validation import (
-    validate_chat_input, validate_summarize_input, sanitize_text, validate_mime_and_bytes
+    validate_chat_input, validate_summarize_input, sanitize_text, validate_mime_and_bytes,
+    validate_docx_archive_safety
 )
 from backend.services.ai_service import ai_service, correlation_id_var
 
@@ -157,6 +159,10 @@ async def correlation_id_middleware(request: Request, call_next):
 # Configuration
 MAX_UPLOAD_SIZE = int(os.getenv("MAX_UPLOAD_SIZE", str(25 * 1024 * 1024)))  # 25 MB default
 CHUNK_SIZE = 1024 * 1024
+MAX_PDF_PAGES = int(os.getenv("MAX_PDF_PAGES", "100"))
+MAX_DOCX_PARAGRAPHS = int(os.getenv("MAX_DOCX_PARAGRAPHS", "2000"))
+MAX_EXTRACTED_TEXT_CHARS = int(os.getenv("MAX_EXTRACTED_TEXT_CHARS", "10000"))
+UPLOAD_PARSE_TIMEOUT_SECONDS = float(os.getenv("UPLOAD_PARSE_TIMEOUT_SECONDS", "5"))
 
 
 RATE_LIMIT_PERIOD = int(os.getenv("RATE_LIMIT_PERIOD", "60"))
@@ -252,6 +258,64 @@ def _validate_api_key(request: Request) -> str:
 
     raise HTTPException(status_code=403, detail="Invalid API key")
 
+def _get_client_ip(request: Request) -> str:
+    forwarded_for = request.headers.get("x-forwarded-for")
+    if forwarded_for:
+        return forwarded_for.split(",", 1)[0].strip()
+    return request.client.host if request.client else "unknown"
+
+
+def _extract_pdf_text(content: bytes) -> str:
+    if fitz is None:
+        raise HTTPException(status_code=503, detail="PDF processing not available")
+
+    doc = None
+    try:
+        doc = fitz.open(stream=content, filetype="pdf")
+        if doc.page_count > MAX_PDF_PAGES:
+            raise HTTPException(status_code=413, detail="PDF is too large to process safely")
+
+        extracted_parts = []
+        for page in doc:
+            extracted_parts.append(page.get_text())
+            if len("".join(extracted_parts)) >= MAX_EXTRACTED_TEXT_CHARS:
+                break
+
+        return "".join(extracted_parts)
+    finally:
+        if doc is not None:
+            doc.close()
+
+
+def _extract_docx_text(content: bytes) -> str:
+    if DocxDocument is None:
+        raise HTTPException(status_code=503, detail="DOCX processing not available")
+
+    document = None
+    try:
+        document = DocxDocument(BytesIO(content))
+        if len(document.paragraphs) > MAX_DOCX_PARAGRAPHS:
+            raise HTTPException(status_code=413, detail="DOCX is too large to process safely")
+
+        return "\n".join(
+            paragraph.text
+            for paragraph in document.paragraphs
+            if paragraph.text.strip()
+        )
+    finally:
+        close_method = getattr(document, "close", None) if document is not None else None
+        if callable(close_method):
+            close_method()
+
+
+async def _run_bounded_parser(parser, content: bytes) -> str:
+    try:
+        return await asyncio.wait_for(
+            asyncio.to_thread(parser, content),
+            timeout=UPLOAD_PARSE_TIMEOUT_SECONDS,
+        )
+    except asyncio.TimeoutError:
+        raise HTTPException(status_code=413, detail="File is too complex to process safely")
 @app.post("/chat")
 async def chat(request: Request, payload: ChatRequest):
     # Auth
@@ -327,28 +391,24 @@ async def upload_document(request: Request, file: UploadFile = File(...), identi
         # Perform MIME-aware preprocessing and signature validation
         validate_mime_and_bytes(content, file.content_type or "", filename)
 
+        if file_extension == ".docx":
+            validate_docx_archive_safety(content)
+
         # Process by type
         if file_extension == '.pdf' or content.startswith(b'%PDF-'):
-            if fitz is None:
-                raise HTTPException(status_code=503, detail="PDF processing not available")
             try:
-                doc = fitz.open(stream=content, filetype="pdf")
-                for page in doc:
-                    extracted_text += page.get_text()
+                extracted_text = await _run_bounded_parser(_extract_pdf_text, content)
+            except HTTPException:
+                raise
             except Exception as e:
                 logger.error(f"PDF parse error: {e}")
                 raise HTTPException(status_code=400, detail="Invalid or corrupted PDF")
 
         elif file_extension == '.docx':
-            if DocxDocument is None:
-                raise HTTPException(status_code=503, detail="DOCX processing not available")
             try:
-                doc = DocxDocument(BytesIO(content))
-                extracted_text = "\n".join(
-                    para.text
-                    for para in doc.paragraphs
-                    if para.text.strip()
-                )
+                extracted_text = await _run_bounded_parser(_extract_docx_text, content)
+            except HTTPException:
+                raise
             except Exception:
                 raise HTTPException(
                     status_code=400,
@@ -359,7 +419,7 @@ async def upload_document(request: Request, file: UploadFile = File(...), identi
             extracted_text = content.decode('utf-8')
 
         # Truncate extracted text to avoid sending huge payloads to models
-        extracted_text = extracted_text[:500000]
+        extracted_text = extracted_text[:MAX_EXTRACTED_TEXT_CHARS]
 
         return {"filename": filename, "text": extracted_text}
 
