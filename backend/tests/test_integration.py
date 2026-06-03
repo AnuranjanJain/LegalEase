@@ -87,7 +87,8 @@ async def test_health_check_and_service_availability():
         
         assert "status" in data
         assert data["status"] in ["ok", "degraded"]
-        assert "details" not in data
+        assert "details" in data
+        assert data["details"] is None
 
 
 @pytest.mark.integration
