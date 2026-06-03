@@ -1,5 +1,8 @@
 from datetime import timedelta
+import logging
+
 from fastapi import APIRouter, Depends, HTTPException, status
+from sqlalchemy.exc import IntegrityError, SQLAlchemyError
 from sqlalchemy.orm import Session
 from pydantic import BaseModel, EmailStr, Field
 
@@ -12,6 +15,8 @@ from backend.auth import (
     get_current_user,
     ACCESS_TOKEN_EXPIRE_HOURS
 )
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(
     prefix="/auth",
@@ -39,14 +44,25 @@ class ChangePasswordRequest(BaseModel):
 def signup(user: UserCreate, db: Session = Depends(get_db)):
     db_user = db.query(models.User).filter(models.User.email == user.email).first()
     if db_user:
-        raise HTTPException(status_code=400, detail="Email already registered")
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Email already registered")
 
     hashed_password = get_password_hash(user.password)
     new_user = models.User(email=user.email, hashed_password=hashed_password)
 
     db.add(new_user)
-    db.commit()
-    db.refresh(new_user)
+    try:
+        db.commit()
+        db.refresh(new_user)
+    except IntegrityError:
+        db.rollback()
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Email already registered")
+    except SQLAlchemyError as exc:
+        db.rollback()
+        logger.exception("Failed to create user during signup")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Unable to register account at this time. Please try again later.",
+        )
 
     access_token = create_access_token(
         data={"sub": new_user.email},
