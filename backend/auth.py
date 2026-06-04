@@ -132,3 +132,20 @@ def validate_token_or_api_key(request: Request, db: Session = Depends(get_db)) -
         return token
 
     raise HTTPException(status_code=403, detail="Invalid or expired authentication token")
+
+
+def _validate_api_key(request: Request) -> str:
+    """
+    API key-only validation helper (used for testing).
+    Extracts bearer token from Authorization or X-API-Key headers,
+    validates it against configured static API keys, and returns
+    the key if valid. Raises HTTPException for missing or invalid keys.
+    """
+    token = _extract_bearer_token(request)
+    if not token:
+        raise HTTPException(status_code=401, detail="Missing API key")
+
+    if _is_valid_api_key(token):
+        return token
+
+    raise HTTPException(status_code=403, detail="Invalid API key")
