@@ -238,6 +238,82 @@ export function HomePage() {
         </div>
       </section>
 
+      {/* How It Works Section */}
+      <section className="py-24 px-4 sm:px-6 lg:px-8 bg-white dark:bg-gray-950 border-b border-gray-150 dark:border-gray-900">
+        <div className="app-container">
+          <div className="text-center mb-16">
+            <span className="text-xs font-extrabold uppercase tracking-widest text-primary-600 dark:text-primary-400 block mb-3">
+              How It Works
+            </span>
+            <h2 className="text-3xl sm:text-4xl font-extrabold text-gray-900 dark:text-white tracking-tight mb-4">
+              Legal Help In Four Clear Steps
+            </h2>
+            <div className="h-1.5 w-20 bg-primary-600 mx-auto rounded-full mb-6"></div>
+            <p className="text-gray-650 dark:text-gray-450 max-w-2xl mx-auto text-base">
+              Choose what you need, share the details, and get practical legal guidance without losing time to confusing paperwork.
+            </p>
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+            <div className="group relative p-7 rounded-2xl bg-white dark:bg-gray-900 border border-gray-150 dark:border-gray-800 shadow-sm hover:shadow-xl hover:-translate-y-1.5 transition-all duration-300 text-left overflow-hidden">
+              <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-blue-500 to-indigo-500 opacity-0 group-hover:opacity-100 transition-opacity"></div>
+              <div className="flex items-center justify-between mb-6">
+                <div className="w-12 h-12 bg-blue-100 dark:bg-blue-900/30 rounded-xl flex items-center justify-center text-blue-600 dark:text-blue-400 group-hover:scale-110 transition-transform">
+                  <Scale size={22} />
+                </div>
+                <span className="text-xs font-extrabold tracking-widest text-gray-350 dark:text-gray-600">01</span>
+              </div>
+              <h3 className="text-lg font-bold mb-3 text-gray-900 dark:text-white">Pick a service</h3>
+              <p className="text-sm leading-relaxed text-gray-650 dark:text-gray-400">
+                Select the legal category, document type, or issue that best matches your situation.
+              </p>
+            </div>
+
+            <div className="group relative p-7 rounded-2xl bg-white dark:bg-gray-900 border border-gray-150 dark:border-gray-800 shadow-sm hover:shadow-xl hover:-translate-y-1.5 transition-all duration-300 text-left overflow-hidden">
+              <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-emerald-500 to-teal-500 opacity-0 group-hover:opacity-100 transition-opacity"></div>
+              <div className="flex items-center justify-between mb-6">
+                <div className="w-12 h-12 bg-emerald-100 dark:bg-emerald-900/30 rounded-xl flex items-center justify-center text-emerald-600 dark:text-emerald-400 group-hover:scale-110 transition-transform">
+                  <FileText size={22} />
+                </div>
+                <span className="text-xs font-extrabold tracking-widest text-gray-350 dark:text-gray-600">02</span>
+              </div>
+              <h3 className="text-lg font-bold mb-3 text-gray-900 dark:text-white">Submit your query</h3>
+              <p className="text-sm leading-relaxed text-gray-650 dark:text-gray-400">
+                Upload a document or describe your request so LegalEase can understand the context.
+              </p>
+            </div>
+
+            <div className="group relative p-7 rounded-2xl bg-white dark:bg-gray-900 border border-gray-150 dark:border-gray-800 shadow-sm hover:shadow-xl hover:-translate-y-1.5 transition-all duration-300 text-left overflow-hidden">
+              <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-purple-500 to-pink-500 opacity-0 group-hover:opacity-100 transition-opacity"></div>
+              <div className="flex items-center justify-between mb-6">
+                <div className="w-12 h-12 bg-purple-100 dark:bg-purple-900/30 rounded-xl flex items-center justify-center text-purple-600 dark:text-purple-400 group-hover:scale-110 transition-transform">
+                  <MessageSquare size={22} />
+                </div>
+                <span className="text-xs font-extrabold tracking-widest text-gray-350 dark:text-gray-600">03</span>
+              </div>
+              <h3 className="text-lg font-bold mb-3 text-gray-900 dark:text-white">Get matched</h3>
+              <p className="text-sm leading-relaxed text-gray-650 dark:text-gray-400">
+                Connect with relevant resources, AI insights, or legal professionals for your next step.
+              </p>
+            </div>
+
+            <div className="group relative p-7 rounded-2xl bg-white dark:bg-gray-900 border border-gray-150 dark:border-gray-800 shadow-sm hover:shadow-xl hover:-translate-y-1.5 transition-all duration-300 text-left overflow-hidden">
+              <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-amber-500 to-orange-500 opacity-0 group-hover:opacity-100 transition-opacity"></div>
+              <div className="flex items-center justify-between mb-6">
+                <div className="w-12 h-12 bg-amber-100 dark:bg-amber-900/30 rounded-xl flex items-center justify-center text-amber-600 dark:text-amber-400 group-hover:scale-110 transition-transform">
+                  <CheckCircle2 size={22} />
+                </div>
+                <span className="text-xs font-extrabold tracking-widest text-gray-350 dark:text-gray-600">04</span>
+              </div>
+              <h3 className="text-lg font-bold mb-3 text-gray-900 dark:text-white">Track guidance</h3>
+              <p className="text-sm leading-relaxed text-gray-650 dark:text-gray-400">
+                Review recommendations, monitor request progress, and return whenever you need updates.
+              </p>
+            </div>
+          </div>
+        </div>
+      </section>
+
       {/* Main Features Grid with Sleek Cards & Micro-Animations */}
       <section className="py-24 px-4 sm:px-6 lg:px-8 bg-white dark:bg-gray-950">
         <div className="app-container">
