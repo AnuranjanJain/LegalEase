@@ -11,6 +11,7 @@ MAX_SUMMARIZE_INPUT_CHARS = int(os.getenv("MAX_SUMMARIZE_INPUT_CHARS", "20000"))
 MAX_CONTEXT_INPUT_CHARS = int(os.getenv("MAX_CONTEXT_INPUT_CHARS", "10000"))
 MAX_DOCX_ARCHIVE_ENTRIES = int(os.getenv("MAX_DOCX_ARCHIVE_ENTRIES", "200"))
 MAX_DOCX_ARCHIVE_UNCOMPRESSED_BYTES = int(os.getenv("MAX_DOCX_ARCHIVE_UNCOMPRESSED_BYTES", str(10 * 1024 * 1024)))
+MAX_DOCX_ARCHIVE_ENTRY_BYTES = int(os.getenv("MAX_DOCX_ARCHIVE_ENTRY_BYTES", str(5 * 1024 * 1024)))
 MAX_DOCX_ARCHIVE_RATIO = float(os.getenv("MAX_DOCX_ARCHIVE_RATIO", "100"))
 MAX_DOCX_XML_BYTES = int(os.getenv("MAX_DOCX_XML_BYTES", str(5 * 1024 * 1024)))
 
@@ -85,7 +86,6 @@ def validate_mime_and_bytes(content: bytes, content_type: str, filename: str):
         if not content.startswith(b"PK\x03\x04"):
             raise ValidationError("File content signature does not match DOCX structure (ZIP archive)")
 
-
 def validate_docx_archive_safety(content: bytes):
     """
     Inspect DOCX archives for obvious zip-bomb and abuse patterns before parsing.
@@ -106,6 +106,9 @@ def validate_docx_archive_safety(content: bytes):
 
                 total_uncompressed_size += member.file_size
                 total_compressed_size += member.compress_size
+
+                if member.file_size > MAX_DOCX_ARCHIVE_ENTRY_BYTES:
+                    raise ValidationError("DOCX archive contains an oversized embedded file")
 
                 if member.filename.endswith("document.xml"):
                     document_xml_size = max(document_xml_size, member.file_size)

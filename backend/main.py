@@ -3,12 +3,14 @@ from fastapi import Depends, FastAPI, HTTPException, UploadFile, File, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, StreamingResponse
 from pydantic import BaseModel
+import asyncio
 from datetime import datetime
-from typing import Optional
 from io import BytesIO
 import os
 import logging
+import tempfile
 import time
+from typing import Optional
 import uuid
 
 from dotenv import load_dotenv
@@ -170,47 +172,9 @@ RATE_LIMIT_IP_CALLS = int(os.getenv("RATE_LIMIT_IP_CALLS", "60"))
 RATE_LIMIT_KEY_CALLS = int(os.getenv("RATE_LIMIT_KEY_CALLS", "300"))
 
 
-# Defaults: 60 requests per minute per IP, 30 per minute per API key
+# Defaults: 60 requests per minute per IP, 300 per minute per API key
 ip_limiter = SimpleRateLimiter(calls=RATE_LIMIT_IP_CALLS, period=RATE_LIMIT_PERIOD)
 key_limiter = SimpleRateLimiter(calls=RATE_LIMIT_KEY_CALLS, period=RATE_LIMIT_PERIOD)
-
-
-
-
-# API keys and dev mode
-API_KEYS = [k.strip() for k in os.getenv("API_KEYS", "").split(",") if k.strip()]
-DEV_API_KEY = os.getenv("DEV_API_KEY")
-ALLOW_DEV = os.getenv("ALLOW_DEV", "false").lower() in ("1", "true", "yes")
-ENVIRONMENT = os.getenv("ENVIRONMENT", "").strip().lower()
-IS_DEVELOPMENT_ENV = ENVIRONMENT == "development"
-DEV_AUTH_ENABLED = False
-
-if ALLOW_DEV:
-    logger.warning(
-        "Development authentication requested. Do not use in production."
-    )
-    if not IS_DEVELOPMENT_ENV:
-        logger.warning(
-            "Development authentication blocked because ENVIRONMENT is not set to development."
-        )
-    elif not DEV_API_KEY:
-        logger.warning(
-            "Development authentication blocked because DEV_API_KEY is not configured."
-        )
-    elif API_KEYS:
-        logger.warning(
-            "Development authentication blocked because API_KEYS are configured and production API key validation remains authoritative."
-        )
-    else:
-        DEV_AUTH_ENABLED = True
-        logger.warning(
-            "Development authentication enabled in a development environment. Do not use in production."
-        )
-
-if not API_KEYS and not DEV_AUTH_ENABLED:
-    logger.warning(
-        "API_KEYS is not configured and development authentication is unavailable."
-    )
 
 
 class ChatRequest(BaseModel):
@@ -316,12 +280,12 @@ async def _run_bounded_parser(parser, content: bytes) -> str:
         )
     except asyncio.TimeoutError:
         raise HTTPException(status_code=413, detail="File is too complex to process safely")
-@app.post("/chat")
-async def chat(request: Request, payload: ChatRequest):
-    # Auth
-    api_key = _validate_api_key(request)
 
-    if not key_limiter.check(api_key)["allowed"]:
+
+@app.post("/chat")
+async def chat(request: Request, payload: ChatRequest, identity: str = Depends(validate_token_or_api_key)):
+    # Rate limiting using the authenticated identity
+    if not key_limiter.check(identity)["allowed"]:
         raise HTTPException(status_code=429, detail="Rate limit exceeded")
 
     # Sanitize inputs
@@ -370,37 +334,43 @@ async def upload_document(request: Request, file: UploadFile = File(...), identi
     if content_length and content_length > MAX_UPLOAD_SIZE:
         raise HTTPException(status_code=413, detail="Uploaded file is too large")
 
+    temp_path = None
     try:
-        chunks = []
-        total_size = 0
-        while True:
-            chunk = await file.read(CHUNK_SIZE)
-            if not chunk:
-                break
-            total_size += len(chunk)
-            if total_size > MAX_UPLOAD_SIZE:
-                raise HTTPException(status_code=413, detail="Uploaded file is too large")
-            chunks.append(chunk)
-
-        content = b"".join(chunks)
-
         filename = file.filename or "unknown"
         file_extension = os.path.splitext(filename)[1].lower()
         extracted_text = ""
+        total_size = 0
+        with tempfile.NamedTemporaryFile(delete=False, suffix=file_extension or "") as temp_file:
+            temp_path = temp_file.name
+            while True:
+                chunk = await file.read(CHUNK_SIZE)
+                if not chunk:
+                    break
+                total_size += len(chunk)
+                if total_size > MAX_UPLOAD_SIZE:
+                    raise HTTPException(status_code=413, detail="Uploaded file is too large")
+                temp_file.write(chunk)
 
-        # Perform MIME-aware preprocessing and signature validation
-        validate_mime_and_bytes(content, file.content_type or "", filename)
+        with open(temp_path, "rb") as temp_file:
+            content = temp_file.read()
+        content_prefix = content[:4096]
+
+        # Perform MIME-aware preprocessing and signature validation using only the
+        # minimum bytes needed for structural checks.
+        validate_mime_and_bytes(content_prefix, file.content_type or "", filename)
 
         if file_extension == ".docx":
             validate_docx_archive_safety(content)
 
-        # Process by type
-        if file_extension == '.pdf' or content.startswith(b'%PDF-'):
+        # Process by type.
+        if file_extension == '.pdf' or content_prefix.startswith(b'%PDF-'):
             try:
                 extracted_text = await _run_bounded_parser(_extract_pdf_text, content)
             except HTTPException:
                 raise
             except Exception as e:
+                if isinstance(e, HTTPException):
+                    raise
                 logger.error(f"PDF parse error: {e}")
                 raise HTTPException(status_code=400, detail="Invalid or corrupted PDF")
 
@@ -416,7 +386,8 @@ async def upload_document(request: Request, file: UploadFile = File(...), identi
                 )
 
         elif file_extension == '.txt':
-            extracted_text = content.decode('utf-8')
+            with open(temp_path, 'r', encoding='utf-8') as text_file:
+                extracted_text = text_file.read(10000)
 
         # Truncate extracted text to avoid sending huge payloads to models
         extracted_text = extracted_text[:MAX_EXTRACTED_TEXT_CHARS]
@@ -430,6 +401,12 @@ async def upload_document(request: Request, file: UploadFile = File(...), identi
     except Exception as e:
         logger.error(f"Upload error: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail="Failed to process document")
+    finally:
+        if temp_path and os.path.exists(temp_path):
+            try:
+                os.unlink(temp_path)
+            except OSError:
+                pass
 
 
 @app.post("/summarize")
