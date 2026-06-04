@@ -21,7 +21,8 @@ async def test_health_endpoint_ok():
         assert "timestamp" in data
         assert "T" in data["timestamp"]  # ISO 8601 format
         assert "details" in data
-        assert data["details"] is None
+        assert isinstance(data["details"], dict)
+        assert "database" in data["details"]
 
 
 @pytest.mark.asyncio
@@ -48,7 +49,7 @@ async def test_signup_endpoint_fails_for_duplicate_email():
 
         second_response = await ac.post("/auth/signup", json=payload)
         assert second_response.status_code == status.HTTP_409_CONFLICT
-        assert second_response.json()["detail"] == "Email already registered"
+        assert second_response.json()["detail"] == "Email already exists"
 
 
 @pytest.mark.asyncio
@@ -181,7 +182,8 @@ async def test_upload_endpoint_with_docx():
     content = b"PK\x03\x04\x14\x00\x00\x00\x08\x00"
     files = {"file": ("sample.docx", content, "application/vnd.openxmlformats-officedocument.wordprocessingml.document")}
 
-    with patch("backend.main.DocxDocument", return_value=mock_doc):
+    with patch("backend.main.DocxDocument", return_value=mock_doc), \
+         patch("backend.main.validate_docx_archive_safety"):
         async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as ac:
             r = await ac.post("/upload", files=files, headers=headers)
             assert r.status_code == 200

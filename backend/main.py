@@ -13,7 +13,7 @@ import uuid
 
 from dotenv import load_dotenv
 
-from backend.database import engine, Base
+from backend.database import engine, Base, SessionLocal
 from backend.routers import auth_routes
 from backend.routers import legal_routes
 from backend.auth import validate_token_or_api_key
@@ -130,6 +130,12 @@ ALLOWED_ORIGINS = [
     for origin in raw_allowed_origins.split(",")
     if origin.strip()
 ]
+# Automatically allow common development ports on localhost
+for host in ["http://localhost", "http://127.0.0.1"]:
+    for port in range(5173, 5181):
+        dev_origin = f"{host}:{port}"
+        if dev_origin not in ALLOWED_ORIGINS:
+            ALLOWED_ORIGINS.append(dev_origin)
 # Rate-limit middleware registered first so that CORSMiddleware
 # (added second) wraps it — ensuring 429 responses include CORS headers.
 app.add_middleware(RateLimitMiddleware)
@@ -455,11 +461,31 @@ async def health():
     uptime = time.monotonic() - _app_start_time
     timestamp = datetime.utcnow().isoformat() + "Z"
 
+    # Database connectivity check
+    db_status = "ok"
+    try:
+        from sqlalchemy import text
+        db = SessionLocal()
+        db.execute(text("SELECT 1"))
+        db.close()
+    except Exception as e:
+        logger.error(f"Database health check failed: {e}")
+        db_status = "down"
+
+    status = health_data.get("status", "unknown")
+    if db_status == "down":
+        status = "degraded"
+
+    details = health_data.get("details") or {}
+    if not isinstance(details, dict):
+        details = {"ai_details": details}
+    details["database"] = db_status
+
     response = HealthResponse(
-        status=health_data.get("status", "unknown"),
+        status=status,
         uptime_seconds=round(uptime, 2),
         timestamp=timestamp,
-        details=health_data.get("details"),
+        details=details,
     )
 
     if response.status == "degraded":

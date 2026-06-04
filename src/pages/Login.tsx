@@ -37,17 +37,33 @@ export function LoginPage() {
         body: JSON.stringify({ email, password }),
       });
 
-      const data = await response.json();
+      const data = await response.json().catch(() => null);
 
       if (!response.ok) {
-        setError(data.detail || 'Invalid email or password');
+        let message = 'Login failed. Please try again.';
+        if (typeof data?.detail === 'string') {
+          message = data.detail;
+        } else if (Array.isArray(data?.detail) && data.detail.length > 0) {
+          message = data.detail[0]?.msg || 'Validation failed';
+        } else if (data?.error) {
+          message = data.error;
+        } else {
+          message = 'Invalid email or password';
+        }
+        setError(message);
         return;
       }
 
       login(data.access_token);
       navigate(redirectTo);
-    } catch {
-      setError('Unable to connect to the server. Please try again.');
+    } catch (err: any) {
+      console.error('Login request failed:', err);
+      const isNetworkError = err instanceof TypeError || (err && err.message && err.message.toLowerCase().includes('fetch'));
+      if (isNetworkError) {
+        setError('Server is unavailable. Please verify the backend server is running.');
+      } else {
+        setError('Unable to connect to the server. Please try again.');
+      }
     } finally {
       setIsLoading(false);
     }
