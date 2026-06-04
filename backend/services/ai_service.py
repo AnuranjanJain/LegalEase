@@ -209,6 +209,123 @@ class AIService:
                 logger.error(f"[{self._get_corr_id()}] Error in summary generation, graceful degradation disabled: {e}")
                 raise
 
+    async def analyze_clauses(self, text: str) -> List[Dict[str, Any]]:
+        """
+        Analyze contract clauses and extract key clauses with risk levels and reasons.
+        """
+        if not text or not text.strip():
+            return []
+
+        prompt = (
+            "Analyze the following legal text and extract up to 5 key clauses. "
+            "For each clause, assign a riskLevel ('High', 'Medium', or 'Low') and a riskReason "
+            "explaining the risk assignment.\n\n"
+            "You MUST respond ONLY with a valid JSON array of objects, where each object has these exact keys:\n"
+            "  - \"clause\": the exact text of the contract clause\n"
+            "  - \"riskLevel\": the assigned risk level ('High', 'Medium', 'Low')\n"
+            "  - \"riskReason\": a brief explanation of why this risk level was assigned\n\n"
+            "Do not include any other commentary, markdown formatting (outside of valid JSON structure), "
+            "or conversational filler. Output must be parsable as JSON.\n\n"
+            f"Text to analyze:\n{text}"
+        )
+
+        # Truncation for model input constraints
+        if len(prompt) > self.max_model_input_chars:
+            prompt = prompt[:self.max_model_input_chars]
+
+        messages = [{"role": "user", "content": prompt}]
+
+        # Check for stub mode
+        if self.stub_mode:
+            return [
+                {
+                    "clause": "The company may terminate this agreement at any time without notice.",
+                    "riskLevel": "High",
+                    "riskReason": "Unilateral termination rights may negatively impact the user."
+                },
+                {
+                    "clause": "Subscriber shall indemnify and hold harmless Provider against any and all claims.",
+                    "riskLevel": "Medium",
+                    "riskReason": "Broad indemnification clauses can lead to unexpected liabilities."
+                },
+                {
+                    "clause": "This Agreement shall be governed by the laws of the State of Delaware.",
+                    "riskLevel": "Low",
+                    "riskReason": "Standard governing law clause, standard jurisdiction choice."
+                }
+            ]
+
+        try:
+            output = await self._execute_with_retry_and_timeout(self.chat_model_name, messages)
+            response_text = output.output if hasattr(output, 'output') else str(output)
+            return self._parse_clauses_json(response_text)
+        except Exception as e:
+            logger.error(f"[{self._get_corr_id()}] Clause analysis failed: {e}")
+            if self.graceful_degradation:
+                # Return standard fallback clauses
+                return [
+                    {
+                        "clause": "The company may terminate this agreement at any time without notice.",
+                        "riskLevel": "High",
+                        "riskReason": "Unilateral termination rights may negatively impact the user (fallback)."
+                    }
+                ]
+            raise
+
+    def _parse_clauses_json(self, raw_text: str) -> List[Dict[str, Any]]:
+        import json
+        import re
+        
+        cleaned = raw_text.strip()
+        # Remove markdown code blocks if present
+        if cleaned.startswith("```"):
+            # Find the first json code block
+            match = re.search(r"```(?:json)?\s*([\s\S]*?)\s*```", cleaned, re.IGNORECASE)
+            if match:
+                cleaned = match.group(1).strip()
+            else:
+                # Fallback strip of leading/trailing markdown code fences
+                cleaned = re.sub(r"^```[a-zA-Z]*\n?", "", cleaned)
+                cleaned = re.sub(r"\n?```$", "", cleaned).strip()
+                
+        try:
+            parsed = json.loads(cleaned)
+            if isinstance(parsed, list):
+                validated_clauses = []
+                for item in parsed:
+                    if isinstance(item, dict) and "clause" in item:
+                        # Normalize risk level
+                        risk_lvl = str(item.get("riskLevel", "Low")).strip().capitalize()
+                        if risk_lvl not in ["High", "Medium", "Low"]:
+                            risk_lvl = "Low"
+                        
+                        validated_clauses.append({
+                            "clause": str(item.get("clause", "")).strip(),
+                            "riskLevel": risk_lvl,
+                            "riskReason": str(item.get("riskReason", "")).strip() or "Analyzed clause."
+                        })
+                return validated_clauses
+            return []
+        except Exception as e:
+            logger.warning(f"Failed to parse AI JSON response: {e}. Raw response: {raw_text}")
+            # Try to find something JSON-like in brackets if the parser failed
+            try:
+                array_match = re.search(r"\[\s*\{[\s\S]*\}\s*\]", cleaned)
+                if array_match:
+                    parsed = json.loads(array_match.group(0))
+                    if isinstance(parsed, list):
+                        return [
+                            {
+                                "clause": str(item.get("clause", "")).strip(),
+                                "riskLevel": str(item.get("riskLevel", "Low")).strip().capitalize() if str(item.get("riskLevel", "Low")).strip().capitalize() in ["High", "Medium", "Low"] else "Low",
+                                "riskReason": str(item.get("riskReason", "Analyzed clause.")).strip()
+                            }
+                            for item in parsed if isinstance(item, dict) and "clause" in item
+                        ]
+            except Exception:
+                pass
+            raise ValueError("Invalid JSON response from AI provider")
+
     def check_health(self) -> Dict[str, Any]:
         """
         Return a public-safe health status, with optional debug diagnostics.

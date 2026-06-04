@@ -138,10 +138,20 @@ export function ProcessingPage() {
         }
 
         setFinalSummary(compiledBrief);
+
+        // Fetch clause-level risk assessment
+        let analyzedClauses: any[] = [];
+        try {
+          const response = await api.post<{ clauses: any[] }>('/legal/analyze-clauses', { text: extractedText });
+          analyzedClauses = response.clauses;
+        } catch (clauseErr) {
+          console.warn('Failed to analyze clauses, falling back to empty clauses array:', clauseErr);
+        }
+
         setStage4Status('completed');
 
         // Save complete results back to StorageService
-        StorageService.updateDocumentStatus(docId, 'processed', compiledBrief, extractedText);
+        StorageService.updateDocumentStatus(docId, 'processed', compiledBrief, extractedText, analyzedClauses);
         showToast(`"${file.name}" analyzed successfully!`, 'success');
       } catch (err) {
         setStage4Status('failed');

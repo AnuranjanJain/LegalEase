@@ -9,6 +9,7 @@ import { useToast } from '../contexts/ToastContext';
 import { useNavigate } from 'react-router-dom';
 import { ShareButton } from '../components/ShareButton';
 import { WhatsAppShareModal } from '../components/WhatsAppShareModal';
+import { ClauseAnalysisSection } from '../components/ClauseAnalysisSection';
 
 export function DocumentsPage() {
   const [isDragging, setIsDragging] = useState(false);
@@ -150,7 +151,35 @@ export function DocumentsPage() {
       showToast(`Opening cognitive audit report for "${doc.name}"`, 'success');
       setSelectedAuditDoc({
         ...doc,
-        summary: getMockSummary(doc)
+        summary: getMockSummary(doc),
+        clauses: doc.clauses || (doc.id === 'doc_1' ? [
+          {
+            clause: "The company may terminate this agreement at any time without notice.",
+            riskLevel: "High",
+            riskReason: "Allows one party to terminate the agreement without notice."
+          },
+          {
+            clause: "Subscriber shall indemnify and hold harmless Provider against any and all claims.",
+            riskLevel: "Medium",
+            riskReason: "Broad indemnification clauses can lead to unexpected liabilities."
+          },
+          {
+            clause: "This Agreement shall be governed by the laws of the State of Delaware.",
+            riskLevel: "Low",
+            riskReason: "Standard governing law clause, standard jurisdiction choice."
+          }
+        ] : doc.id === 'doc_3' ? [
+          {
+            clause: "We retain user data for 5 years after account deletion to comply with internal compliance guidelines.",
+            riskLevel: "Medium",
+            riskReason: "GDPR retention rules generally request deleting PII as soon as the service relationship ends."
+          },
+          {
+            clause: "By using the app, you agree to receive promotional materials and third-party tracking cookies automatically (opt-out).",
+            riskLevel: "Medium",
+            riskReason: "European regulations heavily penalize automatic opt-in profiling of cookies."
+          }
+        ] : [])
       });
     }
   };
@@ -577,6 +606,8 @@ export function DocumentsPage() {
               <div className="prose prose-sm dark:prose-invert max-w-none text-gray-700 dark:text-gray-200 whitespace-pre-line leading-relaxed text-sm">
                 {selectedAuditDoc.summary}
               </div>
+
+              <ClauseAnalysisSection clauses={selectedAuditDoc.clauses} />
 
             </div>
 
