@@ -440,7 +440,7 @@ async def health():
     )
 
     if response.status == "degraded":
-        raise HTTPException(status_code=503, detail=response.model_dump())
+        raise JSONResponse(status_code=503, detail=response.model_dump())
 
     return response
 
