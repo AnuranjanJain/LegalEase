@@ -1,3 +1,9 @@
+export interface ClauseAnalysis {
+  clause: string;
+  riskLevel: 'Low' | 'Medium' | 'High';
+  riskReason: string;
+}
+
 export interface Document {
   id: string;
   name: string;
@@ -9,6 +15,7 @@ export interface Document {
   text?: string;
   extractedText?: string;
   summary?: string;
+  clauses?: ClauseAnalysis[];
 }
 
 export interface UserProfile {
@@ -98,7 +105,7 @@ export const StorageService = {
     return StorageService.getDocuments().find(d => d.id === id);
   },
 
-  updateDocumentStatus: (id: string, status: 'processed' | 'processing' | 'failed', summary?: string, text?: string) => {
+  updateDocumentStatus: (id: string, status: 'processed' | 'processing' | 'failed', summary?: string, text?: string, clauses?: ClauseAnalysis[]) => {
     const docs = StorageService.getDocuments();
     const docIndex = docs.findIndex(d => d.id === id);
     if (docIndex !== -1) {
@@ -111,6 +118,9 @@ export const StorageService = {
       }
       if (text !== undefined) {
         docs[docIndex].text = text;
+      }
+      if (clauses !== undefined) {
+        docs[docIndex].clauses = clauses;
       }
       localStorage.setItem(STORAGE_KEYS.DOCUMENTS, JSON.stringify(docs));
     }
@@ -171,7 +181,24 @@ export const StorageService = {
           size: 2400000,
           uploadDate: new Date(Date.now() - 7200000).toISOString(),
           status: 'processed',
-          processedDate: new Date(Date.now() - 3600000).toISOString()
+          processedDate: new Date(Date.now() - 3600000).toISOString(),
+          clauses: [
+            {
+              clause: "The company may terminate this agreement at any time without notice.",
+              riskLevel: "High",
+              riskReason: "Allows one party to terminate the agreement without notice."
+            },
+            {
+              clause: "Subscriber shall indemnify and hold harmless Provider against any and all claims.",
+              riskLevel: "Medium",
+              riskReason: "Broad indemnification clauses can lead to unexpected liabilities."
+            },
+            {
+              clause: "This Agreement shall be governed by the laws of the State of Delaware.",
+              riskLevel: "Low",
+              riskReason: "Standard governing law clause, standard jurisdiction choice."
+            }
+          ]
         },
         {
           id: 'doc_2',
@@ -188,7 +215,19 @@ export const StorageService = {
           size: 952000,
           uploadDate: new Date(Date.now() - 259200000).toISOString(),
           status: 'processed',
-          processedDate: new Date(Date.now() - 172800000).toISOString()
+          processedDate: new Date(Date.now() - 172800000).toISOString(),
+          clauses: [
+            {
+              clause: "We retain user data for 5 years after account deletion to comply with internal compliance guidelines.",
+              riskLevel: "Medium",
+              riskReason: "GDPR retention rules generally request deleting PII as soon as the service relationship ends."
+            },
+            {
+              clause: "By using the app, you agree to receive promotional materials and third-party tracking cookies automatically (opt-out).",
+              riskLevel: "Medium",
+              riskReason: "European regulations heavily penalize automatic opt-in profiling of cookies."
+            }
+          ]
         }
       ];
       localStorage.setItem(STORAGE_KEYS.DOCUMENTS, JSON.stringify(sampleDocs));

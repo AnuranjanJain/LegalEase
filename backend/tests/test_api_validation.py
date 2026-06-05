@@ -1,7 +1,7 @@
 import pytest
 from fastapi import HTTPException
-from backend.main import _validate_api_key, ChatRequest, SummarizeRequest
-import backend.main
+from backend.auth import _validate_api_key
+from backend.main import ChatRequest, SummarizeRequest
 
 
 @pytest.mark.unit
