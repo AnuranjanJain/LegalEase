@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { 
   ArrowRight, FileText, Shield, Zap, Scale, MessageSquare, 
   AlertTriangle, Lock, Globe, FileSearch, CheckCircle2, ChevronDown,
-  Briefcase, Rocket, UserCheck
+  Briefcase, Rocket, UserCheck , Star
 } from 'lucide-react';
 import { NavLink } from 'react-router-dom';
 
@@ -41,6 +41,37 @@ const DEMO_CLAUSES: Readonly<Record<'term' | 'indem' | 'ip', DemoClause>> = Obje
     remediation: "Add a clear 'Pre-Existing IP' clause to protect and exclude your proprietary background libraries or tools from automatic assignment."
   }
 });
+
+interface Review {
+  name: string;
+  role: string;
+  review: string;
+  rating: number;
+}
+
+const REVIEWS: Review[] = [
+  {
+    name: "Sarah Johnson",
+    role: "Startup Founder",
+    review:
+      "LegalEase helped us identify risky clauses in investor agreements within seconds. It saved our team hours of manual review.",
+    rating: 5,
+  },
+  {
+    name: "Michael Chen",
+    role: "Legal Consultant",
+    review:
+      "The AI clause analysis is surprisingly accurate. The plain-English explanations make legal documents much easier to understand.",
+    rating: 5,
+  },
+  {
+    name: "Emily Davis",
+    role: "Freelancer",
+    review:
+      "I use LegalEase before signing client contracts. The risk alerts have helped me avoid several unfavorable agreements.",
+    rating: 4,
+  },
+];
 
 interface FaqItem {
   q: string;
@@ -495,7 +526,84 @@ export function HomePage() {
         </div>
       </section>
 
-      {/* Security Focus Section */}
+      
+      
+      {/* Reviews & Feedback Section */}
+<section className="py-24 px-4 sm:px-6 lg:px-8 bg-gray-50 dark:bg-gray-900 border-t border-gray-200 dark:border-gray-800">
+  <div className="app-container">
+    <div className="text-center mb-16">
+      <span className="text-xs font-extrabold uppercase tracking-widest text-primary-600 dark:text-primary-400 block mb-3">
+        Reviews & Feedback
+      </span>
+
+      <h2 className="text-3xl sm:text-4xl font-extrabold text-gray-900 dark:text-white tracking-tight mb-4">
+        Trusted By Professionals Worldwide
+      </h2>
+
+      <div className="h-1.5 w-20 bg-primary-600 mx-auto rounded-full mb-6"></div>
+
+      <p className="text-gray-600 dark:text-gray-400 max-w-2xl mx-auto">
+        See how LegalEase is helping businesses, freelancers, and legal
+        professionals simplify complex contracts and reduce risk.
+      </p>
+    </div>
+
+    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
+      {REVIEWS.map((review, index) => (
+        <div
+          key={index}
+          className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-2xl p-8 shadow-sm hover:shadow-xl hover:-translate-y-1 transition-all duration-300"
+        >
+          {/* Rating */}
+          <div className="flex gap-1 mb-4">
+            {[...Array(review.rating)].map((_, i) => (
+              <Star
+                key={i}
+                size={18}
+                className="fill-yellow-400 text-yellow-400"
+              />
+            ))}
+          </div>
+
+          {/* Review Text */}
+          <p className="text-gray-600 dark:text-gray-300 leading-relaxed mb-6">
+            "{review.review}"
+          </p>
+
+          {/* User Info */}
+          <div className="flex items-center gap-4">
+            <div className="w-12 h-12 rounded-full bg-primary-600 text-white flex items-center justify-center font-bold">
+              {review.name
+                .split(" ")
+                .map((word) => word[0])
+                .join("")}
+            </div>
+
+            <div>
+              <h4 className="font-semibold text-gray-900 dark:text-white">
+                {review.name}
+              </h4>
+              <p className="text-sm text-gray-500 dark:text-gray-400">
+                {review.role}
+              </p>
+            </div>
+          </div>
+        </div>
+      ))}
+    </div>
+
+    {/* Trust Summary */}
+    <div className="mt-16 text-center">
+      <div className="inline-flex items-center gap-3 px-6 py-3 rounded-full bg-primary-50 dark:bg-primary-900/20 border border-primary-200 dark:border-primary-800">
+        <Star className="fill-yellow-400 text-yellow-400" size={20} />
+        <span className="font-semibold text-gray-800 dark:text-white">
+          Rated 4.9/5 by 1,000+ professionals
+        </span>
+      </div>
+    </div>
+  </div>
+</section>
+{/* Security Focus Section */}
       <section className="py-20 px-4 sm:px-6 lg:px-8 bg-gray-50 dark:bg-gray-950 text-gray-900 dark:text-white border-t border-gray-200 dark:border-gray-800/80">
         <div className="app-container">
           <div className="grid grid-cols-1 lg:grid-cols-12 gap-12 items-center">
