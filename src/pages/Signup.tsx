@@ -41,17 +41,30 @@ export function SignupPage() {
       const data = await response.json().catch(() => null);
 
       if (!response.ok) {
-        const message =
-          data?.detail || data?.error || `Signup failed with status ${response.status}. Please try again.`;
+        let message = 'Signup failed. Please try again.';
+        if (typeof data?.detail === 'string') {
+          message = data.detail;
+        } else if (Array.isArray(data?.detail) && data.detail.length > 0) {
+          message = data.detail[0]?.msg || 'Validation failed';
+        } else if (data?.error) {
+          message = data.error;
+        } else {
+          message = `Signup failed with status ${response.status}. Please try again.`;
+        }
         setError(message);
         return;
       }
 
-      // Signup successful — redirect to login
-      navigate('/login');
-    } catch (err) {
+      // Signup successful — redirect to verify-email
+      navigate(`/verify-email?email=${encodeURIComponent(email)}`);
+    } catch (err: any) {
       console.error('Signup request failed:', err);
-      setError('Unable to connect to the server. Please try again later.');
+      const isNetworkError = err instanceof TypeError || (err && err.message && err.message.toLowerCase().includes('fetch'));
+      if (isNetworkError) {
+        setError('Server is unavailable. Please verify the backend server is running.');
+      } else {
+        setError('Unable to connect to the server. Please try again later.');
+      }
     } finally {
       setIsLoading(false);
     }
