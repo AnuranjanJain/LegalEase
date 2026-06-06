@@ -15,7 +15,17 @@ async function handleErrorResponse(response: Response, fallbackPrefix: string): 
   }
 
   const errorData = await response.json().catch(() => ({}));
-  throw new Error(errorData.detail || `${fallbackPrefix}: ${response.status}`);
+  let message = '';
+  if (typeof errorData?.detail === 'string') {
+    message = errorData.detail;
+  } else if (Array.isArray(errorData?.detail) && errorData.detail.length > 0) {
+    message = errorData.detail[0]?.msg || 'Validation failed';
+  } else if (errorData?.error) {
+    message = errorData.error;
+  } else {
+    message = `${fallbackPrefix}: ${response.status}`;
+  }
+  throw new Error(message);
 }
 
 export const api = {
