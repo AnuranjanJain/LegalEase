@@ -1,6 +1,6 @@
 import pytest
 import time
-from backend.main import SimpleRateLimiter
+from backend.utils.limiter import SimpleRateLimiter
 
 
 @pytest.mark.unit
