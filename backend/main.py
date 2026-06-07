@@ -111,6 +111,31 @@ async def service_unavailable_exception_handler(request: Request, exc: ServiceUn
         }
     )
 
+import sys
+
+# Global unhandled HTTP exceptions
+@app.exception_handler(Exception)
+async def global_exception_handler(request: Request, exc: Exception):
+    corr_id = correlation_id_var.get()
+    logger.error(f"[{corr_id}] Unhandled exception: {exc}", exc_info=True)
+    return JSONResponse(
+        status_code=500,
+        content={
+            "error": "internal_server_error",
+            "detail": "An unexpected error occurred.",
+            "correlation_id": corr_id
+        }
+    )
+
+# Global unhandled thread/process exceptions
+def handle_uncaught_exception(exc_type, exc_value, exc_traceback):
+    if not issubclass(exc_type, Exception):
+        sys.__excepthook__(exc_type, exc_value, exc_traceback)
+        return
+    logger.critical("Uncaught global exception", exc_info=(exc_type, exc_value, exc_traceback))
+
+sys.excepthook = handle_uncaught_exception
+
 
 # Create database tables
 Base.metadata.create_all(bind=engine)
