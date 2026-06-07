@@ -45,3 +45,4 @@ backend/.coverage
 backend/coverage.xml
 backend/.flake8
 *.db
+pnpm-lock.yaml
