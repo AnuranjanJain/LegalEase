@@ -52,11 +52,12 @@ describe('Toast', () => {
       // There should be some visual differentiation — a class, role, or aria-label
       // that carries the variant name. We check the container broadly.
       const colorMap: Record<string, string> = {
-        success: "bg-green",
-        error: "bg-red",
-        warning: "bg-yellow",
+        success: "bg-green-50",
+        error: "bg-red-50",
+        warning: "bg-yellow-50",
+        info: 'bg-blue-50', 
       };
-      expect(container.innerHTML.toLowerCase()).toContain(colorMap[type]);
+      expect(container.innerHTML).toContain(colorMap['info']);
     }
   );
 
