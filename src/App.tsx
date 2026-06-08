@@ -19,6 +19,7 @@ import { AuthProvider } from './contexts/AuthContext';
 import { ProtectedRoute } from './components/ProtectedRoute';
 import { LoginPage } from './pages/Login';
 import { SignupPage } from './pages/Signup';
+import { VerifyEmailPage } from './pages/VerifyEmail';
 import BackToTop from "./components/BackToTop";
 
 function App() {
@@ -35,6 +36,7 @@ function App() {
         <Routes>
           <Route path="/login" element={<LoginPage />} />
           <Route path="/signup" element={<SignupPage />} />
+          <Route path="/verify-email" element={<VerifyEmailPage />} />
           <Route path="/" element={<Layout />}>
             <Route index element={<HomePage />} />
             <Route path="dashboard" element={<ProtectedRoute><DashboardPage /></ProtectedRoute>} />

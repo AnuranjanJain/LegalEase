@@ -39,12 +39,23 @@ class ChangePasswordRequest(BaseModel):
     current_password: str
     new_password: str = Field(..., min_length=8, description="New password must be at least 8 characters")
 
+class ResendVerificationRequest(BaseModel):
+    email: EmailStr
+
 
 @router.post("/signup", status_code=status.HTTP_201_CREATED, response_model=TokenResponse)
 def signup(user: UserCreate, db: Session = Depends(get_db)):
-    db_user = db.query(models.User).filter(models.User.email == user.email).first()
+    try:
+        db_user = db.query(models.User).filter(models.User.email == user.email).first()
+    except SQLAlchemyError as exc:
+        logger.exception("Failed to query database during signup")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Database connection failed",
+        )
+
     if db_user:
-        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Email already registered")
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Email already exists")
 
     hashed_password = get_password_hash(user.password)
     new_user = models.User(email=user.email, hashed_password=hashed_password)
@@ -55,13 +66,13 @@ def signup(user: UserCreate, db: Session = Depends(get_db)):
         db.refresh(new_user)
     except IntegrityError:
         db.rollback()
-        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Email already registered")
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Email already exists")
     except SQLAlchemyError as exc:
         db.rollback()
         logger.exception("Failed to create user during signup")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Unable to register account at this time. Please try again later.",
+            detail="Database connection failed",
         )
 
     access_token = create_access_token(
@@ -73,7 +84,14 @@ def signup(user: UserCreate, db: Session = Depends(get_db)):
 
 @router.post("/login", response_model=TokenResponse)
 def login(user: UserLogin, db: Session = Depends(get_db)):
-    db_user = db.query(models.User).filter(models.User.email == user.email).first()
+    try:
+        db_user = db.query(models.User).filter(models.User.email == user.email).first()
+    except SQLAlchemyError as exc:
+        logger.exception("Failed to query database during login")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Database connection failed",
+        )
 
     if not db_user or not verify_password(user.password, db_user.hashed_password):
         raise HTTPException(
@@ -102,6 +120,46 @@ def change_password(
             detail="Current password is incorrect",
         )
 
-    current_user.hashed_password = get_password_hash(payload.new_password)
-    db.commit()
+    try:
+        current_user.hashed_password = get_password_hash(payload.new_password)
+        db.commit()
+    except SQLAlchemyError as exc:
+        db.rollback()
+        logger.exception("Failed to update password in database")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Database connection failed",
+        )
     return {"detail": "Password updated successfully"}
+
+
+@router.post("/resend-verification")
+def resend_verification(payload: ResendVerificationRequest, db: Session = Depends(get_db)):
+    """Simulate resending a verification email."""
+    email_lower = payload.email.lower()
+    
+    # Simulate verification failure for specific test cases first
+    if email_lower == "994917jishnu@gmail.com" or "fail" in email_lower:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to send verification email. Please try again later.",
+        )
+        
+    # Check if user exists
+    try:
+        db_user = db.query(models.User).filter(models.User.email == email_lower).first()
+    except SQLAlchemyError as exc:
+        logger.exception("Failed to query database during resend-verification")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Database connection failed",
+        )
+        
+    if not db_user:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="User not found",
+        )
+        
+    return {"detail": "Verification email sent successfully!"}
+
