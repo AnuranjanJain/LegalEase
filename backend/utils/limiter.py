@@ -22,6 +22,10 @@ class SimpleRateLimiter:
         self.period = period
         self._storage: Dict[str, List[float]] = {}
         self._lock = threading.Lock()
+    @property
+    def storage(self) -> Dict[str, List[float]]:
+        """Expose limiter state for tests and diagnostics."""
+        return self._storage
 
     def check(self, key: str):
         now = time.time()
