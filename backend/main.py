@@ -488,7 +488,7 @@ async def health():
     )
 
     if response.status == "degraded":
-        raise JSONResponse(status_code=503, detail=response.model_dump())
+        return JSONResponse(status_code=503, content={"detail": response.model_dump()})
 
     return response
 
