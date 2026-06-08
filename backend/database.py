@@ -8,7 +8,10 @@ from sqlalchemy.orm import sessionmaker
 logger = logging.getLogger(__name__)
 
 # Read database URL from environment; fall back to local SQLite for development.
-_database_url = os.getenv("DATABASE_URL", "sqlite:///./legalease.db")
+_database_url = os.getenv("DATABASE_URL")
+if not _database_url:
+    sqlite_path = "/tmp/legalease.db" if os.getenv("VERCEL") else "./legalease.db"
+    _database_url = f"sqlite:///{sqlite_path}"
 
 # SQLAlchemy requires 'postgresql://' but some providers (e.g. Heroku, Supabase)
 # supply 'postgres://'. Normalise the scheme automatically.
