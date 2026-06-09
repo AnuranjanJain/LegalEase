@@ -38,6 +38,7 @@ __pycache__/
 backend/__pycache__/
 backend/.venv/
 .venv/
+venv/
 # Coverage reports
 .coverage
 coverage/
