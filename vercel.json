@@ -1,5 +1,11 @@
 {
+  "functions": {
+    "api/**/*.py": {
+      "excludeFiles": "{backend/tests/**,coverage/**,docs/**,legacy/**,assets/**,node_modules/**,dist/**,**/__pycache__/**,**/*.pyc}"
+    }
+  },
   "rewrites": [
+    { "source": "/api/(.*)", "destination": "/api/index.py" },
     { "source": "/(.*)", "destination": "/index.html" }
   ]
 }

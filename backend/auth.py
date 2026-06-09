@@ -149,3 +149,24 @@ def _validate_api_key(request: Request) -> str:
         return token
 
     raise HTTPException(status_code=403, detail="Invalid API key")
+
+
+def get_optional_user(request: Request, db: Session = Depends(get_db)) -> Optional[models.User]:
+    """Try to extract a JWT-authenticated user from the request.
+
+    Returns the User object if the caller provided a valid JWT token,
+    or None if the caller is using a static API key (service-to-service).
+    This allows endpoints to conditionally persist history for real users
+    without breaking API-key authentication.
+    """
+    token = _extract_bearer_token(request)
+    if not token or not SECRET_KEY:
+        return None
+    try:
+        payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
+        email: Optional[str] = payload.get("sub")
+        if email:
+            return db.query(models.User).filter(models.User.email == email).first()
+    except JWTError:
+        pass
+    return None

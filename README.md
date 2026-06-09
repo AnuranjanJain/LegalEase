@@ -449,6 +449,13 @@ cp .env.example .env
   - `BYTEZ_API_KEY` — required by the backend to access the Bytez SDK. Keep this secret.
   - `FRONTEND_URL` — frontend origin used for CORS (default: `http://localhost:5173`).
 
+  Vercel deployment:
+  - The frontend calls same-origin API routes at `/api` in production, so `VITE_API_URL` is usually not required on Vercel.
+  - Add `JWT_SECRET_KEY` to Vercel environment variables before testing login/signup.
+  - Add `BYTEZ_API_KEY` to enable AI-backed features; otherwise `/api/health` reports degraded.
+  - Add `DATABASE_URL` for persistent accounts. Without it, Vercel uses temporary SQLite storage that can reset between serverless instances.
+  - If using a separate backend host instead, set frontend `VITE_API_URL` to that backend URL and backend `FRONTEND_URL` to the Vercel frontend URL.
+
   Optional backend controls:
   - `API_KEYS` — comma-separated list of valid API keys for server endpoints (recommended in production).
   - `DEV_API_KEY` — developer API key allowed when `ALLOW_DEV` is enabled (default: `dev-token`).

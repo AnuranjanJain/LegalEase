@@ -3,7 +3,6 @@ from fastapi import Depends, FastAPI, HTTPException, UploadFile, File, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, StreamingResponse
 from pydantic import BaseModel
-import asyncio
 from datetime import datetime
 from io import BytesIO
 import os
@@ -112,6 +111,31 @@ async def service_unavailable_exception_handler(request: Request, exc: ServiceUn
         }
     )
 
+import sys
+
+# Global unhandled HTTP exceptions
+@app.exception_handler(Exception)
+async def global_exception_handler(request: Request, exc: Exception):
+    corr_id = correlation_id_var.get()
+    logger.error(f"[{corr_id}] Unhandled exception: {exc}", exc_info=True)
+    return JSONResponse(
+        status_code=500,
+        content={
+            "error": "internal_server_error",
+            "detail": "An unexpected error occurred.",
+            "correlation_id": corr_id
+        }
+    )
+
+# Global unhandled thread/process exceptions
+def handle_uncaught_exception(exc_type, exc_value, exc_traceback):
+    if not issubclass(exc_type, Exception):
+        sys.__excepthook__(exc_type, exc_value, exc_traceback)
+        return
+    logger.critical("Uncaught global exception", exc_info=(exc_type, exc_value, exc_traceback))
+
+sys.excepthook = handle_uncaught_exception
+
 
 # Create database tables
 Base.metadata.create_all(bind=engine)
@@ -174,12 +198,10 @@ UPLOAD_PARSE_TIMEOUT_SECONDS = float(os.getenv("UPLOAD_PARSE_TIMEOUT_SECONDS", "
 
 
 RATE_LIMIT_PERIOD = int(os.getenv("RATE_LIMIT_PERIOD", "60"))
-RATE_LIMIT_IP_CALLS = int(os.getenv("RATE_LIMIT_IP_CALLS", "60"))
 RATE_LIMIT_KEY_CALLS = int(os.getenv("RATE_LIMIT_KEY_CALLS", "300"))
 
 
-# Defaults: 60 requests per minute per IP, 300 per minute per API key
-ip_limiter = SimpleRateLimiter(calls=RATE_LIMIT_IP_CALLS, period=RATE_LIMIT_PERIOD)
+# Defaults: 300 requests per minute per API key
 key_limiter = SimpleRateLimiter(calls=RATE_LIMIT_KEY_CALLS, period=RATE_LIMIT_PERIOD)
 
 
@@ -466,7 +488,7 @@ async def health():
     )
 
     if response.status == "degraded":
-        raise HTTPException(status_code=503, detail=response.model_dump())
+        return JSONResponse(status_code=503, content={"detail": response.model_dump()})
 
     return response
 
