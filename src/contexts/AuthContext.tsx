@@ -1,50 +1,82 @@
-import { createContext, useContext, useState, ReactNode } from 'react';
+import { createContext, useContext, useState, useEffect, ReactNode } from 'react';
+import { API_BASE_URL } from '../config/api';
 
 interface AuthContextType {
   isAuthenticated: boolean;
-  login: (token: string) => void;
+  isVerifying: boolean;
+  login: (token: string) => Promise<void>;
   logout: () => boolean;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 /**
- * Decodes a JWT payload and checks whether the token has expired.
- * Returns true if the token is still valid, false otherwise.
- * Does not verify the signature — expiry check only.
+ * Verifies the token with the backend by calling /auth/verify endpoint.
+ * This ensures the token signature is valid and the user exists in the database.
  */
-function isTokenValid(token: string): boolean {
+async function verifyTokenWithBackend(token: string): Promise<boolean> {
   try {
-    const parts = token.split('.');
-    if (parts.length !== 3) return false;
+    const response = await fetch(`${API_BASE_URL}/auth/verify`, {
+      method: 'GET',
+      headers: {
+        'Authorization': `Bearer ${token}`,
+        'Content-Type': 'application/json',
+      },
+    });
 
-    const payload = JSON.parse(atob(parts[1]));
-    if (typeof payload.exp !== 'number') return false;
-
-    return payload.exp * 1000 > Date.now();
+    return response.ok;
   } catch {
     return false;
   }
 }
 
 export function AuthProvider({ children }: { children: ReactNode }) {
-  const [isAuthenticated, setIsAuthenticated] = useState<boolean>(() => {
-    const token = localStorage.getItem('access_token');
+  const [isAuthenticated, setIsAuthenticated] = useState<boolean>(false);
+  const [isVerifying, setIsVerifying] = useState<boolean>(true);
 
-    if (token && isTokenValid(token)) {
-      return true;
-    }
+  useEffect(() => {
+    // Verify token with backend on app startup
+    const verifyStoredToken = async () => {
+      const token = localStorage.getItem('access_token');
 
-    if (token) {
-      localStorage.removeItem('access_token');
-    }
+      if (!token) {
+        setIsVerifying(false);
+        setIsAuthenticated(false);
+        return;
+      }
 
-    return false;
-  });
+      const isValid = await verifyTokenWithBackend(token);
 
-  const login = (token: string) => {
+      if (isValid) {
+        setIsAuthenticated(true);
+      } else {
+        // Clear invalid token
+        localStorage.removeItem('access_token');
+        sessionStorage.clear();
+        setIsAuthenticated(false);
+      }
+
+      setIsVerifying(false);
+    };
+
+    verifyStoredToken();
+  }, []);
+
+  const login = async (token: string) => {
     localStorage.setItem('access_token', token);
-    setIsAuthenticated(true);
+    
+    // Verify token with backend before setting authenticated state
+    const isValid = await verifyTokenWithBackend(token);
+    
+    if (isValid) {
+      setIsAuthenticated(true);
+    } else {
+      // Clear invalid token
+      localStorage.removeItem('access_token');
+      sessionStorage.clear();
+      setIsAuthenticated(false);
+      throw new Error('Invalid token received from server');
+    }
   };
 
   const logout = (): boolean => {
@@ -64,7 +96,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
   return (
-    <AuthContext.Provider value={{ isAuthenticated, login, logout }}>
+    <AuthContext.Provider value={{ isAuthenticated, isVerifying, login, logout }}>
       {children}
     </AuthContext.Provider>
   );

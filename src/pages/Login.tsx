@@ -53,7 +53,7 @@ export function LoginPage() {
         return;
       }
 
-      login(data.access_token);
+      await login(data.access_token);
       navigate(redirectTo);
     } catch (err: any) {
       console.error('Login request failed:', err);
