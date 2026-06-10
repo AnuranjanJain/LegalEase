@@ -5,7 +5,7 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
-from backend.auth import get_current_user
+from backend.auth import get_current_user, AuthIdentity
 from backend.database import get_db
 from backend import models
 
@@ -52,13 +52,14 @@ class DocumentRecordOut(BaseModel):
 
 @router.get("/chats", response_model=List[ChatSessionOut])
 def list_chat_sessions(
-    current_user: models.User = Depends(get_current_user),
+    current_user: AuthIdentity = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
     """Return all chat sessions for the authenticated user."""
+    user_id = current_user.get_user_id()
     sessions = (
         db.query(models.ChatSession)
-        .filter(models.ChatSession.user_id == current_user.id)
+        .filter(models.ChatSession.user_id == user_id)
         .order_by(models.ChatSession.updated_at.desc())
         .all()
     )
@@ -79,15 +80,16 @@ def list_chat_sessions(
 @router.get("/chats/{session_id}/messages", response_model=List[ChatMessageOut])
 def get_chat_messages(
     session_id: int,
-    current_user: models.User = Depends(get_current_user),
+    current_user: AuthIdentity = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
     """Return all messages in a chat session owned by the authenticated user."""
+    user_id = current_user.get_user_id()
     session = (
         db.query(models.ChatSession)
         .filter(
             models.ChatSession.id == session_id,
-            models.ChatSession.user_id == current_user.id,
+            models.ChatSession.user_id == user_id,
         )
         .first()
     )
@@ -107,13 +109,14 @@ def get_chat_messages(
 
 @router.get("/documents", response_model=List[DocumentRecordOut])
 def list_documents(
-    current_user: models.User = Depends(get_current_user),
+    current_user: AuthIdentity = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
     """Return all uploaded documents for the authenticated user."""
+    user_id = current_user.get_user_id()
     docs = (
         db.query(models.DocumentRecord)
-        .filter(models.DocumentRecord.user_id == current_user.id)
+        .filter(models.DocumentRecord.user_id == user_id)
         .order_by(models.DocumentRecord.uploaded_at.desc())
         .all()
     )
