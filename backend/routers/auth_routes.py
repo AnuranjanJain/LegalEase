@@ -1,7 +1,7 @@
 from datetime import timedelta
 import logging
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status, Request
 from sqlalchemy.exc import IntegrityError, SQLAlchemyError
 from sqlalchemy.orm import Session
 from pydantic import BaseModel, EmailStr, Field
@@ -14,6 +14,14 @@ from backend.auth import (
     create_access_token,
     get_current_user,
     ACCESS_TOKEN_EXPIRE_HOURS
+)
+from backend.middleware.auth_rate_limit import (
+    check_login_rate_limit,
+    check_signup_rate_limit,
+    check_verification_rate_limit,
+    record_failed_login,
+    check_failed_login_lockout,
+    clear_failed_login_attempts
 )
 
 logger = logging.getLogger(__name__)
@@ -44,7 +52,9 @@ class ResendVerificationRequest(BaseModel):
 
 
 @router.post("/signup", status_code=status.HTTP_201_CREATED, response_model=TokenResponse)
-def signup(user: UserCreate, db: Session = Depends(get_db)):
+def signup(user: UserCreate, request: Request, db: Session = Depends(get_db)):
+    # Check signup rate limits before processing
+    check_signup_rate_limit(request, user.email)
     try:
         db_user = db.query(models.User).filter(models.User.email == user.email).first()
     except SQLAlchemyError as exc:
@@ -83,7 +93,13 @@ def signup(user: UserCreate, db: Session = Depends(get_db)):
 
 
 @router.post("/login", response_model=TokenResponse)
-def login(user: UserLogin, db: Session = Depends(get_db)):
+def login(user: UserLogin, request: Request, db: Session = Depends(get_db)):
+    # Check login rate limits before processing
+    check_login_rate_limit(request, user.email)
+    
+    # Check if IP/email is locked out due to failed attempts
+    check_failed_login_lockout(request, user.email)
+    
     try:
         db_user = db.query(models.User).filter(models.User.email == user.email).first()
     except SQLAlchemyError as exc:
@@ -94,11 +110,16 @@ def login(user: UserLogin, db: Session = Depends(get_db)):
         )
 
     if not db_user or not verify_password(user.password, db_user.hashed_password):
+        # Record failed login attempt for progressive backoff
+        record_failed_login(request, user.email)
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Incorrect email or password",
             headers={"WWW-Authenticate": "Bearer"},
         )
+
+    # Clear failed login attempts on successful login
+    clear_failed_login_attempts(request, user.email)
 
     access_token = create_access_token(
         data={"sub": db_user.email},
@@ -134,8 +155,11 @@ def change_password(
 
 
 @router.post("/resend-verification")
-def resend_verification(payload: ResendVerificationRequest, db: Session = Depends(get_db)):
+def resend_verification(payload: ResendVerificationRequest, request: Request, db: Session = Depends(get_db)):
     """Simulate resending a verification email."""
+    # Check verification rate limits before processing
+    check_verification_rate_limit(request, payload.email)
+    
     email_lower = payload.email.lower()
     
     # Simulate verification failure for specific test cases first
