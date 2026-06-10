@@ -43,6 +43,7 @@ from backend.services.ai_service import ai_service, correlation_id_var
 
 #Middleware import 
 from backend.middleware.rate_limit import RateLimitMiddleware
+from backend.middleware.correlation_id import validate_or_generate_correlation_id
 # Configure logging
 logging.basicConfig(
     level=logging.INFO,
@@ -178,7 +179,10 @@ logger.info(f"Allowed frontend origins: {ALLOWED_ORIGINS}")
 # Correlation ID middleware to inject trace headers
 @app.middleware("http")
 async def correlation_id_middleware(request: Request, call_next):
-    corr_id = request.headers.get("X-Correlation-ID") or str(uuid.uuid4())
+    # Validate or generate safe correlation ID
+    client_id = request.headers.get("X-Correlation-ID")
+    corr_id, was_valid = validate_or_generate_correlation_id(client_id)
+    
     token = correlation_id_var.set(corr_id)
     try:
         response = await call_next(request)
