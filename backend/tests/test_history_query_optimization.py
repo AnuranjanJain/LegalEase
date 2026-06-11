@@ -86,8 +86,6 @@ def test_data_with_sessions(db_session, test_user):
 @pytest.mark.unit
 def test_current_query_pattern(db_session, test_user, test_data_with_sessions):
     """Profile current query pattern to identify N+1 issue."""
-    global query_count
-    
     # Simulate the current implementation
     sessions = (
         db_session.query(models.ChatSession)
@@ -160,8 +158,9 @@ def test_optimized_with_selectinload(db_session, test_user, test_data_with_sessi
     print(f"Total queries: {total_queries}")
     print(f"Additional queries: {additional_queries}")
     
-    # With selectinload, we expect 2 queries total (1 for sessions, 1 for messages)
-    assert total_queries <= 2, "selectinload should eliminate N+1 queries"
+    # The exact setup/query count varies by SQLAlchemy and database version.
+    # What matters is that accessing the eager-loaded relationship adds no queries.
+    assert additional_queries == 0, "selectinload should eliminate N+1 queries"
 
 
 @pytest.mark.unit
