@@ -15,6 +15,7 @@ email-validator
 langchain
 langchain-community
 langchain-huggingface
+langchain-text-splitters
 chromadb
 sentence-transformers
 
