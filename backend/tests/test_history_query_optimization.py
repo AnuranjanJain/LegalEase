@@ -128,6 +128,9 @@ def test_optimized_with_selectinload(db_session, test_user, test_data_with_sessi
     from sqlalchemy.orm import selectinload
     global query_count
     
+    # Reset query count before the actual query
+    query_count = 0
+    
     # Optimized query with selectinload
     sessions = (
         db_session.query(models.ChatSession)
