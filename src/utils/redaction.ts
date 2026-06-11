@@ -36,7 +36,7 @@ export const PII_PATTERNS: PiiPattern[] = [
     label: 'CREDIT_CARD',
     // 13–19 digit card numbers, optional spaces/dashes between groups
     pattern:
-      /\b(?:4[0-9]{12}(?:[0-9]{3})?|(?:5[1-5][0-9]{14})|(?:3[47][0-9]{13})|(?:3(?:0[0-5]|[68][0-9])[0-9]{11})|(?:6(?:011|5[0-9]{2})[0-9]{12})|(?:(?:2131|1800|35\d{3})\d{11}))\b|(?:\d{4}[\s\-]\d{4}[\s\-]\d{4}[\s\-]\d{2,4})/g,
+      /\b(?:4[0-9]{12}(?:[0-9]{3})?|(?:5[1-5][0-9]{14})|(?:3[47][0-9]{13})|(?:3(?:0[0-5]|[68][0-9])[0-9]{11})|(?:6(?:011|5[0-9]{2})[0-9]{12})|(?:(?:2131|1800|35\d{3})\d{11}))\b|(?:\d{4}[\s-]\d{4}[\s-]\d{4}[\s-]\d{2,4})/g,
   },
   {
     label: 'BANK_ACCOUNT',
@@ -49,7 +49,7 @@ export const PII_PATTERNS: PiiPattern[] = [
   {
     label: 'SSN',
     // US Social Security Number — dashes or spaces as separators
-    pattern: /\b(?!000|666|9\d{2})\d{3}[\s\-](?!00)\d{2}[\s\-](?!0000)\d{4}\b/g,
+    pattern: /\b(?!000|666|9\d{2})\d{3}[\s-](?!00)\d{2}[\s-](?!0000)\d{4}\b/g,
   },
   {
     label: 'AADHAAR',
@@ -66,13 +66,13 @@ export const PII_PATTERNS: PiiPattern[] = [
   {
     label: 'EMAIL',
     pattern:
-      /\b[A-Za-z0-9._%+\-]+@[A-Za-z0-9.\-]+\.[A-Za-z]{2,}\b/g,
+      /\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}\b/g,
   },
   {
     label: 'PHONE',
     // International (+XX) and local formats, including Indian 10-digit numbers
     pattern:
-      /(?:\+?(\d{1,3})[\s\-.]?)?\(?\d{2,4}\)?[\s\-.]?\d{2,4}[\s\-.]?\d{4,6}(?:\s?(?:ext|x)\s?\d{1,5})?/g,
+      /(?:\+?(\d{1,3})[\s.-]?)?\(?\d{2,4}\)?[\s.-]?\d{2,4}[\s.-]?\d{4,6}(?:\s?(?:ext|x)\s?\d{1,5})?/g,
   },
 
   // ── Dates of birth ────────────────────────────────────────────────────
@@ -80,7 +80,7 @@ export const PII_PATTERNS: PiiPattern[] = [
     label: 'DATE_OF_BIRTH',
     // Common formats: DD/MM/YYYY, MM-DD-YYYY, YYYY.MM.DD, "born on …", etc.
     pattern:
-      /\b(?:born\s+(?:on\s+)?|dob[:\s]+|date\s+of\s+birth[:\s]+)?(?:0?[1-9]|[12]\d|3[01])[\/\-\.](?:0?[1-9]|1[0-2])[\/\-\.](?:19|20)\d{2}\b|\b(?:0?[1-9]|1[0-2])[\/\-\.](?:0?[1-9]|[12]\d|3[01])[\/\-\.](?:19|20)\d{2}\b|\b(?:19|20)\d{2}[\/\-\.](?:0?[1-9]|1[0-2])[\/\-\.](?:0?[1-9]|[12]\d|3[01])\b/gi,
+      /\b(?:born\s+(?:on\s+)?|dob[:\s]+|date\s+of\s+birth[:\s]+)?(?:0?[1-9]|[12]\d|3[01])[/.-](?:0?[1-9]|1[0-2])[/.-](?:19|20)\d{2}\b|\b(?:0?[1-9]|1[0-2])[/.-](?:0?[1-9]|[12]\d|3[01])[/.-](?:19|20)\d{2}\b|\b(?:19|20)\d{2}[/.-](?:0?[1-9]|1[0-2])[/.-](?:0?[1-9]|[12]\d|3[01])\b/gi,
   },
 
   // ── Physical addresses ────────────────────────────────────────────────
@@ -88,7 +88,7 @@ export const PII_PATTERNS: PiiPattern[] = [
     label: 'POSTAL_ADDRESS',
     // Matches "123 Main Street", "Apt 4B", "Suite 100", etc.
     pattern:
-      /\b\d{1,5}\s+(?:[A-Za-z0-9]+\s){1,4}(?:Street|St|Avenue|Ave|Boulevard|Blvd|Road|Rd|Lane|Ln|Drive|Dr|Court|Ct|Place|Pl|Way|Terrace|Ter|Crescent|Cres)\b(?:\s*,?\s*(?:Apt|Apartment|Suite|Ste|Unit|#)\s*[A-Za-z0-9\-]+)?/gi,
+      /\b\d{1,5}\s+(?:[A-Za-z0-9]+\s){1,4}(?:Street|St|Avenue|Ave|Boulevard|Blvd|Road|Rd|Lane|Ln|Drive|Dr|Court|Ct|Place|Pl|Way|Terrace|Ter|Crescent|Cres)\b(?:\s*,?\s*(?:Apt|Apartment|Suite|Ste|Unit|#)\s*[A-Za-z0-9-]+)?/gi,
   },
   {
     label: 'ZIP_CODE',
