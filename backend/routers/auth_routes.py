@@ -14,6 +14,7 @@ from backend.auth import (
     get_password_hash,
     create_access_token,
     get_current_user,
+    AuthIdentity,
     ACCESS_TOKEN_EXPIRE_HOURS
 )
 
@@ -122,18 +123,25 @@ def login(user: UserLogin, db: Session = Depends(get_db)):
 @router.post("/change-password")
 def change_password(
     payload: ChangePasswordRequest,
-    current_user: models.User = Depends(get_current_user),
+    current_user: AuthIdentity = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
     """Verify the current password and update to the new one."""
-    if not verify_password(payload.current_password, current_user.hashed_password):
+    user = current_user.user
+    if not user:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="User not found",
+        )
+    
+    if not verify_password(payload.current_password, user.hashed_password):
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Current password is incorrect",
         )
 
     try:
-        current_user.hashed_password = get_password_hash(payload.new_password)
+        user.hashed_password = get_password_hash(payload.new_password)
         db.commit()
     except SQLAlchemyError as exc:
         db.rollback()
