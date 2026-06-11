@@ -14,6 +14,7 @@ from backend.auth import (
     get_password_hash,
     create_access_token,
     get_current_user,
+    AuthIdentity,
     ACCESS_TOKEN_EXPIRE_HOURS
 )
 
@@ -122,18 +123,25 @@ def login(user: UserLogin, db: Session = Depends(get_db)):
 @router.post("/change-password")
 def change_password(
     payload: ChangePasswordRequest,
-    current_user: models.User = Depends(get_current_user),
+    current_user: AuthIdentity = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
     """Verify the current password and update to the new one."""
-    if not verify_password(payload.current_password, current_user.hashed_password):
+    user = current_user.user
+    if not user:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="User not found",
+        )
+    
+    if not verify_password(payload.current_password, user.hashed_password):
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Current password is incorrect",
         )
 
     try:
-        current_user.hashed_password = get_password_hash(payload.new_password)
+        user.hashed_password = get_password_hash(payload.new_password)
         db.commit()
     except SQLAlchemyError as exc:
         db.rollback()
@@ -149,15 +157,16 @@ def change_password(
 def resend_verification(payload: ResendVerificationRequest, db: Session = Depends(get_db)):
     """Resend a verification email to the user.
     
+    This endpoint checks if the user exists and simulates sending a verification email.
+    In test mode, specific email patterns can be configured to simulate failures for testing purposes.
+    
     Security note: Returns consistent success response regardless of user existence to prevent
     user enumeration attacks. This is a common security best practice for authentication endpoints.
-    
-    In test mode, specific email patterns can be configured to simulate failures for testing purposes.
     """
     email_lower = payload.email.lower()
     
     # Test mode: controlled failure simulation for development/testing only
-    # This is isolated behind explicit environment flags and cannot be enabled in production
+    # This is isolated behind an explicit environment flag and cannot be enabled in production
     if TEST_MODE:
         if email_lower == "994917jishnu@gmail.com" or "fail" in email_lower:
             logger.warning(f"Test mode: Simulating verification email failure for {email_lower}")

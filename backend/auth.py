@@ -1,7 +1,8 @@
 import logging
 import os
+import hashlib
 from datetime import datetime, timedelta
-from typing import Optional
+from typing import Optional, Union, Literal
 from fastapi import Depends, HTTPException, Request, status
 from fastapi.security import OAuth2PasswordBearer
 from jose import JWTError, jwt
@@ -29,6 +30,61 @@ ALGORITHM = "HS256"
 ACCESS_TOKEN_EXPIRE_HOURS = 24
 
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="auth/login")
+
+
+class AuthIdentity:
+    """
+    Unified identity model for authenticated principals.
+    Distinguishes between user accounts and API key/service callers.
+    """
+    def __init__(
+        self,
+        identity_type: Literal["user", "api_key"],
+        identifier: str,
+        user: Optional[models.User] = None
+    ):
+        self.type = identity_type
+        self.identifier = identifier
+        self.user = user
+
+    def is_user(self) -> bool:
+        """Check if this identity represents a user account."""
+        return self.type == "user"
+
+    def is_api_key(self) -> bool:
+        """Check if this identity represents an API key/service caller."""
+        return self.type == "api_key"
+
+    def get_rate_limit_key(self) -> str:
+        """
+        Get a consistent key for rate limiting.
+        Users are rate-limited by email, API keys by their key identifier.
+        """
+        if self.type == "user":
+            return f"user:{self.identifier}"
+        else:
+            return f"api_key:{self.identifier}"
+
+    def get_user_id(self) -> Optional[int]:
+        """
+        Get the database user ID if this is a user identity.
+        Returns None for API key identities.
+        """
+        return self.user.id if self.user else None
+
+    def get_user_email(self) -> Optional[str]:
+        """
+        Get the user email if this is a user identity.
+        Returns None for API key identities.
+        """
+        return self.user.email if self.user else None
+
+    def __str__(self) -> str:
+        """String representation for logging/debugging."""
+        if self.type == "user":
+            return f"User(email={self.identifier})"
+        else:
+            return f"APIKey(key={self.identifier[:8]}...)"
 
 
 def _require_secret_key() -> str:
@@ -61,8 +117,8 @@ def create_access_token(data: dict, expires_delta: Optional[timedelta] = None) -
     return jwt.encode(to_encode, secret_key, algorithm=ALGORITHM)
 
 
-def get_current_user(token: str = Depends(oauth2_scheme), db: Session = Depends(get_db)):
-    """Decode a JWT and return the matching user, or raise 401."""
+def get_current_user(token: str = Depends(oauth2_scheme), db: Session = Depends(get_db)) -> AuthIdentity:
+    """Decode a JWT and return the matching user as AuthIdentity, or raise 401."""
     secret_key = _require_secret_key()
     credentials_exception = HTTPException(
         status_code=status.HTTP_401_UNAUTHORIZED,
@@ -80,7 +136,11 @@ def get_current_user(token: str = Depends(oauth2_scheme), db: Session = Depends(
     user = db.query(models.User).filter(models.User.email == email).first()
     if user is None:
         raise credentials_exception
-    return user
+    return AuthIdentity(
+        identity_type="user",
+        identifier=email,
+        user=user
+    )
 
 
 def _extract_bearer_token(request: Request) -> str:
@@ -104,12 +164,12 @@ def _is_valid_api_key(token: str) -> bool:
     return False
 
 
-def validate_token_or_api_key(request: Request, db: Session = Depends(get_db)) -> str:
+def validate_token_or_api_key(request: Request, db: Session = Depends(get_db)) -> AuthIdentity:
     """
     Unified auth dependency for protected endpoints.
     Tries JWT authentication first; falls back to static API key
     validation for service-to-service callers.
-    Returns the authenticated identity (user email or API key).
+    Returns an AuthIdentity object with clear type distinction.
     """
     token = _extract_bearer_token(request)
     if not token:
@@ -123,13 +183,24 @@ def validate_token_or_api_key(request: Request, db: Session = Depends(get_db)) -
             if email:
                 user = db.query(models.User).filter(models.User.email == email).first()
                 if user:
-                    return email
+                    return AuthIdentity(
+                        identity_type="user",
+                        identifier=email,
+                        user=user
+                    )
         except JWTError:
             pass
 
     # 2. Fall back to static API key
     if _is_valid_api_key(token):
-        return token
+        # Hash the API key to avoid storing the secret in memory
+        # Use SHA-256 and take first 16 characters as identifier
+        key_hash = hashlib.sha256(token.encode()).hexdigest()[:16]
+        return AuthIdentity(
+            identity_type="api_key",
+            identifier=key_hash,
+            user=None
+        )
 
     raise HTTPException(status_code=403, detail="Invalid or expired authentication token")
 
@@ -151,10 +222,10 @@ def _validate_api_key(request: Request) -> str:
     raise HTTPException(status_code=403, detail="Invalid API key")
 
 
-def get_optional_user(request: Request, db: Session = Depends(get_db)) -> Optional[models.User]:
+def get_optional_user(request: Request, db: Session = Depends(get_db)) -> Optional[AuthIdentity]:
     """Try to extract a JWT-authenticated user from the request.
 
-    Returns the User object if the caller provided a valid JWT token,
+    Returns an AuthIdentity object if the caller provided a valid JWT token,
     or None if the caller is using a static API key (service-to-service).
     This allows endpoints to conditionally persist history for real users
     without breaking API-key authentication.
@@ -166,7 +237,13 @@ def get_optional_user(request: Request, db: Session = Depends(get_db)) -> Option
         payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
         email: Optional[str] = payload.get("sub")
         if email:
-            return db.query(models.User).filter(models.User.email == email).first()
+            user = db.query(models.User).filter(models.User.email == email).first()
+            if user:
+                return AuthIdentity(
+                    identity_type="user",
+                    identifier=email,
+                    user=user
+                )
     except JWTError:
         pass
     return None
