@@ -138,9 +138,11 @@ jobs:
       - name: Report manual preview approval
         if: steps.wait-vercel.outputs.approval_required == 'true'
         uses: actions/github-script@v9
+        env:
+          VERCEL_APPROVAL_URL: ${{ steps.wait-vercel.outputs.approval_url }}
         with:
           script: |
-            const approvalUrl = '${{ steps.wait-vercel.outputs.approval_url }}';
+            const approvalUrl = process.env.VERCEL_APPROVAL_URL;
             await core.summary
               .addHeading('Vercel preview approval required')
               .addRaw('All repository checks passed. The preview deployment still needs maintainer authorization.')
