@@ -17,7 +17,7 @@ from dotenv import load_dotenv
 from backend.database import engine, Base, SessionLocal
 from backend.routers import auth_routes
 from backend.routers import legal_routes
-from backend.auth import validate_token_or_api_key
+from backend.auth import validate_token_or_api_key, AuthIdentity
 from backend.utils.limiter import SimpleRateLimiter
 
 # Optional imports (wrap in try/except so server can start without optional deps)
@@ -311,9 +311,9 @@ async def _run_bounded_parser(parser, file_path: str) -> str:
 
 
 @app.post("/chat")
-async def chat(request: Request, payload: ChatRequest, identity: str = Depends(validate_token_or_api_key)):
+async def chat(request: Request, payload: ChatRequest, identity: AuthIdentity = Depends(validate_token_or_api_key)):
     # Rate limiting using the authenticated identity
-    if not key_limiter.check(identity)["allowed"]:
+    if not key_limiter.check(identity.get_rate_limit_key())["allowed"]:
         raise HTTPException(status_code=429, detail="Rate limit exceeded")
 
     # Sanitize inputs
@@ -353,7 +353,7 @@ async def chat(request: Request, payload: ChatRequest, identity: str = Depends(v
 
 
 @app.post("/upload")
-async def upload_document(request: Request, file: UploadFile = File(...), identity: str = Depends(validate_token_or_api_key)):
+async def upload_document(request: Request, file: UploadFile = File(...), identity: AuthIdentity = Depends(validate_token_or_api_key)):
     # Content-Length pre-check
     try:
         content_length = int(request.headers.get("content-length", "0"))
@@ -438,7 +438,7 @@ async def upload_document(request: Request, file: UploadFile = File(...), identi
 
 
 @app.post("/summarize")
-async def summarize(request: Request, payload: SummarizeRequest, identity: str = Depends(validate_token_or_api_key)):
+async def summarize(request: Request, payload: SummarizeRequest, identity: AuthIdentity = Depends(validate_token_or_api_key)):
 
     # Sanitize input
     sanitized_text = sanitize_text(payload.text)
