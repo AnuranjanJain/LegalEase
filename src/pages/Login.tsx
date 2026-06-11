@@ -28,12 +28,15 @@ export function LoginPage() {
       return;
     }
 
+    // Normalize email so casing variations resolve to the same account
+    const normalizedEmail = email.trim().toLowerCase();
+
     setIsLoading(true);
     try {
       const response = await fetch(`${API_BASE_URL}/auth/login`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email, password }),
+        body: JSON.stringify({ email: normalizedEmail, password }),
       });
 
       const data = await response.json().catch(() => null);
