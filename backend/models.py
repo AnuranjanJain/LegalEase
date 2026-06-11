@@ -1,6 +1,6 @@
 from datetime import datetime
 
-from sqlalchemy import Column, DateTime, ForeignKey, Integer, String, Text
+from sqlalchemy import Column, DateTime, ForeignKey, Integer, String, Text, UniqueConstraint
 from sqlalchemy.orm import relationship
 
 from backend.database import Base
@@ -53,3 +53,19 @@ class DocumentRecord(Base):
     uploaded_at = Column(DateTime, default=datetime.utcnow)
 
     user = relationship("User", back_populates="documents")
+
+
+class RevokedToken(Base):
+    """
+    Stores revoked JWT IDs (jti claims) so that logged-out tokens
+    cannot be reused within their original expiry window.
+    Rows whose `expires_at` is in the past are safe to purge.
+    """
+    __tablename__ = "revoked_tokens"
+
+    id = Column(Integer, primary_key=True, index=True)
+    jti = Column(String, nullable=False, unique=True, index=True)
+    expires_at = Column(DateTime, nullable=False)
+    revoked_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+
+    __table_args__ = (UniqueConstraint("jti", name="uq_revoked_tokens_jti"),)
