@@ -196,6 +196,12 @@ LEGAL EASE
 - **Processing History**: Past document processing records
 - **Status Management**: Cancel, retry, and download options
 
+### 📊 Readability Score Analyzer (`ReadabilityScore.tsx`)
+- **Dual Comparison**: Computes and contrasts readability metrics for the original legal text vs. the AI summary
+- **Linguistic Scores**: Displays Flesch Reading Ease, Flesch-Kincaid Grade Level, and Difficulty Classifications
+- **Visual Progress Bars**: Uses color-coded horizontal bars (Green = Easy, Yellow = Moderate, Red = Difficult) to showcase improvements
+- **Automated Badges**: Highlights exactly how many grade levels and reading ease points have been improved
+
 ### 👤 User Profile (`ProfilePage.tsx`)
 - **Personal Information**: Complete profile management
 - **Address Details**: Billing and contact information
@@ -242,6 +248,36 @@ LEGAL EASE
 - Firefox 75+
 - Safari 13+
 - Edge 80+
+
+## 📊 Readability Score Analyzer
+
+### Feature Overview
+The Readability Score Analyzer provides an instant visual comparison between the **Original Legal Document** and the **AI Generated Summary**. This helps users quantify how much easier the summary is to read and comprehend.
+
+### How Scores Are Calculated
+Readability metrics are calculated based on linguistic properties of the text using sentence count, word count, and syllable count heuristics.
+
+#### Flesch Reading Ease Formula
+The Flesch Reading Ease formula outputs a score between 0 and 100. Higher scores indicate material that is easier to read; lower numbers mark harder-to-read text.
+
+$$\text{Reading Ease} = 206.835 - 1.015 \left( \frac{\text{Total Words}}{\text{Total Sentences}} \right) - 84.6 \left( \frac{\text{Total Syllables}}{\text{Total Words}} \right)$$
+
+**Reading Ease Scores & Difficulty Classification:**
+* **90–100:** Very Easy (approx. 5th-grade reading level)
+* **80–89:** Easy (6th-grade level)
+* **70–79:** Fairly Easy (7th-grade level)
+* **60–69:** Standard (8th to 9th-grade level)
+* **50–59:** Fairly Difficult (High School student level)
+* **30–49:** Difficult (College student level)
+* **0–29:** Very Difficult (College graduate / professional level)
+
+#### Flesch-Kincaid Grade Formula
+The Flesch-Kincaid Grade Level formula translates the Reading Ease score into a U.S. school grade level format, making it easier to see how many years of education are expected to digest the document.
+
+$$\text{Grade Level} = 0.39 \left( \frac{\text{Total Words}}{\text{Total Sentences}} \right) + 11.8 \left( \frac{\text{Total Syllables}}{\text{Total Words}} \right) - 15.59$$
+
+### Visual Screenshots
+*(Screenshots section placeholder for readability comparison panel)*
 
 ## Setup Instructions
 
