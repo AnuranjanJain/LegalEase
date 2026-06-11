@@ -324,6 +324,16 @@ async def chat(request: Request, payload: ChatRequest, identity: AuthIdentity = 
     sanitized_message = sanitize_text(payload.message)
     sanitized_context = sanitize_text(payload.context) if payload.context else None
 
+    # Handle RAG context retrieval for large documents
+    if sanitized_context:
+        import hashlib
+        from backend.services.rag_service import rag_service
+        
+        doc_hash = hashlib.md5(sanitized_context.encode()).hexdigest()
+        if doc_hash not in rag_service.indexed_docs:
+            rag_service.add_document(sanitized_context, doc_hash)
+        sanitized_context = rag_service.get_context(sanitized_message, doc_hash)
+
     # Early payload validation
     validate_chat_input(sanitized_message, sanitized_context)
 
