@@ -86,12 +86,13 @@ def validate_mime_and_bytes(content: bytes, content_type: str, filename: str):
         if not content.startswith(b"PK\x03\x04"):
             raise ValidationError("File content signature does not match DOCX structure (ZIP archive)")
 
-def validate_docx_archive_safety(content: bytes):
+def validate_docx_archive_safety(file_path: str):
     """
     Inspect DOCX archives for obvious zip-bomb and abuse patterns before parsing.
+    Accepts file path to avoid loading entire file into memory.
     """
     try:
-        with zipfile.ZipFile(BytesIO(content)) as archive:
+        with zipfile.ZipFile(file_path) as archive:
             members = archive.infolist()
             if len(members) > MAX_DOCX_ARCHIVE_ENTRIES:
                 raise ValidationError("DOCX archive contains too many files")

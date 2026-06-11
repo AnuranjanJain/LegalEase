@@ -4,6 +4,8 @@ import { API_BASE_URL } from '../config/api';
 interface AuthContextType {
   isAuthenticated: boolean;
   isVerifying: boolean;
+  /** Email of the authenticated user, decoded from the JWT `sub` claim. */
+  userEmail: string | null;
   login: (token: string) => Promise<void>;
   logout: () => boolean;
 }
@@ -30,18 +32,59 @@ async function verifyTokenWithBackend(token: string): Promise<boolean> {
   }
 }
 
+/**
+ * Decodes a JWT payload without verifying its signature.
+ * Returns the parsed payload object, or null if the token is malformed.
+ */
+function decodeTokenPayload(token: string): { sub?: string; exp?: number } | null {
+  try {
+    const parts = token.split('.');
+    if (parts.length !== 3) return null;
+
+    const base64 = parts[1].replace(/-/g, '+').replace(/_/g, '/');
+    const padded = base64.padEnd(base64.length + ((4 - (base64.length % 4)) % 4), '=');
+    return JSON.parse(atob(padded));
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Checks whether a token is present and not expired.
+ * Does not verify the signature; expiry check only.
+ */
+function isTokenValid(token: string): boolean {
+  const payload = decodeTokenPayload(token);
+  if (!payload || typeof payload.exp !== 'number') return false;
+  return payload.exp * 1000 > Date.now();
+}
+
+/**
+ * Extracts the user's email from a valid token's `sub` claim.
+ * Returns null if the token is invalid or carries no email.
+ */
+function getEmailFromToken(token: string | null): string | null {
+  if (!token || !isTokenValid(token)) return null;
+  const payload = decodeTokenPayload(token);
+  return typeof payload?.sub === 'string' ? payload.sub : null;
+}
+
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [isAuthenticated, setIsAuthenticated] = useState<boolean>(false);
   const [isVerifying, setIsVerifying] = useState<boolean>(true);
+  const [userEmail, setUserEmail] = useState<string | null>(() =>
+    getEmailFromToken(localStorage.getItem('access_token'))
+  );
 
   useEffect(() => {
-    // Verify token with backend on app startup
+    // Verify token with backend on app startup.
     const verifyStoredToken = async () => {
       const token = localStorage.getItem('access_token');
 
       if (!token) {
         setIsVerifying(false);
         setIsAuthenticated(false);
+        setUserEmail(null);
         return;
       }
 
@@ -49,11 +92,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
       if (isValid) {
         setIsAuthenticated(true);
+        setUserEmail(getEmailFromToken(token));
       } else {
-        // Clear invalid token
         localStorage.removeItem('access_token');
         sessionStorage.clear();
         setIsAuthenticated(false);
+        setUserEmail(null);
       }
 
       setIsVerifying(false);
@@ -64,17 +108,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const login = async (token: string) => {
     localStorage.setItem('access_token', token);
-    
-    // Verify token with backend before setting authenticated state
+
     const isValid = await verifyTokenWithBackend(token);
-    
+
     if (isValid) {
       setIsAuthenticated(true);
+      setUserEmail(getEmailFromToken(token));
     } else {
-      // Clear invalid token
       localStorage.removeItem('access_token');
       sessionStorage.clear();
       setIsAuthenticated(false);
+      setUserEmail(null);
       throw new Error('Invalid token received from server');
     }
   };
@@ -82,11 +126,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const logout = (): boolean => {
     try {
       localStorage.removeItem('access_token');
-
-      // Clear any other auth-related storage if present
       sessionStorage.clear();
 
       setIsAuthenticated(false);
+      setUserEmail(null);
 
       return true;
     } catch (error) {
@@ -96,7 +139,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
   return (
-    <AuthContext.Provider value={{ isAuthenticated, isVerifying, login, logout }}>
+    <AuthContext.Provider value={{ isAuthenticated, isVerifying, userEmail, login, logout }}>
       {children}
     </AuthContext.Provider>
   );
