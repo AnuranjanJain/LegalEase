@@ -257,13 +257,13 @@ def _get_client_ip(request: Request) -> str:
     return request.client.host if request.client else "unknown"
 
 
-def _extract_pdf_text(content: bytes) -> str:
+def _extract_pdf_text(file_path: str) -> str:
     if fitz is None:
         raise HTTPException(status_code=503, detail="PDF processing not available")
 
     doc = None
     try:
-        doc = fitz.open(stream=content, filetype="pdf")
+        doc = fitz.open(file_path)
         if doc.page_count > MAX_PDF_PAGES:
             raise HTTPException(status_code=413, detail="PDF is too large to process safely")
 
@@ -279,13 +279,13 @@ def _extract_pdf_text(content: bytes) -> str:
             doc.close()
 
 
-def _extract_docx_text(content: bytes) -> str:
+def _extract_docx_text(file_path: str) -> str:
     if DocxDocument is None:
         raise HTTPException(status_code=503, detail="DOCX processing not available")
 
     document = None
     try:
-        document = DocxDocument(BytesIO(content))
+        document = DocxDocument(file_path)
         if len(document.paragraphs) > MAX_DOCX_PARAGRAPHS:
             raise HTTPException(status_code=413, detail="DOCX is too large to process safely")
 
@@ -300,10 +300,10 @@ def _extract_docx_text(content: bytes) -> str:
             close_method()
 
 
-async def _run_bounded_parser(parser, content: bytes) -> str:
+async def _run_bounded_parser(parser, file_path: str) -> str:
     try:
         return await asyncio.wait_for(
-            asyncio.to_thread(parser, content),
+            asyncio.to_thread(parser, file_path),
             timeout=UPLOAD_PARSE_TIMEOUT_SECONDS,
         )
     except asyncio.TimeoutError:
@@ -379,21 +379,21 @@ async def upload_document(request: Request, file: UploadFile = File(...), identi
                     raise HTTPException(status_code=413, detail="Uploaded file is too large")
                 temp_file.write(chunk)
 
+        # Read only first 4096 bytes for MIME validation
         with open(temp_path, "rb") as temp_file:
-            content = temp_file.read()
-        content_prefix = content[:4096]
+            content_prefix = temp_file.read(4096)
 
         # Perform MIME-aware preprocessing and signature validation using only the
         # minimum bytes needed for structural checks.
         validate_mime_and_bytes(content_prefix, file.content_type or "", filename)
 
         if file_extension == ".docx":
-            validate_docx_archive_safety(content)
+            validate_docx_archive_safety(temp_path)
 
-        # Process by type.
+        # Process by type using file path to avoid loading entire file into memory
         if file_extension == '.pdf' or content_prefix.startswith(b'%PDF-'):
             try:
-                extracted_text = await _run_bounded_parser(_extract_pdf_text, content)
+                extracted_text = await _run_bounded_parser(_extract_pdf_text, temp_path)
             except HTTPException:
                 raise
             except Exception as e:
@@ -404,7 +404,7 @@ async def upload_document(request: Request, file: UploadFile = File(...), identi
 
         elif file_extension == '.docx':
             try:
-                extracted_text = await _run_bounded_parser(_extract_docx_text, content)
+                extracted_text = await _run_bounded_parser(_extract_docx_text, temp_path)
             except HTTPException:
                 raise
             except Exception:
