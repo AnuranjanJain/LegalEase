@@ -1,9 +1,12 @@
-import { Send, User, Bot, Paperclip, X, FileText, Sparkles, RefreshCcw, PlusCircle, Trash2, History, Copy, Check } from 'lucide-react';
+import { Send, User, Bot, Paperclip, X, FileText, Sparkles, RefreshCcw, PlusCircle, Trash2, History, Copy, Check, ShieldCheck } from 'lucide-react';
 import { api } from '../services/api';
 import { ChatStorageService, ChatMessage, ChatSessionMetadata } from '../services/storage';
 import { useRef, useState, useEffect, useCallback } from 'react';
 import { useToast } from '../contexts/ToastContext';
 import LegalMapping from '../components/LegalMapping';
+import { useRedaction } from '../contexts/RedactionContext';
+import { redact } from '../utils/redaction';
+import { RedactedText } from '../components/RedactedText';
 
 function makeGreeting(): ChatMessage {
   return {
@@ -37,17 +40,48 @@ export function ChatbotPage() {
   
   // State to track which message ID was copied to show the checkmark temporarily
   const [copiedId, setCopiedId] = useState<string | null>(null);
-  
+
+  // Announcement text for the aria-live region. Updated whenever the
+  // redaction toggle changes so screen readers announce the state change.
+  const [redactionAnnouncement, setRedactionAnnouncement] = useState('');
+
   const { showToast } = useToast();
+  const { isRedactionEnabled, redactionStyle } = useRedaction();
   const fileInputRef = useRef<HTMLInputElement>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
-  // Clipboard handler
-  const handleCopy = (text: string, id: string) => {
-    navigator.clipboard.writeText(text);
+  // Announce redaction state changes to screen readers via aria-live.
+  // Skip the very first render (isFirstRender guard) so we don't announce
+  // "PII redaction disabled" on page load when the default is already OFF.
+  const isFirstRedactionRender = useRef(true);
+  useEffect(() => {
+    if (isFirstRedactionRender.current) {
+      isFirstRedactionRender.current = false;
+      return;
+    }
+    setRedactionAnnouncement(
+      isRedactionEnabled
+        ? 'PII redaction enabled. Sensitive data is now masked in AI responses.'
+        : 'PII redaction disabled. Original AI responses are now shown.'
+    );
+    // Clear after a short delay so the same message can re-fire if the user
+    // toggles rapidly, while not leaving stale text in the live region.
+    const timer = setTimeout(() => setRedactionAnnouncement(''), 3000);
+    return () => clearTimeout(timer);
+  }, [isRedactionEnabled]);
+
+  // ---------------------------------------------------------------------------
+  // Clipboard handler.
+  //
+  // Receives the already-computed displayText (the text currently visible to
+  // the user, possibly redacted) to avoid re-running redact() on click.
+  // This ensures the copied text always exactly matches what is on screen.
+  // ---------------------------------------------------------------------------
+  const handleCopy = (displayText: string, id: string) => {
+    navigator.clipboard.writeText(displayText);
     setCopiedId(id);
     showToast('Copied to clipboard!', 'success');
-    setTimeout(() => setCopiedId(null), 2000); // Revert back to copy icon after 2 seconds
+    setTimeout(() => setCopiedId(null), 2000);
   };
 
   useEffect(() => {
@@ -294,7 +328,28 @@ export function ChatbotPage() {
       <div className="flex-grow overflow-y-auto px-6 py-8 space-y-6 relative z-10">
         {messages.map((msg: ChatMessage) => {
           const isUser = msg.sender === 'user';
-          
+
+          // ---------------------------------------------------------------------------
+          // Redaction scope decision — user messages vs. bot messages:
+          //
+          // Bot messages (AI responses) are redacted when the toggle is ON because
+          // they may echo back PII that was present in the uploaded document context.
+          //
+          // User messages are intentionally NOT redacted in the display layer because:
+          //   1. The user authored the text themselves and already knows its content.
+          //   2. Redacting the user's own input would make their conversation history
+          //      unreadable and break the UX flow.
+          //   3. The toggle label says "mask sensitive data in AI responses", which
+          //      sets a clear expectation that only AI output is affected.
+          //
+          // If policy changes to redact user input too, replace the condition below
+          // with `isRedactionEnabled` (removing the `!isUser &&` guard).
+          // ---------------------------------------------------------------------------
+          const displayText =
+            !isUser && isRedactionEnabled
+              ? redact(msg.text, redactionStyle)
+              : msg.text;
+
           return (
             <div 
               key={msg.id} 
@@ -321,7 +376,7 @@ export function ChatbotPage() {
                   {/* Dedicated Copy Button for AI/Bot responses */}
                   {!isUser && (
                     <button 
-                      onClick={() => handleCopy(msg.text, msg.id)}
+                      onClick={() => handleCopy(displayText, msg.id)}
                       className="absolute top-2 right-2 p-1 text-gray-400 hover:text-primary dark:hover:text-primary-400 transition-colors opacity-0 group-hover:opacity-100 focus:opacity-100"
                       title="Copy to clipboard"
                       aria-label="Copy response text"
@@ -330,7 +385,9 @@ export function ChatbotPage() {
                     </button>
                   )}
 
-                  <p className="text-sm font-medium whitespace-pre-wrap pr-4">{msg.text}</p>
+                  <p className="text-sm font-medium whitespace-pre-wrap pr-4">
+                    <RedactedText text={displayText} />
+                  </p>
                   <p className={`text-[9px] font-semibold mt-2 ${isUser ? 'text-blue-100 text-right' : 'text-gray-400 dark:text-gray-500'}`}>
                     {msg.time}
                   </p>
@@ -361,12 +418,21 @@ export function ChatbotPage() {
         <div ref={messagesEndRef} />
       </div>
 
-      {/* Screen reader live region for accessibility */}
+      {/* Screen reader live region — announces both AI typing state and
+          PII redaction toggle changes (aria-atomic ensures the full message
+          is read rather than just the changed portion). */}
       <div className="sr-only" aria-live="polite" aria-atomic="true">
-        {isTyping ? "LegalEase AI is writing an answer..." : ""}
+        {redactionAnnouncement || (isTyping ? 'LegalEase AI is writing an answer...' : '')}
       </div>
 
       <div className="p-4 bg-white dark:bg-gray-800 border-t border-gray-200 dark:border-gray-800">
+        {/* PII Redaction active indicator */}
+        {isRedactionEnabled && (
+          <div className="mb-2 flex items-center gap-1.5 text-[10px] font-semibold text-emerald-600 dark:text-emerald-400">
+            <ShieldCheck size={12} />
+            <span>PII Redaction active — sensitive data masked in AI responses</span>
+          </div>
+        )}
         {uploadedDoc && (
           <div className="mb-3 flex items-center justify-between bg-primary/5 dark:bg-primary/10 p-2 rounded-lg border border-primary/20">
             <div className="flex items-center gap-2 overflow-hidden">

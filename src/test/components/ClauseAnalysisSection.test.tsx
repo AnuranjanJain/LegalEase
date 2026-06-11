@@ -2,13 +2,19 @@ import { render, screen } from '@testing-library/react';
 import { describe, it, expect } from 'vitest';
 import { ClauseAnalysisSection } from '../../components/ClauseAnalysisSection';
 import { ClauseAnalysis } from '../../services/storage';
+import { RedactionProvider } from '../../contexts/RedactionContext';
+
+// Helper: renders with the required RedactionProvider
+function renderWithProvider(ui: React.ReactElement) {
+  return render(<RedactionProvider>{ui}</RedactionProvider>);
+}
 
 describe('ClauseAnalysisSection Component', () => {
   it('renders nothing when clauses list is empty or undefined', () => {
-    const { container } = render(<ClauseAnalysisSection clauses={[]} />);
+    const { container } = renderWithProvider(<ClauseAnalysisSection clauses={[]} />);
     expect(container.firstChild).toBeNull();
 
-    const { container: containerUndefined } = render(<ClauseAnalysisSection clauses={undefined} />);
+    const { container: containerUndefined } = renderWithProvider(<ClauseAnalysisSection clauses={undefined} />);
     expect(containerUndefined.firstChild).toBeNull();
   });
 
@@ -26,7 +32,7 @@ describe('ClauseAnalysisSection Component', () => {
       }
     ];
 
-    render(<ClauseAnalysisSection clauses={sampleClauses} />);
+    render(<RedactionProvider><ClauseAnalysisSection clauses={sampleClauses} /></RedactionProvider>);
 
     // Header exists
     expect(screen.getByText('Clause-Level Risk Assessment')).toBeInTheDocument();

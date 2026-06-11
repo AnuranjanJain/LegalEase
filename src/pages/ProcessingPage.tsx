@@ -2,11 +2,14 @@ import { useState, useEffect, useRef } from 'react';
 import { useLocation, NavLink } from 'react-router-dom';
 import { 
   RefreshCcw, CheckCircle, Clock, Cpu, Sparkles, 
-  AlertTriangle, FileText, BookOpen 
+  AlertTriangle, FileText, BookOpen, ShieldCheck
 } from 'lucide-react';
 import { api } from '../services/api';
 import { StorageService } from '../services/storage';
 import { useToast } from '../contexts/ToastContext';
+import { useRedactedText } from '../hooks/useRedactedText';
+import { useRedaction } from '../contexts/RedactionContext';
+import { RedactedText } from '../components/RedactedText';
 
 // Word-based sliding window chunking algorithm
 function chunkText(text: string, windowSize: number = 2000, overlap: number = 200): string[] {
@@ -48,6 +51,10 @@ export function ProcessingPage() {
   const [currentChunkIndex, setCurrentChunkIndex] = useState(0);
   const [errorMessage, setErrorMessage] = useState('');
   const [finalSummary, setFinalSummary] = useState('');
+
+  // Apply PII redaction to the live preview (original summary kept in state)
+  const redactedSummary = useRedactedText(finalSummary);
+  const { isRedactionEnabled } = useRedaction();
 
   // Run the document processing pipeline
   useEffect(() => {
@@ -487,11 +494,19 @@ export function ProcessingPage() {
                       <BookOpen size={14} />
                       Previewing Compiled AI Summary
                     </span>
-                    <span className="text-[10px] text-gray-400 font-medium">Rendered instantly</span>
+                    <div className="flex items-center gap-2">
+                      {isRedactionEnabled && (
+                        <span className="text-[10px] font-bold text-primary flex items-center gap-1">
+                          <ShieldCheck size={11} />
+                          PII Redacted
+                        </span>
+                      )}
+                      <span className="text-[10px] text-gray-400 font-medium">Rendered instantly</span>
+                    </div>
                   </div>
                   <div className="max-h-60 overflow-y-auto text-xs text-gray-700 dark:text-gray-300 leading-relaxed space-y-4 pr-2 scrollbar-thin scrollbar-thumb-gray-200 dark:scrollbar-thumb-gray-850">
                     <div className="whitespace-pre-line prose prose-sm dark:prose-invert">
-                      {finalSummary}
+                      <RedactedText text={redactedSummary} />
                     </div>
                   </div>
                 </div>
