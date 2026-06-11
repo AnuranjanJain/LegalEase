@@ -46,7 +46,9 @@ export default {
           400: '#60a5fa',
           500: '#3b82f6',
           600: '#2563eb',
+          650: '#2159e2',
           700: '#1d4ed8',
+          750: '#1d47c4',
           800: '#1e40af',
           900: '#1e3a8a',
           950: '#172554',
@@ -115,7 +117,31 @@ export default {
         background: {
           light: '#F3F4F6',
           dark: '#111827',
-        }
+        },
+        // Intermediate gray shades interpolated between Tailwind's defaults.
+        // These were used throughout the UI (e.g. gray-150 borders, gray-850
+        // dark cards) but don't exist in the default palette, so Tailwind
+        // emitted no CSS and elements silently kept the wrong color — the
+        // root cause of the light/dark theme inconsistencies (issue #330).
+        // Merged with the default gray scale via theme.extend.
+        gray: {
+          55: '#f6f7f9',   // between 50 and 100
+          150: '#ecedf0',  // between 100 and 200
+          250: '#dbdee3',  // between 200 and 300
+          350: '#b7bcc5',  // between 300 and 400
+          450: '#848b97',  // between 400 and 500
+          455: '#848b97',  // alias of 450 (typo'd in source)
+          550: '#5b636c',  // between 500 and 600
+          650: '#414b5a',  // between 600 and 700
+          750: '#2b3544',  // between 700 and 800
+          850: '#18202f',  // between 800 and 900
+        },
+        // Intermediate shades for the other palettes used in the app
+        red: { 650: '#cb2121', 750: '#a91c1c' },
+        amber: { 650: '#c76508' },
+        blue: { 650: '#2159e2' },
+        indigo: { 650: '#493fd7' },
+        emerald: { 550: '#0aa875' },
       },
       // Display font for headings and hero text
       fontFamily: {

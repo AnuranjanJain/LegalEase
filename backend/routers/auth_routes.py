@@ -58,8 +58,10 @@ class ResendVerificationRequest(BaseModel):
 
 @router.post("/signup", status_code=status.HTTP_201_CREATED, response_model=TokenResponse)
 def signup(user: UserCreate, db: Session = Depends(get_db)):
+    # Normalize email so casing variations resolve to a single account
+    normalized_email = user.email.strip().lower()
     try:
-        db_user = db.query(models.User).filter(models.User.email == user.email).first()
+        db_user = db.query(models.User).filter(models.User.email == normalized_email).first()
     except SQLAlchemyError as exc:
         logger.exception("Failed to query database during signup")
         raise HTTPException(
@@ -71,7 +73,7 @@ def signup(user: UserCreate, db: Session = Depends(get_db)):
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Email already exists")
 
     hashed_password = get_password_hash(user.password)
-    new_user = models.User(email=user.email, hashed_password=hashed_password)
+    new_user = models.User(email=normalized_email, hashed_password=hashed_password)
 
     db.add(new_user)
     try:
@@ -97,8 +99,10 @@ def signup(user: UserCreate, db: Session = Depends(get_db)):
 
 @router.post("/login", response_model=TokenResponse)
 def login(user: UserLogin, db: Session = Depends(get_db)):
+    # Normalize email to match accounts case-insensitively
+    normalized_email = user.email.strip().lower()
     try:
-        db_user = db.query(models.User).filter(models.User.email == user.email).first()
+        db_user = db.query(models.User).filter(models.User.email == normalized_email).first()
     except SQLAlchemyError as exc:
         logger.exception("Failed to query database during login")
         raise HTTPException(
