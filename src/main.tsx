@@ -6,6 +6,7 @@ import './index.css'
 import { ErrorBoundary } from './components/ErrorBoundary.tsx'
 import { ToastProvider } from './contexts/ToastContext.tsx'
 import { NotificationProvider } from './contexts/NotificationContext.tsx'
+import { RedactionProvider } from './contexts/RedactionContext.tsx'
 
 // Global error handlers for uncaught exceptions and unhandled promise rejections
 window.addEventListener('error', (event) => {
@@ -21,7 +22,9 @@ ReactDOM.createRoot(document.getElementById('root')!).render(
     <ErrorBoundary>
       <NotificationProvider>
         <ToastProvider>
-          <App />
+          <RedactionProvider>
+            <App />
+          </RedactionProvider>
         </ToastProvider>
       </NotificationProvider>
     </ErrorBoundary>

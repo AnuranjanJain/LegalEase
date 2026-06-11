@@ -29,12 +29,15 @@ export function SignupPage() {
       return;
     }
 
+    // Normalize email so casing variations don't create duplicate accounts
+    const normalizedEmail = email.trim().toLowerCase();
+
     setIsLoading(true);
     try {
       const response = await fetch(`${API_BASE_URL}/auth/signup`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email, password }),
+        body: JSON.stringify({ email: normalizedEmail, password }),
       });
 
       const data = await response.json().catch(() => null);
@@ -55,7 +58,7 @@ export function SignupPage() {
       }
 
       // Signup successful — redirect to verify-email
-      navigate(`/verify-email?email=${encodeURIComponent(email)}`);
+      navigate(`/verify-email?email=${encodeURIComponent(normalizedEmail)}`);
     } catch (err: any) {
       console.error('Signup request failed:', err);
       const isNetworkError = err instanceof TypeError || (err && err.message && err.message.toLowerCase().includes('fetch'));

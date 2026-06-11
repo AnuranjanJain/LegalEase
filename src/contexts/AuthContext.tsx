@@ -2,6 +2,8 @@ import { createContext, useContext, useState, ReactNode } from 'react';
 
 interface AuthContextType {
   isAuthenticated: boolean;
+  /** Email of the authenticated user, decoded from the JWT `sub` claim. */
+  userEmail: string | null;
   login: (token: string) => void;
   logout: () => boolean;
 }
@@ -9,22 +11,37 @@ interface AuthContextType {
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 /**
- * Decodes a JWT payload and checks whether the token has expired.
- * Returns true if the token is still valid, false otherwise.
+ * Decodes a JWT payload without verifying its signature.
+ * Returns the parsed payload object, or null if the token is malformed.
+ */
+function decodeTokenPayload(token: string): { sub?: string; exp?: number } | null {
+  try {
+    const parts = token.split('.');
+    if (parts.length !== 3) return null;
+    return JSON.parse(atob(parts[1]));
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Checks whether a token is present and not expired.
  * Does not verify the signature — expiry check only.
  */
 function isTokenValid(token: string): boolean {
-  try {
-    const parts = token.split('.');
-    if (parts.length !== 3) return false;
+  const payload = decodeTokenPayload(token);
+  if (!payload || typeof payload.exp !== 'number') return false;
+  return payload.exp * 1000 > Date.now();
+}
 
-    const payload = JSON.parse(atob(parts[1]));
-    if (typeof payload.exp !== 'number') return false;
-
-    return payload.exp * 1000 > Date.now();
-  } catch {
-    return false;
-  }
+/**
+ * Extracts the user's email from a valid token's `sub` claim.
+ * Returns null if the token is invalid or carries no email.
+ */
+function getEmailFromToken(token: string | null): string | null {
+  if (!token || !isTokenValid(token)) return null;
+  const payload = decodeTokenPayload(token);
+  return typeof payload?.sub === 'string' ? payload.sub : null;
 }
 
 export function AuthProvider({ children }: { children: ReactNode }) {
@@ -42,9 +59,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return false;
   });
 
+  const [userEmail, setUserEmail] = useState<string | null>(() =>
+    getEmailFromToken(localStorage.getItem('access_token'))
+  );
+
   const login = (token: string) => {
     localStorage.setItem('access_token', token);
     setIsAuthenticated(true);
+    setUserEmail(getEmailFromToken(token));
   };
 
   const logout = (): boolean => {
@@ -55,6 +77,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       sessionStorage.clear();
 
       setIsAuthenticated(false);
+      setUserEmail(null);
 
       return true;
     } catch (error) {
@@ -64,7 +87,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
   return (
-    <AuthContext.Provider value={{ isAuthenticated, login, logout }}>
+    <AuthContext.Provider value={{ isAuthenticated, userEmail, login, logout }}>
       {children}
     </AuthContext.Provider>
   );

@@ -1,6 +1,7 @@
-import { Bell, Palette, Shield, Globe, Trash2 } from 'lucide-react';
+import { Bell, Palette, Shield, Globe, Trash2, EyeOff } from 'lucide-react';
 import { useToast } from '../contexts/ToastContext';
 import { ChatStorageService } from '../services/storage';
+import { RedactionToggle } from '../components/RedactionToggle';
 
 export function SettingsPage() {
   const { showToast } = useToast();
@@ -150,7 +151,26 @@ export function SettingsPage() {
 
           </div>
 
-          {/* --- PANEL 4: LANGUAGE AND REGIONAL PREFERENCES --- */}
+          {/* --- PANEL 4: PII REDACTION --- */}
+          <div className="bg-white/70 dark:bg-gray-950/40 backdrop-blur-md rounded-2xl border border-gray-150 dark:border-gray-850 p-6 md:p-8 shadow-sm hover:shadow-md transition-shadow">
+            
+            <div className="flex items-center gap-4 mb-6 pb-4 border-b border-gray-150 dark:border-gray-850/60">
+              <div className="h-11 w-11 bg-primary-600/10 text-primary-600 dark:text-primary-400 rounded-xl flex items-center justify-center border border-primary-500/15">
+                <EyeOff size={20} />
+              </div>
+              <div>
+                <h3 className="text-base font-extrabold text-gray-900 dark:text-white">PII Redaction</h3>
+                <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
+                  Automatically mask sensitive personal information in documents and AI summaries.
+                </p>
+              </div>
+            </div>
+
+            <RedactionToggle />
+
+          </div>
+
+          {/* --- PANEL 5: LANGUAGE AND REGIONAL PREFERENCES --- */}
           <div className="bg-white/70 dark:bg-gray-950/40 backdrop-blur-md rounded-2xl border border-gray-150 dark:border-gray-850 p-6 md:p-8 shadow-sm hover:shadow-md transition-shadow">
             
             <div className="flex items-center gap-4 mb-5 pb-4 border-b border-gray-150 dark:border-gray-850/60">
