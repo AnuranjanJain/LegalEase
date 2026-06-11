@@ -3,6 +3,7 @@ from typing import List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel
+from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from backend.auth import get_current_user, AuthIdentity
@@ -56,22 +57,33 @@ def list_chat_sessions(
     db: Session = Depends(get_db),
 ):
     """Return all chat sessions for the authenticated user."""
-    user_id = current_user.get_user_id()
+    # Use subquery to count messages efficiently (eliminates N+1 query pattern)
+    message_counts = (
+        db.query(
+            models.ChatMessage.session_id,
+            func.count(models.ChatMessage.id).label('msg_count')
+        )
+        .group_by(models.ChatMessage.session_id)
+        .subquery()
+    )
+    
     sessions = (
-        db.query(models.ChatSession)
-        .filter(models.ChatSession.user_id == user_id)
+        db.query(models.ChatSession, message_counts.c.msg_count)
+        .outerjoin(message_counts, models.ChatSession.id == message_counts.c.session_id)
+        .filter(models.ChatSession.user_id == current_user.id)
         .order_by(models.ChatSession.updated_at.desc())
         .all()
     )
+    
     result = []
-    for s in sessions:
+    for s, count in sessions:
         result.append(
             ChatSessionOut(
                 id=s.id,
                 title=s.title or "New Chat",
                 created_at=s.created_at.isoformat() if s.created_at else "",
                 updated_at=s.updated_at.isoformat() if s.updated_at else "",
-                message_count=len(s.messages) if s.messages else 0,
+                message_count=count if count else 0,
             )
         )
     return result
