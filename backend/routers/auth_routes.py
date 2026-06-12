@@ -109,7 +109,7 @@ def signup(user: UserCreate, db: Session = Depends(get_db)):
 
 
 @router.post("/login", response_model=TokenResponse)
-def login(user: UserLogin, db: Session = Depends(get_db)):
+def login(request: Request, user: UserLogin, db: Session = Depends(get_db)):
     # Normalize email to match accounts case-insensitively
     normalized_email = user.email.strip().lower()
     try:
