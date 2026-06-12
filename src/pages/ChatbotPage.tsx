@@ -288,14 +288,14 @@ export function ChatbotPage() {
   };
 
   return (
-    <div className="flex flex-col h-[calc(100vh-64px)] bg-gray-50 dark:bg-gray-900 border-l border-gray-200 dark:border-gray-800 relative">
+    <div className="flex flex-col h-screen bg-gray-50 dark:bg-gray-900 border-l border-gray-200 dark:border-gray-800 relative overflow-hidden">
 
       {/* Session panel */}
       {showSessions && (
-        <div className="absolute top-0 left-0 right-0 z-10 bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 shadow-md max-h-64 overflow-y-auto">
-          <div className="flex items-center justify-between px-4 py-2 border-b border-gray-100 dark:border-gray-700">
+        <div className="absolute top-0 left-0 right-0 z-20 bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 shadow-lg max-h-64 overflow-y-auto flex-shrink-0">
+          <div className="flex items-center justify-between px-4 py-3 border-b border-gray-100 dark:border-gray-700 sticky top-0 bg-white dark:bg-gray-800">
             <span className="text-sm font-semibold text-gray-700 dark:text-gray-300">Conversations</span>
-            <button onClick={() => setShowSessions(false)} className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-200">
+            <button onClick={() => setShowSessions(false)} className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 p-1 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors">
               <X size={16} />
             </button>
           </div>
@@ -305,16 +305,16 @@ export function ChatbotPage() {
           {sessions.map(session => (
             <div
               key={session.id}
-              className={`flex items-center justify-between px-4 py-2 cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-700 ${session.id === activeSessionId ? 'bg-primary/5 dark:bg-primary/10' : ''}`}
+              className={`flex items-center justify-between px-4 py-3 cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors ${session.id === activeSessionId ? 'bg-primary/5 dark:bg-primary/10' : ''}`}
               onClick={() => handleSwitchSession(session.id)}
             >
-              <div className="overflow-hidden">
+              <div className="overflow-hidden flex-1 min-w-0">
                 <p className="text-sm font-medium text-gray-800 dark:text-gray-200 truncate">{session.title}</p>
                 <p className="text-xs text-gray-400">{session.messageCount} messages · {new Date(session.updatedAt).toLocaleDateString()}</p>
               </div>
               <button
                 onClick={e => { e.stopPropagation(); handleDeleteSession(session.id); }}
-                className="ml-2 flex-shrink-0 text-gray-300 hover:text-red-500 transition-colors"
+                className="ml-2 flex-shrink-0 p-1.5 text-gray-300 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-500/10 rounded-lg transition-colors"
                 title="Delete conversation"
               >
                 <Trash2 size={14} />
@@ -324,8 +324,8 @@ export function ChatbotPage() {
         </div>
       )}
 
-      {/* Message list */}
-      <div className="flex-grow overflow-y-auto px-6 py-8 space-y-6 relative z-10">
+      {/* Message list - takes remaining space */}
+      <div className="flex-grow overflow-y-auto px-4 sm:px-6 py-6 sm:py-8 space-y-4 sm:space-y-6 relative z-10 min-h-0">
         {messages.map((msg: ChatMessage) => {
           const isUser = msg.sender === 'user';
 
@@ -355,19 +355,19 @@ export function ChatbotPage() {
               key={msg.id} 
               className={`flex w-full ${isUser ? 'justify-end' : 'justify-start'} animate-slide-up`}
             >
-              <div className={`flex items-start max-w-[80%] gap-3 ${isUser ? 'flex-row-reverse' : 'flex-row'}`}>
+              <div className={`flex items-start max-w-[85%] sm:max-w-[80%] gap-2 sm:gap-3 ${isUser ? 'flex-row-reverse' : 'flex-row'}`}>
                 
                 {/* Glowing Avatar Circles */}
-                <div className={`flex-shrink-0 h-9 w-9 rounded-xl flex items-center justify-center shadow-md ${
+                <div className={`flex-shrink-0 h-8 w-8 sm:h-9 sm:w-9 rounded-lg sm:rounded-xl flex items-center justify-center shadow-md ${
                   isUser 
                     ? 'bg-gradient-to-tr from-primary to-indigo-600 text-white' 
                     : 'bg-gradient-to-tr from-emerald-600 to-teal-500 text-white'
                 }`}>
-                  {isUser ? <User size={16} /> : <Bot size={16} />}
+                  {isUser ? <User size={14} /> : <Bot size={14} />}
                 </div>
 
                 {/* Message Bubble Card */}
-                <div className={`p-4 rounded-2xl shadow-sm text-left leading-relaxed relative group ${
+                <div className={`p-3 sm:p-4 rounded-2xl shadow-sm text-left leading-relaxed relative group ${
                   isUser 
                     ? 'bg-primary text-white rounded-tr-none' 
                     : 'bg-white/80 dark:bg-gray-900/60 backdrop-blur-md text-gray-900 dark:text-gray-150 rounded-tl-none border border-gray-150 dark:border-gray-800'
@@ -425,7 +425,7 @@ export function ChatbotPage() {
         {redactionAnnouncement || (isTyping ? 'LegalEase AI is writing an answer...' : '')}
       </div>
 
-      <div className="p-4 bg-white dark:bg-gray-800 border-t border-gray-200 dark:border-gray-800">
+      <div className="p-3 sm:p-4 bg-white dark:bg-gray-800 border-t border-gray-200 dark:border-gray-800 flex-shrink-0">
         {/* PII Redaction active indicator */}
         {isRedactionEnabled && (
           <div className="mb-2 flex items-center gap-1.5 text-[10px] font-semibold text-emerald-600 dark:text-emerald-400">
@@ -497,7 +497,7 @@ export function ChatbotPage() {
             <Trash2 size={20} />
           </button>
 
-          <div className="flex-1 relative">
+          <div className="flex-1 relative min-w-0">
             {/* Dynamic Context Badge Indicator */}
             {uploadedDoc && (
               <span 
@@ -517,10 +517,15 @@ export function ChatbotPage() {
               maxLength={MAX_INPUT_CHARS}
               value={input}
               onChange={(e) => setInput(e.target.value)}
-              onKeyDown={(e) => e.key === 'Enter' && !isTyping && handleSend()}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' && !e.shiftKey && !isTyping) {
+                  e.preventDefault();
+                  handleSend();
+                }
+              }}
             />
 
-            {/* NEW: Dynamic Character Counter */}
+            {/* Dynamic Character Counter */}
             <div 
               className={`absolute bottom-2 right-3 text-[10px] font-medium transition-colors duration-300 pointer-events-none ${
                 input.length >= MAX_INPUT_CHARS ? 'text-red-500 animate-pulse' :
@@ -535,7 +540,7 @@ export function ChatbotPage() {
           <button
             onClick={handleSend}
             disabled={!input.trim() || isTyping || input.length > MAX_INPUT_CHARS}
-            className="bg-primary text-white p-2 rounded-lg hover:bg-primary/90 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+            className="bg-primary text-white p-2 rounded-lg hover:bg-primary/90 disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex-shrink-0"
           >
             <Send size={20} />
           </button>
