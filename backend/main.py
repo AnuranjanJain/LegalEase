@@ -227,33 +227,6 @@ class HealthResponse(BaseModel):
     details: Optional[dict] = None
 
 
-def _validate_api_key(request: Request) -> str:
-    # Accept header `Authorization: Bearer <key>` or `X-API-Key`
-    auth = request.headers.get("authorization") or ""
-    api_key = ""
-    if auth.lower().startswith("bearer "):
-        api_key = auth.split(" ", 1)[1].strip()
-    else:
-        api_key = request.headers.get("x-api-key", "").strip()
-
-    if not api_key:
-        raise HTTPException(status_code=401, detail="Missing API key")
-
-    # Read from environment dynamically (allows test mocking)
-    api_keys = [k.strip() for k in os.getenv("API_KEYS", "").split(",") if k.strip()]
-    allow_dev = os.getenv("ALLOW_DEV", "false").lower() in ("1", "true", "yes")
-    dev_api_key = os.getenv("DEV_API_KEY", "dev-token")
-
-    # Check production API keys first
-    if api_key in api_keys:
-        return api_key
-
-    # Check dev mode only when production keys are not configured
-    if not api_keys and allow_dev and api_key == dev_api_key:
-        return api_key
-
-    raise HTTPException(status_code=403, detail="Invalid API key")
-
 def _get_client_ip(request: Request) -> str:
     forwarded_for = request.headers.get("x-forwarded-for")
     if forwarded_for:
