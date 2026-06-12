@@ -6,7 +6,6 @@ import { useToast } from '../contexts/ToastContext';
 import LegalMapping from '../components/LegalMapping';
 import { useRedaction } from '../contexts/RedactionContext';
 import { redact } from '../utils/redaction';
-import { RedactedText } from '../components/RedactedText';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import rehypeRaw from 'rehype-raw';
@@ -240,7 +239,7 @@ export function ChatbotPage() {
     const element = document.getElementById('chat-history-container');
     if (!element) return;
     showToast('Generating PDF...', 'info');
-    const opt = {
+    const opt: any = {
       margin:       [10, 10, 10, 10],
       filename:     'LegalEase_Chat_Export.pdf',
       image:        { type: 'jpeg', quality: 0.98 },
