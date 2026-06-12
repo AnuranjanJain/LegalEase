@@ -5,6 +5,20 @@ const getAuthHeaders = (): Record<string, string> => {
   return token ? { 'Authorization': `Bearer ${token}` } : {};
 };
 
+export interface NotificationResponse {
+  id: number;
+  title: string;
+  description: string | null;
+  type: 'document' | 'security' | 'system';
+  read: boolean;
+  created_at: string;
+}
+
+export interface NotificationListResponse {
+  notifications: NotificationResponse[];
+  unread_count: number;
+}
+
 /** Build a user-friendly error from a failed response. */
 async function handleErrorResponse(response: Response, fallbackPrefix: string): Promise<never> {
   if (response.status === 429) {
@@ -61,6 +75,38 @@ export const api = {
     return response.json();
   },
 
+  put: async <T>(endpoint: string, data?: any): Promise<T> => {
+    const response = await fetch(`${API_BASE_URL}${endpoint}`, {
+      method: 'PUT',
+      headers: {
+        'Content-Type': 'application/json',
+        ...getAuthHeaders(),
+      },
+      body: data ? JSON.stringify(data) : undefined,
+    });
+
+    if (!response.ok) {
+      await handleErrorResponse(response, 'API error');
+    }
+
+    return response.json();
+  },
+
+  delete: async <T>(endpoint: string): Promise<T> => {
+    const response = await fetch(`${API_BASE_URL}${endpoint}`, {
+      method: 'DELETE',
+      headers: {
+        ...getAuthHeaders(),
+      },
+    });
+
+    if (!response.ok) {
+      await handleErrorResponse(response, 'API error');
+    }
+
+    return response.json();
+  },
+
   upload: async <T>(endpoint: string, formData: FormData): Promise<T> => {
     const response = await fetch(`${API_BASE_URL}${endpoint}`, {
       method: 'POST',
@@ -93,5 +139,28 @@ export const api = {
     }
 
     return response;
+  },
+
+  // Notification API methods
+  notifications: {
+    getAll: async (): Promise<NotificationListResponse> => {
+      return api.get<NotificationListResponse>('/notifications');
+    },
+
+    markRead: async (notificationId: number): Promise<{ detail: string }> => {
+      return api.post<{ detail: string }>(`/notifications/${notificationId}/read`, {});
+    },
+
+    markAllRead: async (): Promise<{ detail: string }> => {
+      return api.post<{ detail: string }>('/notifications/read-all', {});
+    },
+
+    delete: async (notificationId: number): Promise<{ detail: string }> => {
+      return api.delete<{ detail: string }>(`/notifications/${notificationId}`);
+    },
+
+    create: async (data: { title: string; description?: string; type: string }): Promise<NotificationResponse> => {
+      return api.post<NotificationResponse>('/notifications', data);
+    },
   },
 };
