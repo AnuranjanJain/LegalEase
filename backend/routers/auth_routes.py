@@ -16,7 +16,7 @@ from backend.auth import (
     get_current_user,
     AuthIdentity,
     ACCESS_TOKEN_EXPIRE_HOURS,
-    _extract_bearer_token,
+    _extract_jwt_token,
     SECRET_KEY,
     ALGORITHM,
 )
@@ -231,7 +231,7 @@ def logout(
     from backend.models import RevokedToken
     from datetime import datetime
 
-    token = _extract_bearer_token(request)
+    token = _extract_jwt_token(request)
     if not token:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Missing token")
 
