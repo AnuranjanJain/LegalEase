@@ -57,6 +57,7 @@ def list_chat_sessions(
     db: Session = Depends(get_db),
 ):
     """Return all chat sessions for the authenticated user."""
+    user_id = current_user.get_user_id()
     # Use subquery to count messages efficiently (eliminates N+1 query pattern)
     message_counts = (
         db.query(
@@ -70,7 +71,7 @@ def list_chat_sessions(
     sessions = (
         db.query(models.ChatSession, message_counts.c.msg_count)
         .outerjoin(message_counts, models.ChatSession.id == message_counts.c.session_id)
-        .filter(models.ChatSession.user_id == current_user.id)
+        .filter(models.ChatSession.user_id == user_id)
         .order_by(models.ChatSession.updated_at.desc())
         .all()
     )
