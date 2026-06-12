@@ -82,5 +82,4 @@ class RAGService:
             })
         return citations
 
-
 rag_service = RAGService()

@@ -1,7 +1,7 @@
 import { useState, FormEvent } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { Eye, EyeOff, Mail, Lock, UserPlus } from 'lucide-react';
-import { API_BASE_URL } from '../config/api';
+import { api } from '../services/api';
 
 export function SignupPage() {
   const [email, setEmail] = useState('');
@@ -34,28 +34,7 @@ export function SignupPage() {
 
     setIsLoading(true);
     try {
-      const response = await fetch(`${API_BASE_URL}/auth/signup`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email: normalizedEmail, password }),
-      });
-
-      const data = await response.json().catch(() => null);
-
-      if (!response.ok) {
-        let message = 'Signup failed. Please try again.';
-        if (typeof data?.detail === 'string') {
-          message = data.detail;
-        } else if (Array.isArray(data?.detail) && data.detail.length > 0) {
-          message = data.detail[0]?.msg || 'Validation failed';
-        } else if (data?.error) {
-          message = data.error;
-        } else {
-          message = `Signup failed with status ${response.status}. Please try again.`;
-        }
-        setError(message);
-        return;
-      }
+      await api.post('/auth/signup', { email: normalizedEmail, password });
 
       // Signup successful — redirect to verify-email
       navigate(`/verify-email?email=${encodeURIComponent(normalizedEmail)}`);
@@ -65,7 +44,7 @@ export function SignupPage() {
       if (isNetworkError) {
         setError('Server is unavailable. Please verify the backend server is running.');
       } else {
-        setError('Unable to connect to the server. Please try again later.');
+        setError(err.message || 'Unable to connect to the server. Please try again later.');
       }
     } finally {
       setIsLoading(false);

@@ -203,24 +203,72 @@ export function ChatbotPage() {
 
     try {
       const conversationHistory = buildConversationHistory(updatedMessages);
-      const data = await api.post<{ response: string; citations?: Citation[] }>(
+      const botId = crypto.randomUUID();
+      const botMessage: ChatMessage = {
+        id: botId,
+        text: '',
+        sender: 'bot',
+        time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+        timestamp: new Date().toISOString(),
+      };
+      setMessages(prev => [...prev, botMessage]);
+      setIsTyping(false); // Hide the bouncing dots immediately since we will stream text
+
+      const response = await api.stream(
         '/chat',
         { message: currentInput, context: uploadedDoc?.text },
         conversationHistory
       );
 
-      const botId = crypto.randomUUID();
-      const botMessage: ChatMessage = {
-        id: botId,
-        text: data.response || "I apologize, but I couldn't process that request.",
-        sender: 'bot',
-        time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-        timestamp: new Date().toISOString(),
-      };
-      if (data.citations && data.citations.length > 0) {
-        setMessageCitations(prev => ({ ...prev, [botId]: data.citations! }));
+      const citationsHeader = response.headers.get('X-Citations');
+      if (citationsHeader) {
+        try {
+          const citations = JSON.parse(atob(citationsHeader));
+          if (citations && citations.length > 0) {
+            setMessageCitations(prev => ({ ...prev, [botId]: citations }));
+          }
+        } catch (e) {
+          console.error("Failed to parse citations", e);
+        }
       }
-      setMessages(prev => [...prev, botMessage]);
+
+      const reader = response.body?.getReader();
+      const decoder = new TextDecoder('utf-8');
+
+      if (reader) {
+        let done = false;
+        while (!done) {
+          const { value, done: readerDone } = await reader.read();
+          done = readerDone;
+          if (value) {
+            const chunk = decoder.decode(value, { stream: true });
+            const lines = chunk.split('\n');
+            for (const line of lines) {
+              if (line.startsWith('data: ')) {
+                const dataStr = line.slice(6);
+                if (dataStr === '[DONE]') {
+                  done = true;
+                  break;
+                }
+                try {
+                  const data = JSON.parse(dataStr);
+                  if (data.response) {
+                    setMessages(prev => 
+                      prev.map(msg => 
+                        msg.id === botId 
+                          ? { ...msg, text: msg.text + data.response } 
+                          : msg
+                      )
+                    );
+                  }
+                } catch (e) {
+                  // Ignore incomplete JSON chunks or parse errors, they'll resolve in the next chunk
+                }
+              }
+            }
+          }
+        }
+      }
     } catch (error) {
       console.error('Error sending message:', error);
       showToast('Failed to send message. Please try again.', 'error');

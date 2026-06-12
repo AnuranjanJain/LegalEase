@@ -172,6 +172,7 @@ app.add_middleware(
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
+    expose_headers=["X-Citations"],
 )
 logger.info(f"Allowed frontend origins: {ALLOWED_ORIGINS}")
 
@@ -361,7 +362,12 @@ async def chat(request: Request, payload: ChatRequest, identity: AuthIdentity = 
                 for i, word in enumerate(words):
                     yield word + (" " if i < len(words) - 1 else "")
                     await asyncio.sleep(0.01)
-            return StreamingResponse(stream_cached(), media_type="text/event-stream")
+            
+            headers = {}
+            if citations:
+                import json, base64
+                headers["X-Citations"] = base64.b64encode(json.dumps(citations).encode()).decode()
+            return StreamingResponse(stream_cached(), media_type="text/event-stream", headers=headers)
         else:
             return {"response": cached_response, "citations": citations}
 
@@ -383,7 +389,11 @@ async def chat(request: Request, payload: ChatRequest, identity: AuthIdentity = 
                 logger.error(f"[{correlation_id_var.get()}] Stream generation error: {e}")
                 yield "\n[Error: Inference stream failed]"
 
-        return StreamingResponse(stream_generator(), media_type="text/event-stream")
+        headers = {}
+        if citations:
+            import json, base64
+            headers["X-Citations"] = base64.b64encode(json.dumps(citations).encode()).decode()
+        return StreamingResponse(stream_generator(), media_type="text/event-stream", headers=headers)
     else:
         response_gen = ai_service.generate_chat_response(
             message=sanitized_message,
