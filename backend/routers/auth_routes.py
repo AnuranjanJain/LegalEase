@@ -2,7 +2,7 @@ from datetime import timedelta
 import logging
 import os
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Request, status
 from sqlalchemy.exc import IntegrityError, SQLAlchemyError
 from sqlalchemy.orm import Session
 from pydantic import BaseModel, EmailStr, Field
@@ -15,7 +15,18 @@ from backend.auth import (
     create_access_token,
     get_current_user,
     AuthIdentity,
-    ACCESS_TOKEN_EXPIRE_HOURS
+    ACCESS_TOKEN_EXPIRE_HOURS,
+    _extract_bearer_token,
+    SECRET_KEY,
+    ALGORITHM,
+)
+from backend.middleware.auth_rate_limit import (
+    check_login_rate_limit,
+    check_signup_rate_limit,
+    check_verification_rate_limit,
+    record_failed_login,
+    check_failed_login_lockout,
+    clear_failed_login_attempts
 )
 
 logger = logging.getLogger(__name__)
@@ -98,7 +109,7 @@ def signup(user: UserCreate, db: Session = Depends(get_db)):
 
 
 @router.post("/login", response_model=TokenResponse)
-def login(user: UserLogin, db: Session = Depends(get_db)):
+def login(request: Request, user: UserLogin, db: Session = Depends(get_db)):
     # Normalize email to match accounts case-insensitively
     normalized_email = user.email.strip().lower()
     try:
@@ -111,11 +122,16 @@ def login(user: UserLogin, db: Session = Depends(get_db)):
         )
 
     if not db_user or not verify_password(user.password, db_user.hashed_password):
+        # Record failed login attempt for progressive backoff
+        record_failed_login(request, user.email)
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Incorrect email or password",
             headers={"WWW-Authenticate": "Bearer"},
         )
+
+    # Clear failed login attempts on successful login
+    clear_failed_login_attempts(request, user.email)
 
     access_token = create_access_token(
         data={"sub": db_user.email},
@@ -207,3 +223,55 @@ def verify_token(current_user: models.User = Depends(get_current_user)):
         "email": current_user.email
     }
 
+
+@router.post("/logout", status_code=status.HTTP_200_OK)
+def logout(
+    request: Request,
+    current_user: AuthIdentity = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """
+    Invalidate the caller's JWT by recording its jti in the revocation table.
+    Subsequent requests carrying the same token will be rejected with 401,
+    even if the token has not yet expired.
+    """
+    from jose import jwt as jose_jwt, JWTError
+    from backend.models import RevokedToken
+    from datetime import datetime
+
+    token = _extract_bearer_token(request)
+    if not token:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Missing token")
+
+    try:
+        payload = jose_jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
+    except JWTError:
+        # Token already invalid — treat as a successful logout
+        return {"detail": "Logged out successfully"}
+
+    jti = payload.get("jti")
+    exp = payload.get("exp")
+
+    if not jti or not exp:
+        # Token was issued without jti (pre-fix token) — nothing to blacklist,
+        # but the client has already cleared localStorage so this is acceptable.
+        return {"detail": "Logged out successfully"}
+
+    expires_at = datetime.utcfromtimestamp(exp)
+
+    # Idempotent: ignore if jti already revoked (e.g. duplicate logout request)
+    existing = db.query(RevokedToken).filter(RevokedToken.jti == jti).first()
+    if not existing:
+        try:
+            db.add(RevokedToken(jti=jti, expires_at=expires_at))
+            db.commit()
+        except Exception:
+            db.rollback()
+            logger.exception("Failed to record token revocation")
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail="Logout failed — please try again",
+            )
+
+    logger.info("Token revoked for user %s (jti=%s)", current_user.identifier, jti)
+    return {"detail": "Logged out successfully"}

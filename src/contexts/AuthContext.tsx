@@ -125,6 +125,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const logout = (): boolean => {
     try {
+      // Revoke the token server-side so it cannot be reused even within its expiry window.
+      const token = localStorage.getItem('access_token');
+      if (token) {
+        // Fire-and-forget: we always clear the local session regardless of server response.
+        fetch(`${import.meta.env.VITE_API_URL ?? ''}/auth/logout`, {
+          method: 'POST',
+          headers: { Authorization: `Bearer ${token}` },
+        }).catch((err) => console.warn('Server-side logout failed:', err));
+      }
+
       localStorage.removeItem('access_token');
       sessionStorage.clear();
 
