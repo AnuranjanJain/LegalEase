@@ -20,6 +20,14 @@ from backend.auth import (
     SECRET_KEY,
     ALGORITHM,
 )
+from backend.middleware.auth_rate_limit import (
+    check_login_rate_limit,
+    check_signup_rate_limit,
+    check_verification_rate_limit,
+    record_failed_login,
+    check_failed_login_lockout,
+    clear_failed_login_attempts
+)
 
 logger = logging.getLogger(__name__)
 
@@ -114,11 +122,16 @@ def login(user: UserLogin, db: Session = Depends(get_db)):
         )
 
     if not db_user or not verify_password(user.password, db_user.hashed_password):
+        # Record failed login attempt for progressive backoff
+        record_failed_login(request, user.email)
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Incorrect email or password",
             headers={"WWW-Authenticate": "Bearer"},
         )
+
+    # Clear failed login attempts on successful login
+    clear_failed_login_attempts(request, user.email)
 
     access_token = create_access_token(
         data={"sub": db_user.email},
