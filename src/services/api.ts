@@ -76,4 +76,22 @@ export const api = {
 
     return response.json();
   },
+
+  stream: async (endpoint: string, data: any, conversationHistory?: Array<{role: string, content: string}>): Promise<Response> => {
+    const requestData = conversationHistory ? { ...data, conversation_history: conversationHistory, stream: true } : { ...data, stream: true };
+    const response = await fetch(`${API_BASE_URL}${endpoint}`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        ...getAuthHeaders(),
+      },
+      body: JSON.stringify(requestData),
+    });
+
+    if (!response.ok) {
+      await handleErrorResponse(response, 'API error');
+    }
+
+    return response;
+  },
 };
