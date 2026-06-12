@@ -495,8 +495,6 @@ export function ChatbotPage() {
                     )}
                   </div>
                 </div>
-                </div>
-
               </div>
             </div>
           );
