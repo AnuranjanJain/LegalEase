@@ -57,6 +57,13 @@ def list_chat_sessions(
     db: Session = Depends(get_db),
 ):
     """Return all chat sessions for the authenticated user."""
+    user_id = current_user.get_user_id()
+    if not user_id:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="User not found",
+        )
+    
     # Use subquery to count messages efficiently (eliminates N+1 query pattern)
     message_counts = (
         db.query(
@@ -66,11 +73,10 @@ def list_chat_sessions(
         .group_by(models.ChatMessage.session_id)
         .subquery()
     )
-    
     sessions = (
         db.query(models.ChatSession, message_counts.c.msg_count)
         .outerjoin(message_counts, models.ChatSession.id == message_counts.c.session_id)
-        .filter(models.ChatSession.user_id == current_user.id)
+        .filter(models.ChatSession.user_id == user_id)
         .order_by(models.ChatSession.updated_at.desc())
         .all()
     )
@@ -97,6 +103,12 @@ def get_chat_messages(
 ):
     """Return all messages in a chat session owned by the authenticated user."""
     user_id = current_user.get_user_id()
+    if not user_id:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="User not found",
+        )
+    
     session = (
         db.query(models.ChatSession)
         .filter(
@@ -126,6 +138,12 @@ def list_documents(
 ):
     """Return all uploaded documents for the authenticated user."""
     user_id = current_user.get_user_id()
+    if not user_id:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="User not found",
+        )
+    
     docs = (
         db.query(models.DocumentRecord)
         .filter(models.DocumentRecord.user_id == user_id)
