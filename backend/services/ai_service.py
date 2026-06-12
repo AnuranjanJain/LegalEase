@@ -173,12 +173,16 @@ class AIService:
 
         # Stream handling
         if stream:
+            import json
             # We yield words/chunks simulating a streaming channel to reduce perceived latency
             words = response_text.split(" ")
             for i, word in enumerate(words):
                 chunk = word + (" " if i < len(words) - 1 else "")
-                yield chunk
+                # Yield proper Server-Sent Events (SSE) format
+                payload = json.dumps({"response": chunk})
+                yield f"data: {payload}\n\n"
                 await asyncio.sleep(0.01)  # small pause for visual effect
+            yield "data: [DONE]\n\n"
         else:
             yield response_text
 
