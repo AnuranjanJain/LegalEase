@@ -1,4 +1,4 @@
-import { Send, User, Bot, Paperclip, X, FileText, Sparkles, RefreshCcw, PlusCircle, Trash2, History, Copy, Check, ShieldCheck } from 'lucide-react';
+import { Send, User, Bot, Paperclip, X, FileText, Sparkles, RefreshCcw, PlusCircle, Trash2, History, Copy, Check, ShieldCheck, BookOpen, ChevronDown } from 'lucide-react';
 import { api } from '../services/api';
 import { ChatStorageService, ChatMessage, ChatSessionMetadata } from '../services/storage';
 import { useRef, useState, useEffect, useCallback } from 'react';
@@ -28,8 +28,12 @@ function buildConversationHistory(msgs: ChatMessage[]) {
     .map(m => ({ role: m.sender === 'user' ? 'user' : 'assistant', content: m.text }));
 }
 
+type Citation = { text: string; source: string; chunk_index: number };
+
 export function ChatbotPage() {
   const [messages, setMessages] = useState<ChatMessage[]>([makeGreeting()]);
+  const [messageCitations, setMessageCitations] = useState<Record<string, Citation[]>>({});
+  const [openCitationId, setOpenCitationId] = useState<string | null>(null);
   const [activeSessionId, setActiveSessionId] = useState<string | null>(null);
   const [sessions, setSessions] = useState<ChatSessionMetadata[]>([]);
   const [input, setInput] = useState('');
@@ -37,7 +41,7 @@ export function ChatbotPage() {
   const [uploadedDoc, setUploadedDoc] = useState<{ name: string; text: string } | null>(null);
   const [isUploading, setIsUploading] = useState(false);
   const [showSessions, setShowSessions] = useState(false);
-  
+
   // State to track which message ID was copied to show the checkmark temporarily
   const [copiedId, setCopiedId] = useState<string | null>(null);
 
@@ -199,19 +203,23 @@ export function ChatbotPage() {
 
     try {
       const conversationHistory = buildConversationHistory(updatedMessages);
-      const data = await api.post<{ response: string }>(
+      const data = await api.post<{ response: string; citations?: Citation[] }>(
         '/chat',
         { message: currentInput, context: uploadedDoc?.text },
         conversationHistory
       );
 
+      const botId = crypto.randomUUID();
       const botMessage: ChatMessage = {
-        id: crypto.randomUUID(),
+        id: botId,
         text: data.response || "I apologize, but I couldn't process that request.",
         sender: 'bot',
         time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
         timestamp: new Date().toISOString(),
       };
+      if (data.citations && data.citations.length > 0) {
+        setMessageCitations(prev => ({ ...prev, [botId]: data.citations! }));
+      }
       setMessages(prev => [...prev, botMessage]);
     } catch (error) {
       console.error('Error sending message:', error);
@@ -391,6 +399,33 @@ export function ChatbotPage() {
                   <p className={`text-[9px] font-semibold mt-2 ${isUser ? 'text-blue-100 text-right' : 'text-gray-400 dark:text-gray-500'}`}>
                     {msg.time}
                   </p>
+
+                  {/* Citation panel for bot messages */}
+                  {!isUser && messageCitations[msg.id] && messageCitations[msg.id].length > 0 && (
+                    <div className="mt-3 border-t border-gray-200 dark:border-gray-700 pt-2">
+                      <button
+                        onClick={() => setOpenCitationId(openCitationId === msg.id ? null : msg.id)}
+                        className="flex items-center gap-1.5 text-[10px] font-bold text-primary hover:text-primary/80 transition-colors"
+                      >
+                        <BookOpen size={11} />
+                        {messageCitations[msg.id].length} Source{messageCitations[msg.id].length > 1 ? 's' : ''}
+                        <ChevronDown size={11} className={`transition-transform ${openCitationId === msg.id ? 'rotate-180' : ''}`} />
+                      </button>
+                      {openCitationId === msg.id && (
+                        <div className="mt-2 space-y-2">
+                          {messageCitations[msg.id].map((c, idx) => (
+                            <div key={idx} className="p-2 rounded-lg bg-gray-100 dark:bg-gray-800 border border-gray-200 dark:border-gray-700">
+                              <p className="text-[9px] font-bold text-primary mb-1 flex items-center gap-1">
+                                <span className="inline-flex items-center justify-center w-4 h-4 rounded-full bg-primary text-white text-[8px] font-black">{idx + 1}</span>
+                                {c.source} — chunk {c.chunk_index + 1}
+                              </p>
+                              <p className="text-[10px] text-gray-600 dark:text-gray-400 leading-relaxed line-clamp-3">{c.text}</p>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  )}
                 </div>
 
               </div>
