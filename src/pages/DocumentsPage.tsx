@@ -10,6 +10,7 @@ import { useNavigate } from 'react-router-dom';
 import { ShareButton } from '../components/ShareButton';
 import { WhatsAppShareModal } from '../components/WhatsAppShareModal';
 import { ClauseAnalysisSection } from '../components/ClauseAnalysisSection';
+import { ReadabilityScore } from '../components/ReadabilityScore';
 import { useRedaction } from '../contexts/RedactionContext';
 import { redact } from '../utils/redaction';
 import { RedactedText } from '../components/RedactedText';
@@ -163,6 +164,7 @@ export function DocumentsPage() {
       showToast(`Opening cognitive audit report for "${doc.name}"`, 'success');
       setSelectedAuditDoc({
         ...doc,
+        text: doc.text || (doc.id === 'doc_1' ? "This Lease Agreement is entered into on this 1st day of June, by and between the Landlord and the Tenant. The Tenant hereby covenants and agrees to pay to the Landlord as monthly rent for the demised premises the sum of Two Thousand Four Hundred and Fifty Dollars ($2,450.00) USD, payable on the first day of each calendar month. In the event that any installment of rent is not received by the Landlord within five (5) grace days of its due date, the Tenant shall pay a late fee equal to five percent (5%) of the monthly rent. The Tenant shall deposit a security deposit of one and a half months' rent prior to taking occupancy. The Tenant shall be responsible for the cost of all minor repairs and maintenance of the premises under the value of one hundred dollars ($100)." : doc.id === 'doc_3' ? "We retain user data for five (5) years after account deletion to comply with internal compliance guidelines. By using the application, you agree to receive promotional materials and third-party tracking cookies automatically (opt-out)." : ""),
         summary: getMockSummary(doc),
         clauses: doc.clauses || (doc.id === 'doc_1' ? [
           {
@@ -629,6 +631,12 @@ export function DocumentsPage() {
               <div className="prose prose-sm dark:prose-invert max-w-none text-gray-700 dark:text-gray-200 whitespace-pre-line leading-relaxed text-sm">
                 <RedactedText text={auditSummaryDisplay} />
               </div>
+
+              {/* Readability Score Analysis */}
+              <ReadabilityScore 
+                originalText={selectedAuditDoc.text} 
+                summaryText={selectedAuditDoc.summary} 
+              />
 
               <ClauseAnalysisSection clauses={selectedAuditDoc.clauses} />
 
