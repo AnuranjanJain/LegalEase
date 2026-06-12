@@ -62,7 +62,7 @@ def signup(user: UserCreate, db: Session = Depends(get_db)):
     normalized_email = user.email.strip().lower()
     try:
         db_user = db.query(models.User).filter(models.User.email == normalized_email).first()
-    except SQLAlchemyError as exc:
+    except SQLAlchemyError:
         logger.exception("Failed to query database during signup")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
@@ -82,7 +82,7 @@ def signup(user: UserCreate, db: Session = Depends(get_db)):
     except IntegrityError:
         db.rollback()
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Email already exists")
-    except SQLAlchemyError as exc:
+    except SQLAlchemyError:
         db.rollback()
         logger.exception("Failed to create user during signup")
         raise HTTPException(
@@ -103,7 +103,7 @@ def login(user: UserLogin, db: Session = Depends(get_db)):
     normalized_email = user.email.strip().lower()
     try:
         db_user = db.query(models.User).filter(models.User.email == normalized_email).first()
-    except SQLAlchemyError as exc:
+    except SQLAlchemyError:
         logger.exception("Failed to query database during login")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
@@ -147,7 +147,7 @@ def change_password(
     try:
         user.hashed_password = get_password_hash(payload.new_password)
         db.commit()
-    except SQLAlchemyError as exc:
+    except SQLAlchemyError:
         db.rollback()
         logger.exception("Failed to update password in database")
         raise HTTPException(
@@ -182,7 +182,7 @@ def resend_verification(payload: ResendVerificationRequest, db: Session = Depend
     # Check if user exists in the database
     try:
         db_user = db.query(models.User).filter(models.User.email == email_lower).first()
-    except SQLAlchemyError as exc:
+    except SQLAlchemyError:
         logger.exception("Failed to query database during resend-verification")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
