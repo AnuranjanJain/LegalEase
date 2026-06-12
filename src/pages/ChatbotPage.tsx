@@ -200,20 +200,60 @@ export function ChatbotPage() {
 
     try {
       const conversationHistory = buildConversationHistory(updatedMessages);
-      const data = await api.post<{ response: string }>(
-        '/chat',
-        { message: currentInput, context: uploadedDoc?.text },
-        conversationHistory
-      );
-
+      const botMessageId = crypto.randomUUID();
       const botMessage: ChatMessage = {
-        id: crypto.randomUUID(),
-        text: data.response || "I apologize, but I couldn't process that request.",
+        id: botMessageId,
+        text: '',
         sender: 'bot',
         time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
         timestamp: new Date().toISOString(),
       };
       setMessages(prev => [...prev, botMessage]);
+      setIsTyping(false); // Hide the bouncing dots immediately since we will stream text
+
+      const response = await api.stream(
+        '/chat',
+        { message: currentInput, context: uploadedDoc?.text },
+        conversationHistory
+      );
+
+      const reader = response.body?.getReader();
+      const decoder = new TextDecoder('utf-8');
+
+      if (reader) {
+        let done = false;
+        while (!done) {
+          const { value, done: readerDone } = await reader.read();
+          done = readerDone;
+          if (value) {
+            const chunk = decoder.decode(value, { stream: true });
+            const lines = chunk.split('\n');
+            for (const line of lines) {
+              if (line.startsWith('data: ')) {
+                const dataStr = line.slice(6);
+                if (dataStr === '[DONE]') {
+                  done = true;
+                  break;
+                }
+                try {
+                  const data = JSON.parse(dataStr);
+                  if (data.response) {
+                    setMessages(prev => 
+                      prev.map(msg => 
+                        msg.id === botMessageId 
+                          ? { ...msg, text: msg.text + data.response } 
+                          : msg
+                      )
+                    );
+                  }
+                } catch (e) {
+                  // Ignore incomplete JSON chunks or parse errors, they'll resolve in the next chunk
+                }
+              }
+            }
+          }
+        }
+      }
     } catch (error) {
       console.error('Error sending message:', error);
       showToast('Failed to send message. Please try again.', 'error');

@@ -1,6 +1,7 @@
 import logging
 import os
 import hashlib
+import uuid
 from datetime import datetime, timedelta
 from typing import Optional, Union, Literal
 from fastapi import Depends, HTTPException, Request, status
@@ -113,8 +114,17 @@ def create_access_token(data: dict, expires_delta: Optional[timedelta] = None) -
     secret_key = _require_secret_key()
     to_encode = data.copy()
     expire = datetime.utcnow() + (expires_delta if expires_delta else timedelta(hours=ACCESS_TOKEN_EXPIRE_HOURS))
-    to_encode.update({"exp": expire})
+    to_encode.update({
+        "exp": expire,
+        "jti": str(uuid.uuid4()),  # unique token ID — used for revocation
+    })
     return jwt.encode(to_encode, secret_key, algorithm=ALGORITHM)
+
+
+def is_token_revoked(jti: str, db: Session) -> bool:
+    """Return True if the token's jti is present in the revocation table."""
+    from backend.models import RevokedToken  # local import avoids circular deps
+    return db.query(RevokedToken).filter(RevokedToken.jti == jti).first() is not None
 
 
 def get_current_user(token: str = Depends(oauth2_scheme), db: Session = Depends(get_db)) -> AuthIdentity:
@@ -129,6 +139,9 @@ def get_current_user(token: str = Depends(oauth2_scheme), db: Session = Depends(
         payload = jwt.decode(token, secret_key, algorithms=[ALGORITHM])
         email: str = payload.get("sub")
         if email is None:
+            raise credentials_exception
+        jti: Optional[str] = payload.get("jti")
+        if jti and is_token_revoked(jti, db):
             raise credentials_exception
     except JWTError:
         raise credentials_exception
@@ -180,7 +193,8 @@ def validate_token_or_api_key(request: Request, db: Session = Depends(get_db)) -
         try:
             payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
             email: Optional[str] = payload.get("sub")
-            if email:
+            jti: Optional[str] = payload.get("jti")
+            if email and not (jti and is_token_revoked(jti, db)):
                 user = db.query(models.User).filter(models.User.email == email).first()
                 if user:
                     return AuthIdentity(
