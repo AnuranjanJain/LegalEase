@@ -1,4 +1,4 @@
-import { Send, User, Bot, Paperclip, X, FileText, Sparkles, RefreshCcw, PlusCircle, Trash2, History, Copy, Check, ShieldCheck } from 'lucide-react';
+import { Send, User, Bot, Paperclip, X, FileText, Sparkles, RefreshCcw, PlusCircle, Trash2, History, Copy, Check, ShieldCheck, Download } from 'lucide-react';
 import { api } from '../services/api';
 import { ChatStorageService, ChatMessage, ChatSessionMetadata } from '../services/storage';
 import { useRef, useState, useEffect, useCallback } from 'react';
@@ -6,7 +6,11 @@ import { useToast } from '../contexts/ToastContext';
 import LegalMapping from '../components/LegalMapping';
 import { useRedaction } from '../contexts/RedactionContext';
 import { redact } from '../utils/redaction';
-import { RedactedText } from '../components/RedactedText';
+import ReactMarkdown from 'react-markdown';
+import remarkGfm from 'remark-gfm';
+import rehypeRaw from 'rehype-raw';
+// @ts-ignore
+import html2pdf from 'html2pdf.js';
 
 function makeGreeting(): ChatMessage {
   return {
@@ -271,6 +275,25 @@ export function ChatbotPage() {
     }
   };
 
+  const handleExportPDF = () => {
+    const element = document.getElementById('chat-history-container');
+    if (!element) return;
+    showToast('Generating PDF...', 'info');
+    const opt: any = {
+      margin:       [10, 10, 10, 10],
+      filename:     'LegalEase_Chat_Export.pdf',
+      image:        { type: 'jpeg', quality: 0.98 },
+      html2canvas:  { scale: 2, useCORS: true },
+      jsPDF:        { unit: 'mm', format: 'a4', orientation: 'portrait' }
+    };
+    html2pdf().set(opt).from(element).save().then(() => {
+      showToast('Export successful!', 'success');
+    }).catch((err: any) => {
+      console.error('PDF export error:', err);
+      showToast('Failed to export PDF.', 'error');
+    });
+  };
+
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -425,9 +448,21 @@ export function ChatbotPage() {
                     </button>
                   )}
 
-                  <p className="text-sm font-medium whitespace-pre-wrap pr-4">
-                    <RedactedText text={displayText} />
-                  </p>
+                  <div className="text-sm font-medium whitespace-pre-wrap pr-4 markdown-body">
+                    <ReactMarkdown 
+                      remarkPlugins={[remarkGfm]} 
+                      rehypePlugins={[rehypeRaw]}
+                      components={{
+                        table: ({node, ...props}) => <table className="border-collapse table-auto w-full text-sm my-2 border border-gray-300 dark:border-gray-600 rounded-lg overflow-hidden" {...props} />,
+                        th: ({node, ...props}) => <th className="border border-gray-300 dark:border-gray-600 px-4 py-2 bg-gray-100 dark:bg-gray-800 text-left font-bold" {...props} />,
+                        td: ({node, ...props}) => <td className="border border-gray-300 dark:border-gray-600 px-4 py-2" {...props} />,
+                        blockquote: ({node, ...props}) => <blockquote className="border-l-4 border-gray-300 dark:border-gray-500 pl-4 italic text-gray-600 dark:text-gray-400 my-2" {...props} />,
+                        a: ({node, ...props}) => <a className="text-primary hover:underline" {...props} />
+                      }}
+                    >
+                      {displayText}
+                    </ReactMarkdown>
+                  </div>
                   <p className={`text-[9px] font-semibold mt-2 ${isUser ? 'text-blue-100 text-right' : 'text-gray-400 dark:text-gray-500'}`}>
                     {msg.time}
                   </p>
@@ -511,6 +546,14 @@ export function ChatbotPage() {
             title="Attach Document"
           >
             {isUploading ? <RefreshCcw size={20} className="animate-spin" /> : <Paperclip size={20} />}
+          </button>
+
+          <button
+            onClick={handleExportPDF}
+            className="p-2 text-gray-400 hover:text-primary dark:hover:text-primary transition-colors"
+            title="Export to PDF"
+          >
+            <Download size={20} />
           </button>
 
           <button
