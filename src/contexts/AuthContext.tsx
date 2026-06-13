@@ -1,14 +1,36 @@
-import { createContext, useContext, useState, ReactNode } from 'react';
+import { createContext, useContext, useState, useEffect, ReactNode } from 'react';
+import { API_BASE_URL } from '../config/api';
 
 interface AuthContextType {
   isAuthenticated: boolean;
+  isVerifying: boolean;
   /** Email of the authenticated user, decoded from the JWT `sub` claim. */
   userEmail: string | null;
-  login: (token: string) => void;
+  login: (token: string) => Promise<void>;
   logout: () => boolean;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
+
+/**
+ * Verifies the token with the backend by calling /auth/verify endpoint.
+ * This ensures the token signature is valid and the user exists in the database.
+ */
+async function verifyTokenWithBackend(token: string): Promise<boolean> {
+  try {
+    const response = await fetch(`${API_BASE_URL}/auth/verify`, {
+      method: 'GET',
+      headers: {
+        'Authorization': `Bearer ${token}`,
+        'Content-Type': 'application/json',
+      },
+    });
+
+    return response.ok;
+  } catch {
+    return false;
+  }
+}
 
 /**
  * Decodes a JWT payload without verifying its signature.
@@ -18,7 +40,10 @@ function decodeTokenPayload(token: string): { sub?: string; exp?: number } | nul
   try {
     const parts = token.split('.');
     if (parts.length !== 3) return null;
-    return JSON.parse(atob(parts[1]));
+
+    const base64 = parts[1].replace(/-/g, '+').replace(/_/g, '/');
+    const padded = base64.padEnd(base64.length + ((4 - (base64.length % 4)) % 4), '=');
+    return JSON.parse(atob(padded));
   } catch {
     return null;
   }
@@ -26,7 +51,7 @@ function decodeTokenPayload(token: string): { sub?: string; exp?: number } | nul
 
 /**
  * Checks whether a token is present and not expired.
- * Does not verify the signature — expiry check only.
+ * Does not verify the signature; expiry check only.
  */
 function isTokenValid(token: string): boolean {
   const payload = decodeTokenPayload(token);
@@ -45,28 +70,57 @@ function getEmailFromToken(token: string | null): string | null {
 }
 
 export function AuthProvider({ children }: { children: ReactNode }) {
-  const [isAuthenticated, setIsAuthenticated] = useState<boolean>(() => {
-    const token = localStorage.getItem('access_token');
-
-    if (token && isTokenValid(token)) {
-      return true;
-    }
-
-    if (token) {
-      localStorage.removeItem('access_token');
-    }
-
-    return false;
-  });
-
+  const [isAuthenticated, setIsAuthenticated] = useState<boolean>(false);
+  const [isVerifying, setIsVerifying] = useState<boolean>(true);
   const [userEmail, setUserEmail] = useState<string | null>(() =>
     getEmailFromToken(localStorage.getItem('access_token'))
   );
 
-  const login = (token: string) => {
+  useEffect(() => {
+    // Verify token with backend on app startup.
+    const verifyStoredToken = async () => {
+      const token = localStorage.getItem('access_token');
+
+      if (!token) {
+        setIsVerifying(false);
+        setIsAuthenticated(false);
+        setUserEmail(null);
+        return;
+      }
+
+      const isValid = await verifyTokenWithBackend(token);
+
+      if (isValid) {
+        setIsAuthenticated(true);
+        setUserEmail(getEmailFromToken(token));
+      } else {
+        localStorage.removeItem('access_token');
+        sessionStorage.clear();
+        setIsAuthenticated(false);
+        setUserEmail(null);
+      }
+
+      setIsVerifying(false);
+    };
+
+    verifyStoredToken();
+  }, []);
+
+  const login = async (token: string) => {
     localStorage.setItem('access_token', token);
-    setIsAuthenticated(true);
-    setUserEmail(getEmailFromToken(token));
+
+    const isValid = await verifyTokenWithBackend(token);
+
+    if (isValid) {
+      setIsAuthenticated(true);
+      setUserEmail(getEmailFromToken(token));
+    } else {
+      localStorage.removeItem('access_token');
+      sessionStorage.clear();
+      setIsAuthenticated(false);
+      setUserEmail(null);
+      throw new Error('Invalid token received from server');
+    }
   };
 
   const logout = (): boolean => {
@@ -82,8 +136,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       }
 
       localStorage.removeItem('access_token');
-
-      // Clear any other auth-related storage if present
       sessionStorage.clear();
 
       setIsAuthenticated(false);
@@ -97,7 +149,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
   return (
-    <AuthContext.Provider value={{ isAuthenticated, userEmail, login, logout }}>
+    <AuthContext.Provider value={{ isAuthenticated, isVerifying, userEmail, login, logout }}>
       {children}
     </AuthContext.Provider>
   );

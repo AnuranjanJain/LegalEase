@@ -16,7 +16,7 @@ from backend.auth import (
     get_current_user,
     AuthIdentity,
     ACCESS_TOKEN_EXPIRE_HOURS,
-    _extract_bearer_token,
+    extract_jwt_from_authorization,
     SECRET_KEY,
     ALGORITHM,
 )
@@ -73,7 +73,7 @@ def signup(user: UserCreate, db: Session = Depends(get_db)):
     normalized_email = user.email.strip().lower()
     try:
         db_user = db.query(models.User).filter(models.User.email == normalized_email).first()
-    except SQLAlchemyError as exc:
+    except SQLAlchemyError:
         logger.exception("Failed to query database during signup")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
@@ -93,7 +93,7 @@ def signup(user: UserCreate, db: Session = Depends(get_db)):
     except IntegrityError:
         db.rollback()
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Email already exists")
-    except SQLAlchemyError as exc:
+    except SQLAlchemyError:
         db.rollback()
         logger.exception("Failed to create user during signup")
         raise HTTPException(
@@ -114,7 +114,7 @@ def login(request: Request, user: UserLogin, db: Session = Depends(get_db)):
     normalized_email = user.email.strip().lower()
     try:
         db_user = db.query(models.User).filter(models.User.email == normalized_email).first()
-    except SQLAlchemyError as exc:
+    except SQLAlchemyError:
         logger.exception("Failed to query database during login")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
@@ -163,7 +163,7 @@ def change_password(
     try:
         user.hashed_password = get_password_hash(payload.new_password)
         db.commit()
-    except SQLAlchemyError as exc:
+    except SQLAlchemyError:
         db.rollback()
         logger.exception("Failed to update password in database")
         raise HTTPException(
@@ -198,7 +198,7 @@ def resend_verification(payload: ResendVerificationRequest, db: Session = Depend
     # Check if user exists in the database
     try:
         db_user = db.query(models.User).filter(models.User.email == email_lower).first()
-    except SQLAlchemyError as exc:
+    except SQLAlchemyError:
         logger.exception("Failed to query database during resend-verification")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
@@ -214,6 +214,14 @@ def resend_verification(payload: ResendVerificationRequest, db: Session = Depend
     
     return {"detail": "Verification email sent successfully!"}
 
+
+@router.get("/verify")
+def verify_token(current_user: models.User = Depends(get_current_user)):
+    """Verify that the provided JWT token is valid and return user info."""
+    return {
+        "valid": True,
+        "email": current_user.email
+    }
 
 
 @router.get("/verify")
@@ -250,7 +258,7 @@ def logout(
     from backend.models import RevokedToken
     from datetime import datetime
 
-    token = _extract_bearer_token(request)
+    token = extract_jwt_from_authorization(request)
     if not token:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Missing token")
 
