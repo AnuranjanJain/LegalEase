@@ -173,12 +173,16 @@ class AIService:
 
         # Stream handling
         if stream:
+            import json
             # We yield words/chunks simulating a streaming channel to reduce perceived latency
             words = response_text.split(" ")
             for i, word in enumerate(words):
                 chunk = word + (" " if i < len(words) - 1 else "")
-                yield chunk
+                # Yield proper Server-Sent Events (SSE) format
+                payload = json.dumps({"response": chunk})
+                yield f"data: {payload}\n\n"
                 await asyncio.sleep(0.01)  # small pause for visual effect
+            yield "data: [DONE]\n\n"
         else:
             yield response_text
 
@@ -272,59 +276,208 @@ class AIService:
                 ]
             raise
 
+    def _extract_json_array_balanced(self, text: str) -> Optional[str]:
+        """
+        Extract the first valid JSON array using balanced bracket parsing.
+        This avoids the greedy regex matching issues and handles nested structures correctly.
+        """
+        import re
+        
+        # Find the first opening bracket
+        start_idx = text.find('[')
+        if start_idx == -1:
+            logger.debug(f"[{self._get_corr_id()}] No opening bracket found in text")
+            return None
+        
+        bracket_count = 0
+        in_string = False
+        escape_next = False
+        
+        for i in range(start_idx, len(text)):
+            char = text[i]
+            
+            # Handle escape sequences
+            if escape_next:
+                escape_next = False
+                continue
+            
+            if char == '\\':
+                escape_next = True
+                continue
+            
+            # Track string boundaries
+            if char == '"':
+                in_string = not in_string
+                continue
+            
+            # Only count brackets outside strings
+            if not in_string:
+                if char == '[':
+                    bracket_count += 1
+                elif char == ']':
+                    bracket_count -= 1
+                    
+                    # When we close the outermost bracket, we have a complete array
+                    if bracket_count == 0:
+                        return text[start_idx:i+1]
+        
+        logger.debug(f"[{self._get_corr_id()}] Unbalanced brackets in text")
+        return None
+
+    def _clean_json_string(self, json_str: str) -> str:
+        """
+        Clean common JSON formatting issues from LLM outputs.
+        Handles trailing commas, extra whitespace, etc.
+        """
+        import re
+        
+        # Remove trailing commas before closing brackets/braces
+        # This handles: [ {"a": 1,}, ] -> [ {"a": 1} ]
+        cleaned = re.sub(r',(\s*[}\]])', r'\1', json_str)
+        
+        # Remove trailing commas at end of array/object (apply again to catch nested cases)
+        cleaned = re.sub(r',(\s*[}\]])', r'\1', cleaned)
+        
+        return cleaned.strip()
+
+    def _extract_from_markdown(self, text: str) -> str:
+        """
+        Extract JSON content from various markdown formats.
+        Handles code blocks with or without language specifiers.
+        """
+        import re
+        
+        # Try standard markdown code blocks first
+        match = re.search(r'```(?:json|text)?\s*([\s\S]*?)\s*```', text, re.IGNORECASE)
+        if match:
+            return match.group(1).strip()
+        
+        # Try to find content between any code fences
+        match = re.search(r'```([\s\S]*?)```', text)
+        if match:
+            return match.group(1).strip()
+        
+        # No markdown found, return original
+        return text
+
     def _parse_clauses_json(self, raw_text: str) -> List[Dict[str, Any]]:
+        """
+        Parse JSON response from AI clause analysis with robust error recovery.
+        
+        Recovery strategy:
+        1. Extract from markdown if present
+        2. Try direct JSON parsing
+        3. Try balanced bracket extraction
+        4. Try cleaning and retrying
+        5. Validate and normalize output
+        """
         import json
         import re
         
-        cleaned = raw_text.strip()
-        # Remove markdown code blocks if present
-        if cleaned.startswith("```"):
-            # Find the first json code block
-            match = re.search(r"```(?:json)?\s*([\s\S]*?)\s*```", cleaned, re.IGNORECASE)
-            if match:
-                cleaned = match.group(1).strip()
-            else:
-                # Fallback strip of leading/trailing markdown code fences
-                cleaned = re.sub(r"^```[a-zA-Z]*\n?", "", cleaned)
-                cleaned = re.sub(r"\n?```$", "", cleaned).strip()
-                
+        corr_id = self._get_corr_id()
+        
+        # Handle empty or whitespace-only responses
+        if not raw_text or not raw_text.strip():
+            logger.warning(f"[{corr_id}] Empty response received from AI provider")
+            raise ValueError("Empty response from AI provider")
+        
+        # Step 1: Extract from markdown if present
+        cleaned = self._extract_from_markdown(raw_text)
+        
+        # Step 2: Try direct JSON parsing
         try:
             parsed = json.loads(cleaned)
             if isinstance(parsed, list):
-                validated_clauses = []
-                for item in parsed:
-                    if isinstance(item, dict) and "clause" in item:
-                        # Normalize risk level
-                        risk_lvl = str(item.get("riskLevel", "Low")).strip().capitalize()
-                        if risk_lvl not in ["High", "Medium", "Low"]:
-                            risk_lvl = "Low"
-                        
-                        validated_clauses.append({
-                            "clause": str(item.get("clause", "")).strip(),
-                            "riskLevel": risk_lvl,
-                            "riskReason": str(item.get("riskReason", "")).strip() or "Analyzed clause."
-                        })
-                return validated_clauses
-            return []
-        except Exception as e:
-            logger.warning(f"Failed to parse AI JSON response: {e}. Raw response: {raw_text}")
-            # Try to find something JSON-like in brackets if the parser failed
+                logger.info(f"[{corr_id}] Successfully parsed JSON directly")
+                return self._validate_and_normalize_clauses(parsed)
+            logger.debug(f"[{corr_id}] Parsed JSON is not a list, type: {type(parsed)}")
+        except json.JSONDecodeError as e:
+            logger.debug(f"[{corr_id}] Direct JSON parsing failed: {e}")
+        
+        # Step 3: Try balanced bracket extraction
+        json_array = self._extract_json_array_balanced(cleaned)
+        if json_array:
+            logger.info(f"[{corr_id}] Extracted JSON array using balanced bracket parsing")
             try:
-                array_match = re.search(r"\[\s*\{[\s\S]*\}\s*\]", cleaned)
-                if array_match:
-                    parsed = json.loads(array_match.group(0))
-                    if isinstance(parsed, list):
-                        return [
-                            {
-                                "clause": str(item.get("clause", "")).strip(),
-                                "riskLevel": str(item.get("riskLevel", "Low")).strip().capitalize() if str(item.get("riskLevel", "Low")).strip().capitalize() in ["High", "Medium", "Low"] else "Low",
-                                "riskReason": str(item.get("riskReason", "Analyzed clause.")).strip()
-                            }
-                            for item in parsed if isinstance(item, dict) and "clause" in item
-                        ]
-            except Exception:
-                pass
-            raise ValueError("Invalid JSON response from AI provider")
+                parsed = json.loads(json_array)
+                if isinstance(parsed, list):
+                    return self._validate_and_normalize_clauses(parsed)
+            except json.JSONDecodeError as e:
+                logger.debug(f"[{corr_id}] Balanced bracket extraction failed to parse: {e}")
+        
+        # Step 4: Try cleaning common issues and retry
+        cleaned_json = self._clean_json_string(cleaned)
+        try:
+            parsed = json.loads(cleaned_json)
+            if isinstance(parsed, list):
+                logger.info(f"[{corr_id}] Successfully parsed after cleaning JSON string")
+                return self._validate_and_normalize_clauses(parsed)
+        except json.JSONDecodeError as e:
+            logger.debug(f"[{corr_id}] Cleaned JSON parsing failed: {e}")
+        
+        # Step 5: Try balanced bracket extraction on cleaned string
+        json_array = self._extract_json_array_balanced(cleaned_json)
+        if json_array:
+            logger.info(f"[{corr_id}] Extracted JSON array from cleaned string")
+            try:
+                parsed = json.loads(json_array)
+                if isinstance(parsed, list):
+                    return self._validate_and_normalize_clauses(parsed)
+            except json.JSONDecodeError as e:
+                logger.debug(f"[{corr_id}] Cleaned balanced bracket extraction failed: {e}")
+        
+        # Step 6: Fallback to legacy regex extraction (for backward compatibility)
+        try:
+            array_match = re.search(r"\[\s*\{[\s\S]*\}\s*\]", cleaned)
+            if array_match:
+                logger.info(f"[{corr_id}] Using legacy regex extraction as fallback")
+                parsed = json.loads(array_match.group(0))
+                if isinstance(parsed, list):
+                    return self._validate_and_normalize_clauses(parsed)
+        except Exception as e:
+            logger.debug(f"[{corr_id}] Legacy regex extraction failed: {e}")
+        
+        # All extraction attempts failed
+        logger.error(
+            f"[{corr_id}] All JSON extraction methods failed. "
+            f"Response length: {len(raw_text)}, "
+            f"Starts with bracket: {raw_text.strip().startswith('[')}, "
+            f"Contains bracket: {'[' in raw_text}"
+        )
+        raise ValueError("Invalid JSON response from AI provider")
+
+    def _validate_and_normalize_clauses(self, parsed: List[Any]) -> List[Dict[str, Any]]:
+        """
+        Validate and normalize clause objects from parsed JSON.
+        Ensures consistent output format and valid risk levels.
+        """
+        validated_clauses = []
+        
+        for item in parsed:
+            if not isinstance(item, dict):
+                logger.debug(f"Skipping non-dict item in parsed list: {type(item)}")
+                continue
+            
+            if "clause" not in item:
+                logger.debug("Skipping item without 'clause' key")
+                continue
+            
+            # Normalize risk level
+            risk_lvl = str(item.get("riskLevel", "Low")).strip().capitalize()
+            if risk_lvl not in ["High", "Medium", "Low"]:
+                risk_lvl = "Low"
+                logger.debug(f"Normalized invalid riskLevel to 'Low'")
+            
+            validated_clauses.append({
+                "clause": str(item.get("clause", "")).strip(),
+                "riskLevel": risk_lvl,
+                "riskReason": str(item.get("riskReason", "")).strip() or "Analyzed clause."
+            })
+        
+        if not validated_clauses:
+            logger.warning("No valid clauses found after validation")
+        
+        return validated_clauses
 
     def check_health(self) -> Dict[str, Any]:
         """

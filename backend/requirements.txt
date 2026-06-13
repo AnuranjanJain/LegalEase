@@ -11,6 +11,14 @@ psycopg2-binary  # Required only for PostgreSQL
 bcrypt
 python-jose[cryptography]
 email-validator
+# RAG and Semantic Cache dependencies
+langchain
+langchain-community
+langchain-huggingface
+langchain-text-splitters
+chromadb
+sentence-transformers
+
 # Testing dependencies
 pytest
 pytest-asyncio

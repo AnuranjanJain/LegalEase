@@ -145,7 +145,21 @@ async def test_ai_service_streaming_mode():
             chunks.append(chunk)
             
         assert len(chunks) > 1
-        assert "".join(chunks).startswith("[STUB CHAT RESPONSE]")
+        
+        # Parse SSE format and extract response values
+        full_response = ""
+        for chunk in chunks:
+            # Extract JSON from "data: {...}" format
+            if chunk.startswith("data: ") and chunk != "data: [DONE]\n\n":
+                try:
+                    import json
+                    json_str = chunk.replace("data: ", "").strip()
+                    data = json.loads(json_str)
+                    full_response += data.get("response", "")
+                except (json.JSONDecodeError, ValueError):
+                    pass
+        
+        assert full_response.startswith("[STUB CHAT RESPONSE]")
         
         with patch.dict(os.environ, {"STUB_MODE": "false"}):
             ai_service.__init__()

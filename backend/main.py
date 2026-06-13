@@ -324,12 +324,40 @@ async def chat(request: Request, payload: ChatRequest, identity: AuthIdentity = 
     sanitized_message = sanitize_text(payload.message)
     sanitized_context = sanitize_text(payload.context) if payload.context else None
 
+    # Handle RAG context retrieval for large documents
+    if sanitized_context:
+        import hashlib
+        from backend.services.rag_service import rag_service
+        
+        doc_hash = hashlib.md5(sanitized_context.encode()).hexdigest()
+        if doc_hash not in rag_service.indexed_docs:
+            rag_service.add_document(sanitized_context, doc_hash)
+        sanitized_context = rag_service.get_context(sanitized_message, doc_hash)
+
     # Early payload validation
     validate_chat_input(sanitized_message, sanitized_context)
+
+    from backend.services.cache_service import semantic_cache
+    cache_key = f"{sanitized_message} || {sanitized_context}" if sanitized_context else sanitized_message
+    cached_response = semantic_cache.get(cache_key)
+
+    if cached_response:
+        logger.info(f"[{correlation_id_var.get()}] Serving response from semantic cache")
+        if payload.stream:
+            async def stream_cached():
+                import asyncio
+                words = cached_response.split(" ")
+                for i, word in enumerate(words):
+                    yield word + (" " if i < len(words) - 1 else "")
+                    await asyncio.sleep(0.01)
+            return StreamingResponse(stream_cached(), media_type="text/event-stream")
+        else:
+            return {"response": cached_response}
 
     # Streaming or standard block handling
     if payload.stream:
         async def stream_generator():
+            full_response = ""
             try:
                 async for chunk in ai_service.generate_chat_response(
                     message=sanitized_message,
@@ -337,7 +365,9 @@ async def chat(request: Request, payload: ChatRequest, identity: AuthIdentity = 
                     history=payload.conversation_history,
                     stream=True
                 ):
+                    full_response += chunk
                     yield chunk
+                semantic_cache.set(cache_key, full_response)
             except Exception as e:
                 logger.error(f"[{correlation_id_var.get()}] Stream generation error: {e}")
                 yield "\n[Error: Inference stream failed]"
@@ -353,6 +383,7 @@ async def chat(request: Request, payload: ChatRequest, identity: AuthIdentity = 
         response_text = ""
         async for chunk in response_gen:
             response_text += chunk
+        semantic_cache.set(cache_key, response_text)
         return {"response": response_text}
 
 
