@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect } from 'react';
 import { NavLink, useNavigate } from 'react-router-dom';
-import { Menu, X, Bell, Moon, Sun, User, Settings, FileText, Shield, Info, LogOut } from 'lucide-react';
+import { Menu, X, Bell, Moon, Sun, User, Settings, FileText, Shield, Info, LogOut, Loader2 } from 'lucide-react';
 import { useDarkMode } from '../hooks/useDarkMode';
 import { useNotifications, AppNotification } from '../contexts/NotificationContext';
 import { useAuth } from '../contexts/AuthContext';
@@ -64,7 +64,7 @@ export function Header() {
   const userMenuRef = useRef<HTMLDivElement>(null);
   const notificationRef = useRef<HTMLDivElement>(null);
   const { isDarkMode, toggleDarkMode } = useDarkMode();
-  const { notifications, unreadCount, markAllRead, markRead } = useNotifications();
+  const { notifications, unreadCount, isLoading, markAllRead, markRead } = useNotifications();
   const navigate = useNavigate();
 
   const toggleNotificationMenu = () => setIsNotificationOpen((s) => !s);
@@ -82,6 +82,14 @@ export function Header() {
       navigate('/login');
     } catch {
       showToast('Failed to log out. Please try again.', 'error');
+    }
+  };
+
+  const handleMarkAllRead = async () => {
+    try {
+      await markAllRead();
+    } catch {
+      showToast('Failed to mark all as read', 'error');
     }
   };
 
@@ -169,7 +177,12 @@ export function Header() {
                   </div>
 
                   <div className="max-h-96 overflow-y-auto">
-                    {notifications.length > 0 ? (
+                    {isLoading ? (
+                      <div className="px-4 py-8 flex flex-col items-center justify-center">
+                        <Loader2 size={24} className="text-gray-400 animate-spin mb-2" />
+                        <p className="text-sm text-gray-500 dark:text-gray-400">Loading...</p>
+                      </div>
+                    ) : notifications.length > 0 ? (
                       notifications.map((n, index) => (
                         <div
                           key={n.id}
@@ -201,7 +214,7 @@ export function Header() {
 
                   <div className="px-4 py-2 border-t border-gray-100 dark:border-gray-700 flex items-center justify-between">
                     {unreadCount > 0 && (
-                      <button className="text-xs text-primary hover:underline" onClick={markAllRead}>
+                      <button className="text-xs text-primary hover:underline" onClick={handleMarkAllRead}>
                         Mark all as read
                       </button>
                     )}

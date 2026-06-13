@@ -11,7 +11,7 @@ psycopg2-binary  # Required only for PostgreSQL
 bcrypt
 python-jose[cryptography]
 email-validator
-# RAG dependencies
+# RAG and Semantic Cache dependencies
 langchain
 langchain-community
 langchain-huggingface
