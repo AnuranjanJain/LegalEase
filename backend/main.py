@@ -17,6 +17,7 @@ from dotenv import load_dotenv
 from backend.database import engine, Base, SessionLocal
 from backend.routers import auth_routes
 from backend.routers import legal_routes
+from backend.routers.notifications import router as notifications_router
 from backend.auth import validate_token_or_api_key, AuthIdentity
 from backend.utils.limiter import SimpleRateLimiter
 
@@ -145,6 +146,8 @@ Base.metadata.create_all(bind=engine)
 app.include_router(auth_routes.router)
 # Include legal mapping router
 app.include_router(legal_routes.router)
+# Include notifications router
+app.include_router(notifications_router)
 
 
 # Enable CORS for frontend communication
