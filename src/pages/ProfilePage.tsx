@@ -450,7 +450,7 @@ export function ProfilePage() {
                   <div className="flex items-center justify-between mb-4">
                     <h4 className="text-xs font-extrabold uppercase tracking-widest text-gray-400 dark:text-gray-500">System Notifications Feed</h4>
                     {unreadCount > 0 && (
-                      <button onClick={markAllRead} className="text-xs text-primary font-bold hover:underline">
+                      <button onClick={async () => { try { await markAllRead(); } catch { showToast('Failed to mark all as read', 'error'); } }} className="text-xs text-primary font-bold hover:underline">
                         Mark all read
                       </button>
                     )}

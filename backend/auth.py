@@ -239,6 +239,7 @@ def validate_token_or_api_key(request: Request, db: Session = Depends(get_db)) -
     - If neither header is present: Reject request
     
     Returns an AuthIdentity object with clear type distinction.
+    Rejects requests with both headers (ambiguous authentication).
     """
     auth_mode = _determine_auth_mode(request)
     
@@ -400,7 +401,8 @@ def get_optional_user(request: Request, db: Session = Depends(get_db)) -> Option
     try:
         payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
         email: Optional[str] = payload.get("sub")
-        if email:
+        jti: Optional[str] = payload.get("jti")
+        if email and not (jti and is_token_revoked(jti, db)):
             user = db.query(models.User).filter(models.User.email == email).first()
             if user:
                 return AuthIdentity(
