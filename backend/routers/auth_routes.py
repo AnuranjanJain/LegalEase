@@ -215,6 +215,14 @@ def resend_verification(payload: ResendVerificationRequest, db: Session = Depend
     return {"detail": "Verification email sent successfully!"}
 
 
+@router.get("/verify")
+def verify_token(current_user: models.User = Depends(get_current_user)):
+    """Verify that the provided JWT token is valid and return user info."""
+    return {
+        "valid": True,
+        "email": current_user.email
+    }
+
 
 @router.post("/logout", status_code=status.HTTP_200_OK)
 def logout(
