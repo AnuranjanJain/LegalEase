@@ -1,6 +1,6 @@
 import pytest
 import time
-from backend.main import SimpleRateLimiter
+from backend.utils.limiter import SimpleRateLimiter
 
 
 @pytest.mark.unit
@@ -63,4 +63,4 @@ def test_rate_limiter_pruning():
     limiter.is_allowed("user1")
     
     # Storage should not grow unbounded
-    assert len(limiter.storage["user1"]) < 50
+    assert len(limiter._storage["user1"]) < 50

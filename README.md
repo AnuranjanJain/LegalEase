@@ -196,6 +196,12 @@ LEGAL EASE
 - **Processing History**: Past document processing records
 - **Status Management**: Cancel, retry, and download options
 
+### 📊 Readability Score Analyzer (`ReadabilityScore.tsx`)
+- **Dual Comparison**: Computes and contrasts readability metrics for the original legal text vs. the AI summary
+- **Linguistic Scores**: Displays Flesch Reading Ease, Flesch-Kincaid Grade Level, and Difficulty Classifications
+- **Visual Progress Bars**: Uses color-coded horizontal bars (Green = Easy, Yellow = Moderate, Red = Difficult) to showcase improvements
+- **Automated Badges**: Highlights exactly how many grade levels and reading ease points have been improved
+
 ### 👤 User Profile (`ProfilePage.tsx`)
 - **Personal Information**: Complete profile management
 - **Address Details**: Billing and contact information
@@ -242,6 +248,36 @@ LEGAL EASE
 - Firefox 75+
 - Safari 13+
 - Edge 80+
+
+## 📊 Readability Score Analyzer
+
+### Feature Overview
+The Readability Score Analyzer provides an instant visual comparison between the **Original Legal Document** and the **AI Generated Summary**. This helps users quantify how much easier the summary is to read and comprehend.
+
+### How Scores Are Calculated
+Readability metrics are calculated based on linguistic properties of the text using sentence count, word count, and syllable count heuristics.
+
+#### Flesch Reading Ease Formula
+The Flesch Reading Ease formula outputs a score between 0 and 100. Higher scores indicate material that is easier to read; lower numbers mark harder-to-read text.
+
+$$\text{Reading Ease} = 206.835 - 1.015 \left( \frac{\text{Total Words}}{\text{Total Sentences}} \right) - 84.6 \left( \frac{\text{Total Syllables}}{\text{Total Words}} \right)$$
+
+**Reading Ease Scores & Difficulty Classification:**
+* **90–100:** Very Easy (approx. 5th-grade reading level)
+* **80–89:** Easy (6th-grade level)
+* **70–79:** Fairly Easy (7th-grade level)
+* **60–69:** Standard (8th to 9th-grade level)
+* **50–59:** Fairly Difficult (High School student level)
+* **30–49:** Difficult (College student level)
+* **0–29:** Very Difficult (College graduate / professional level)
+
+#### Flesch-Kincaid Grade Formula
+The Flesch-Kincaid Grade Level formula translates the Reading Ease score into a U.S. school grade level format, making it easier to see how many years of education are expected to digest the document.
+
+$$\text{Grade Level} = 0.39 \left( \frac{\text{Total Words}}{\text{Total Sentences}} \right) + 11.8 \left( \frac{\text{Total Syllables}}{\text{Total Words}} \right) - 15.59$$
+
+### Visual Screenshots
+*(Screenshots section placeholder for readability comparison panel)*
 
 ## Setup Instructions
 
@@ -443,16 +479,25 @@ cp .env.example .env
 # Edit .env and replace placeholders with real values (DO NOT commit .env)
 ```
 
-- **Important environment variables** (see `.env.example`):
-    - `BYTEZ_API_KEY` — required by the backend to access the Bytez SDK. Keep this secret.
-    - `FRONTEND_URL` — frontend origin used for CORS (default: `http://localhost:5173`).
-    - `BYTEZ_API_KEY` — required by the backend to access the Bytez SDK. Keep this secret.
-    - `FRONTEND_URL` — frontend origin used for CORS (default: `http://localhost:5173`).
-    - `API_KEYS` — comma-separated list of valid API keys for server endpoints (recommended in production).
-    - `DEV_API_KEY` — developer API key allowed when `ALLOW_DEV` is enabled (default: `dev-token`).
-    - `ALLOW_DEV` — allow using `DEV_API_KEY` for local development (`true`/`false`, default `true`).
-    - `MAX_UPLOAD_SIZE` — maximum allowed upload size in bytes (default 26214400 = 25MB).
-    - `RATE_LIMIT_IP_CALLS`, `RATE_LIMIT_KEY_CALLS`, `RATE_LIMIT_PERIOD` — simple rate-limiting configuration (defaults: 60, 30, 60).
+- **Important environment variables:**
+
+  From `.env.example`:
+  - `BYTEZ_API_KEY` — required by the backend to access the Bytez SDK. Keep this secret.
+  - `FRONTEND_URL` — frontend origin used for CORS (default: `http://localhost:5173`).
+
+  Vercel deployment:
+  - The frontend calls same-origin API routes at `/api` in production, so `VITE_API_URL` is usually not required on Vercel.
+  - Add `JWT_SECRET_KEY` to Vercel environment variables before testing login/signup.
+  - Add `BYTEZ_API_KEY` to enable AI-backed features; otherwise `/api/health` reports degraded.
+  - Add `DATABASE_URL` for persistent accounts. Without it, Vercel uses temporary SQLite storage that can reset between serverless instances.
+  - If using a separate backend host instead, set frontend `VITE_API_URL` to that backend URL and backend `FRONTEND_URL` to the Vercel frontend URL.
+
+  Optional backend controls:
+  - `API_KEYS` — comma-separated list of valid API keys for server endpoints (recommended in production).
+  - `DEV_API_KEY` — developer API key allowed when `ALLOW_DEV` is enabled (default: `dev-token`).
+  - `ALLOW_DEV` — allow using `DEV_API_KEY` for local development (`true`/`false`, default `true`).
+  - `MAX_UPLOAD_SIZE` — maximum allowed upload size in bytes (default 26214400 = 25MB).
+  - `RATE_LIMIT_IP_CALLS`, `RATE_LIMIT_KEY_CALLS`, `RATE_LIMIT_PERIOD` — simple rate-limiting configuration (defaults: 60, 30, 60).
 
 - **Run backend (development):**
 
@@ -460,18 +505,20 @@ cp .env.example .env
 # from the project root
 cd backend
 uvicorn main:app --reload --port 8000
+```
 
-Security notes (backend)
+**Security notes (backend)**
+
 - Authentication: backend endpoints (`/chat`, `/upload`, `/summarize`) require an API key in `Authorization: Bearer <key>` or `X-API-Key` header. Set `API_KEYS` or use `DEV_API_KEY` with `ALLOW_DEV` enabled for local development.
 - Upload limits: server enforces `MAX_UPLOAD_SIZE` and basic file-type validation (PDF, DOCX, text). Oversized uploads return HTTP 413.
 - Rate limiting: server applies per-IP and per-API-key rate limits; exceeding the limit returns HTTP 429.
 - Error codes: AI/service dependency failures return 5xx (503/502) rather than 200.
 - Health check: `/health` returns dependency status (useful for orchestration and monitoring).
 
-Logging and secrets
+**Logging and secrets**
+
 - Do not commit real secrets. Use environment variables or your secret manager.
 - The server will log degraded status when AI dependencies are unavailable but will not print secret values.
-```
 
 - **Run frontend (development):**
 

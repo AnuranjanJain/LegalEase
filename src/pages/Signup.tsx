@@ -1,8 +1,7 @@
 import { useState, FormEvent } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { Eye, EyeOff, Mail, Lock, UserPlus } from 'lucide-react';
-
-const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000';
+import { api } from '../services/api';
 
 export function SignupPage() {
   const [email, setEmail] = useState('');
@@ -30,28 +29,23 @@ export function SignupPage() {
       return;
     }
 
+    // Normalize email so casing variations don't create duplicate accounts
+    const normalizedEmail = email.trim().toLowerCase();
+
     setIsLoading(true);
     try {
-      const response = await fetch(`${API_BASE_URL}/auth/signup`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email, password }),
-      });
+      await api.post('/auth/signup', { email: normalizedEmail, password });
 
-      const data = await response.json().catch(() => null);
-
-      if (!response.ok) {
-        const message =
-          data?.detail || data?.error || `Signup failed with status ${response.status}. Please try again.`;
-        setError(message);
-        return;
-      }
-
-      // Signup successful — redirect to login
-      navigate('/login');
-    } catch (err) {
+      // Signup successful — redirect to verify-email
+      navigate(`/verify-email?email=${encodeURIComponent(normalizedEmail)}`);
+    } catch (err: any) {
       console.error('Signup request failed:', err);
-      setError('Unable to connect to the server. Please try again later.');
+      const isNetworkError = err instanceof TypeError || (err && err.message && err.message.toLowerCase().includes('fetch'));
+      if (isNetworkError) {
+        setError('Server is unavailable. Please verify the backend server is running.');
+      } else {
+        setError(err.message || 'Unable to connect to the server. Please try again later.');
+      }
     } finally {
       setIsLoading(false);
     }

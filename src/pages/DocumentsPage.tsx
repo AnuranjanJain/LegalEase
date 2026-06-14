@@ -2,7 +2,7 @@ import { useState, useRef, useEffect, useMemo } from 'react';
 import { 
   UploadCloud, FileText, Trash2, Eye, Search, 
   Grid, List, CheckCircle, ArrowRight, RefreshCcw,
-  X, MessageSquare, Download, AlertCircle
+  X, MessageSquare, Download, AlertCircle, ShieldCheck
 } from 'lucide-react';
 import { StorageService, Document, ChatStorageService } from '../services/storage';
 import { useToast } from '../contexts/ToastContext';
@@ -10,6 +10,10 @@ import { useNavigate } from 'react-router-dom';
 import { ShareButton } from '../components/ShareButton';
 import { WhatsAppShareModal } from '../components/WhatsAppShareModal';
 import { ClauseAnalysisSection } from '../components/ClauseAnalysisSection';
+import { ReadabilityScore } from '../components/ReadabilityScore';
+import { useRedaction } from '../contexts/RedactionContext';
+import { redact } from '../utils/redaction';
+import { RedactedText } from '../components/RedactedText';
 
 export function DocumentsPage() {
   const [isDragging, setIsDragging] = useState(false);
@@ -22,6 +26,15 @@ export function DocumentsPage() {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const { showToast } = useToast();
   const navigate = useNavigate();
+  const { isRedactionEnabled, redactionStyle } = useRedaction();
+
+  // Derive the redacted version of the audit summary (never mutates original)
+  const auditSummaryDisplay = useMemo(() => {
+    if (!selectedAuditDoc?.summary) return selectedAuditDoc?.summary ?? '';
+    return isRedactionEnabled
+      ? redact(selectedAuditDoc.summary, redactionStyle)
+      : selectedAuditDoc.summary;
+  }, [selectedAuditDoc?.summary, isRedactionEnabled, redactionStyle]);
 
   // Load documents from StorageService on mount
   useEffect(() => {
@@ -151,6 +164,7 @@ export function DocumentsPage() {
       showToast(`Opening cognitive audit report for "${doc.name}"`, 'success');
       setSelectedAuditDoc({
         ...doc,
+        text: doc.text || (doc.id === 'doc_1' ? "This Lease Agreement is entered into on this 1st day of June, by and between the Landlord and the Tenant. The Tenant hereby covenants and agrees to pay to the Landlord as monthly rent for the demised premises the sum of Two Thousand Four Hundred and Fifty Dollars ($2,450.00) USD, payable on the first day of each calendar month. In the event that any installment of rent is not received by the Landlord within five (5) grace days of its due date, the Tenant shall pay a late fee equal to five percent (5%) of the monthly rent. The Tenant shall deposit a security deposit of one and a half months' rent prior to taking occupancy. The Tenant shall be responsible for the cost of all minor repairs and maintenance of the premises under the value of one hundred dollars ($100)." : doc.id === 'doc_3' ? "We retain user data for five (5) years after account deletion to comply with internal compliance guidelines. By using the application, you agree to receive promotional materials and third-party tracking cookies automatically (opt-out)." : ""),
         summary: getMockSummary(doc),
         clauses: doc.clauses || (doc.id === 'doc_1' ? [
           {
@@ -197,9 +211,12 @@ export function DocumentsPage() {
   };
 
   const handleDownloadSummary = (doc: Document) => {
-    const summaryText = doc.summary || getMockSummary(doc);
-    if (!summaryText) return;
-    
+    const rawSummary = doc.summary || getMockSummary(doc);
+    if (!rawSummary) return;
+    // Download the redacted version if redaction is active
+    const summaryText = isRedactionEnabled
+      ? redact(rawSummary, redactionStyle)
+      : rawSummary;
     const blob = new Blob([summaryText], { type: 'text/markdown;charset=utf-8;' });
     const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
@@ -597,15 +614,29 @@ export function DocumentsPage() {
             <div className="p-6 md:p-8 overflow-y-auto flex-grow text-left space-y-6 scrollbar-thin scrollbar-thumb-gray-200 dark:scrollbar-thumb-gray-850">
               
               {/* Ready Badge & Overview */}
-              <div className="flex items-center gap-2 p-3 bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 border border-emerald-500/15 rounded-xl text-xs font-bold w-fit">
-                <CheckCircle size={16} />
-                <span>AI Cognitive Audit Audit Ready</span>
+              <div className="flex items-center gap-2 flex-wrap">
+                <div className="flex items-center gap-2 p-3 bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 border border-emerald-500/15 rounded-xl text-xs font-bold w-fit">
+                  <CheckCircle size={16} />
+                  <span>AI Cognitive Audit Audit Ready</span>
+                </div>
+                {isRedactionEnabled && (
+                  <div className="flex items-center gap-2 p-3 bg-primary-600/5 text-primary dark:text-primary-400 border border-primary-600/15 rounded-xl text-xs font-bold w-fit">
+                    <ShieldCheck size={16} />
+                    <span>PII Redacted</span>
+                  </div>
+                )}
               </div>
 
               {/* Summary Text Content */}
               <div className="prose prose-sm dark:prose-invert max-w-none text-gray-700 dark:text-gray-200 whitespace-pre-line leading-relaxed text-sm">
-                {selectedAuditDoc.summary}
+                <RedactedText text={auditSummaryDisplay} />
               </div>
+
+              {/* Readability Score Analysis */}
+              <ReadabilityScore 
+                originalText={selectedAuditDoc.text} 
+                summaryText={selectedAuditDoc.summary} 
+              />
 
               <ClauseAnalysisSection clauses={selectedAuditDoc.clauses} />
 

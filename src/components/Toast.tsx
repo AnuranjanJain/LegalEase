@@ -63,6 +63,9 @@ export function Toast({ toast, onRemove }: ToastProps) {
 
   return (
     <div
+      role="status"
+      aria-label={`${toast.type} notification`}
+      data-type={toast.type}
       className={`flex items-start gap-3 p-4 rounded-lg border shadow-lg transition-all duration-300 min-w-[320px] max-w-md ${
         config.bgColor
       } ${config.borderColor} ${

@@ -1,25 +1,33 @@
 import asyncio
 from contextlib import asynccontextmanager
-from fastapi import Depends, FastAPI, HTTPException, UploadFile, File, Request
+from fastapi import BackgroundTasks, Depends, FastAPI, HTTPException, UploadFile, File, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, StreamingResponse
 from pydantic import BaseModel
 from datetime import datetime
-from typing import Optional
 from io import BytesIO
 import os
 import logging
+import tempfile
 import time
+from typing import Optional
 import uuid
 
 from dotenv import load_dotenv
 
-from backend.database import engine, Base
+from backend.database import engine, Base, SessionLocal
 from backend.routers import auth_routes
 from backend.routers import legal_routes
-from backend.auth import validate_token_or_api_key
+from backend.routers.notifications import router as notifications_router
+from backend.auth import validate_token_or_api_key, AuthIdentity
 from backend.utils.limiter import SimpleRateLimiter
 from backend.utils.cleanup import start_token_cleanup_task
+
+# ---------------------------------------------------------------------------
+# In-memory task store for async document processing (#365)
+# Structure: { task_id: {"status": str, "progress": int, "result": dict|None} }
+# ---------------------------------------------------------------------------
+_upload_tasks: dict[str, dict] = {}
 
 # Optional imports (wrap in try/except so server can start without optional deps)
 try:
@@ -44,6 +52,7 @@ from backend.services.ai_service import ai_service, correlation_id_var
 
 #Middleware import 
 from backend.middleware.rate_limit import RateLimitMiddleware
+from backend.middleware.correlation_id import validate_or_generate_correlation_id
 # Configure logging
 logging.basicConfig(
     level=logging.INFO,
@@ -126,6 +135,31 @@ async def service_unavailable_exception_handler(request: Request, exc: ServiceUn
         }
     )
 
+import sys
+
+# Global unhandled HTTP exceptions
+@app.exception_handler(Exception)
+async def global_exception_handler(request: Request, exc: Exception):
+    corr_id = correlation_id_var.get()
+    logger.error(f"[{corr_id}] Unhandled exception: {exc}", exc_info=True)
+    return JSONResponse(
+        status_code=500,
+        content={
+            "error": "internal_server_error",
+            "detail": "An unexpected error occurred.",
+            "correlation_id": corr_id
+        }
+    )
+
+# Global unhandled thread/process exceptions
+def handle_uncaught_exception(exc_type, exc_value, exc_traceback):
+    if not issubclass(exc_type, Exception):
+        sys.__excepthook__(exc_type, exc_value, exc_traceback)
+        return
+    logger.critical("Uncaught global exception", exc_info=(exc_type, exc_value, exc_traceback))
+
+sys.excepthook = handle_uncaught_exception
+
 
 # Create database tables
 Base.metadata.create_all(bind=engine)
@@ -134,6 +168,8 @@ Base.metadata.create_all(bind=engine)
 app.include_router(auth_routes.router)
 # Include legal mapping router
 app.include_router(legal_routes.router)
+# Include notifications router
+app.include_router(notifications_router)
 
 
 # Enable CORS for frontend communication
@@ -146,6 +182,12 @@ ALLOWED_ORIGINS = [
     for origin in raw_allowed_origins.split(",")
     if origin.strip()
 ]
+# Automatically allow common development ports on localhost
+for host in ["http://localhost", "http://127.0.0.1"]:
+    for port in range(5173, 5181):
+        dev_origin = f"{host}:{port}"
+        if dev_origin not in ALLOWED_ORIGINS:
+            ALLOWED_ORIGINS.append(dev_origin)
 # Rate-limit middleware registered first so that CORSMiddleware
 # (added second) wraps it — ensuring 429 responses include CORS headers.
 app.add_middleware(RateLimitMiddleware)
@@ -162,7 +204,10 @@ logger.info(f"Allowed frontend origins: {ALLOWED_ORIGINS}")
 # Correlation ID middleware to inject trace headers
 @app.middleware("http")
 async def correlation_id_middleware(request: Request, call_next):
-    corr_id = request.headers.get("X-Correlation-ID") or str(uuid.uuid4())
+    # Validate or generate safe correlation ID
+    client_id = request.headers.get("X-Correlation-ID")
+    corr_id, was_valid = validate_or_generate_correlation_id(client_id)
+    
     token = correlation_id_var.set(corr_id)
     try:
         response = await call_next(request)
@@ -182,51 +227,11 @@ UPLOAD_PARSE_TIMEOUT_SECONDS = float(os.getenv("UPLOAD_PARSE_TIMEOUT_SECONDS", "
 
 
 RATE_LIMIT_PERIOD = int(os.getenv("RATE_LIMIT_PERIOD", "60"))
-RATE_LIMIT_IP_CALLS = int(os.getenv("RATE_LIMIT_IP_CALLS", "60"))
 RATE_LIMIT_KEY_CALLS = int(os.getenv("RATE_LIMIT_KEY_CALLS", "300"))
 
 
-# Defaults: 60 requests per minute per IP, 30 per minute per API key
-ip_limiter = SimpleRateLimiter(calls=RATE_LIMIT_IP_CALLS, period=RATE_LIMIT_PERIOD)
+# Defaults: 300 requests per minute per API key
 key_limiter = SimpleRateLimiter(calls=RATE_LIMIT_KEY_CALLS, period=RATE_LIMIT_PERIOD)
-
-
-
-
-# API keys and dev mode
-API_KEYS = [k.strip() for k in os.getenv("API_KEYS", "").split(",") if k.strip()]
-DEV_API_KEY = os.getenv("DEV_API_KEY")
-ALLOW_DEV = os.getenv("ALLOW_DEV", "false").lower() in ("1", "true", "yes")
-ENVIRONMENT = os.getenv("ENVIRONMENT", "").strip().lower()
-IS_DEVELOPMENT_ENV = ENVIRONMENT == "development"
-DEV_AUTH_ENABLED = False
-
-if ALLOW_DEV:
-    logger.warning(
-        "Development authentication requested. Do not use in production."
-    )
-    if not IS_DEVELOPMENT_ENV:
-        logger.warning(
-            "Development authentication blocked because ENVIRONMENT is not set to development."
-        )
-    elif not DEV_API_KEY:
-        logger.warning(
-            "Development authentication blocked because DEV_API_KEY is not configured."
-        )
-    elif API_KEYS:
-        logger.warning(
-            "Development authentication blocked because API_KEYS are configured and production API key validation remains authoritative."
-        )
-    else:
-        DEV_AUTH_ENABLED = True
-        logger.warning(
-            "Development authentication enabled in a development environment. Do not use in production."
-        )
-
-if not API_KEYS and not DEV_AUTH_ENABLED:
-    logger.warning(
-        "API_KEYS is not configured and development authentication is unavailable."
-    )
 
 
 class ChatRequest(BaseModel):
@@ -247,33 +252,6 @@ class HealthResponse(BaseModel):
     details: Optional[dict] = None
 
 
-def _validate_api_key(request: Request) -> str:
-    # Accept header `Authorization: Bearer <key>` or `X-API-Key`
-    auth = request.headers.get("authorization") or ""
-    api_key = ""
-    if auth.lower().startswith("bearer "):
-        api_key = auth.split(" ", 1)[1].strip()
-    else:
-        api_key = request.headers.get("x-api-key", "").strip()
-
-    if not api_key:
-        raise HTTPException(status_code=401, detail="Missing API key")
-
-    # Read from environment dynamically (allows test mocking)
-    api_keys = [k.strip() for k in os.getenv("API_KEYS", "").split(",") if k.strip()]
-    allow_dev = os.getenv("ALLOW_DEV", "false").lower() in ("1", "true", "yes")
-    dev_api_key = os.getenv("DEV_API_KEY", "dev-token")
-
-    # Check production API keys first
-    if api_key in api_keys:
-        return api_key
-
-    # Check dev mode only when production keys are not configured
-    if not api_keys and allow_dev and api_key == dev_api_key:
-        return api_key
-
-    raise HTTPException(status_code=403, detail="Invalid API key")
-
 def _get_client_ip(request: Request) -> str:
     forwarded_for = request.headers.get("x-forwarded-for")
     if forwarded_for:
@@ -281,13 +259,13 @@ def _get_client_ip(request: Request) -> str:
     return request.client.host if request.client else "unknown"
 
 
-def _extract_pdf_text(content: bytes) -> str:
+def _extract_pdf_text(file_path: str) -> str:
     if fitz is None:
         raise HTTPException(status_code=503, detail="PDF processing not available")
 
     doc = None
     try:
-        doc = fitz.open(stream=content, filetype="pdf")
+        doc = fitz.open(file_path)
         if doc.page_count > MAX_PDF_PAGES:
             raise HTTPException(status_code=413, detail="PDF is too large to process safely")
 
@@ -303,13 +281,13 @@ def _extract_pdf_text(content: bytes) -> str:
             doc.close()
 
 
-def _extract_docx_text(content: bytes) -> str:
+def _extract_docx_text(file_path: str) -> str:
     if DocxDocument is None:
         raise HTTPException(status_code=503, detail="DOCX processing not available")
 
     document = None
     try:
-        document = DocxDocument(BytesIO(content))
+        document = DocxDocument(file_path)
         if len(document.paragraphs) > MAX_DOCX_PARAGRAPHS:
             raise HTTPException(status_code=413, detail="DOCX is too large to process safely")
 
@@ -324,32 +302,60 @@ def _extract_docx_text(content: bytes) -> str:
             close_method()
 
 
-async def _run_bounded_parser(parser, content: bytes) -> str:
+async def _run_bounded_parser(parser, file_path: str) -> str:
     try:
         return await asyncio.wait_for(
-            asyncio.to_thread(parser, content),
+            asyncio.to_thread(parser, file_path),
             timeout=UPLOAD_PARSE_TIMEOUT_SECONDS,
         )
     except asyncio.TimeoutError:
         raise HTTPException(status_code=413, detail="File is too complex to process safely")
-@app.post("/chat")
-async def chat(request: Request, payload: ChatRequest):
-    # Auth
-    api_key = _validate_api_key(request)
 
-    if not key_limiter.check(api_key)["allowed"]:
+
+@app.post("/chat")
+async def chat(request: Request, payload: ChatRequest, identity: AuthIdentity = Depends(validate_token_or_api_key)):
+    # Rate limiting using the authenticated identity
+    if not key_limiter.check(identity.get_rate_limit_key())["allowed"]:
         raise HTTPException(status_code=429, detail="Rate limit exceeded")
 
     # Sanitize inputs
     sanitized_message = sanitize_text(payload.message)
     sanitized_context = sanitize_text(payload.context) if payload.context else None
 
+    # Handle RAG context retrieval for large documents
+    if sanitized_context:
+        import hashlib
+        from backend.services.rag_service import rag_service
+        
+        doc_hash = hashlib.md5(sanitized_context.encode()).hexdigest()
+        if doc_hash not in rag_service.indexed_docs:
+            rag_service.add_document(sanitized_context, doc_hash)
+        sanitized_context = rag_service.get_context(sanitized_message, doc_hash)
+
     # Early payload validation
     validate_chat_input(sanitized_message, sanitized_context)
+
+    from backend.services.cache_service import semantic_cache
+    cache_key = f"{sanitized_message} || {sanitized_context}" if sanitized_context else sanitized_message
+    cached_response = semantic_cache.get(cache_key)
+
+    if cached_response:
+        logger.info(f"[{correlation_id_var.get()}] Serving response from semantic cache")
+        if payload.stream:
+            async def stream_cached():
+                import asyncio
+                words = cached_response.split(" ")
+                for i, word in enumerate(words):
+                    yield word + (" " if i < len(words) - 1 else "")
+                    await asyncio.sleep(0.01)
+            return StreamingResponse(stream_cached(), media_type="text/event-stream")
+        else:
+            return {"response": cached_response}
 
     # Streaming or standard block handling
     if payload.stream:
         async def stream_generator():
+            full_response = ""
             try:
                 async for chunk in ai_service.generate_chat_response(
                     message=sanitized_message,
@@ -357,7 +363,9 @@ async def chat(request: Request, payload: ChatRequest):
                     history=payload.conversation_history,
                     stream=True
                 ):
+                    full_response += chunk
                     yield chunk
+                semantic_cache.set(cache_key, full_response)
             except Exception as e:
                 logger.error(f"[{correlation_id_var.get()}] Stream generation error: {e}")
                 yield "\n[Error: Inference stream failed]"
@@ -373,11 +381,19 @@ async def chat(request: Request, payload: ChatRequest):
         response_text = ""
         async for chunk in response_gen:
             response_text += chunk
+        semantic_cache.set(cache_key, response_text)
         return {"response": response_text}
 
 
-@app.post("/upload")
-async def upload_document(request: Request, file: UploadFile = File(...), identity: str = Depends(validate_token_or_api_key)):
+@app.post("/upload", status_code=202)
+async def upload_document(
+    request: Request,
+    background_tasks: BackgroundTasks,
+    file: UploadFile = File(...),
+    identity: AuthIdentity = Depends(validate_token_or_api_key)
+):
+    """Accept a document upload, immediately return 202 with a task_id,
+    and embed it in a background worker to avoid gateway timeouts (#365)."""
     # Content-Length pre-check
     try:
         content_length = int(request.headers.get("content-length", "0"))
@@ -386,70 +402,122 @@ async def upload_document(request: Request, file: UploadFile = File(...), identi
     if content_length and content_length > MAX_UPLOAD_SIZE:
         raise HTTPException(status_code=413, detail="Uploaded file is too large")
 
+    task_id = str(uuid.uuid4())
+    temp_path = None
     try:
-        chunks = []
-        total_size = 0
-        while True:
-            chunk = await file.read(CHUNK_SIZE)
-            if not chunk:
-                break
-            total_size += len(chunk)
-            if total_size > MAX_UPLOAD_SIZE:
-                raise HTTPException(status_code=413, detail="Uploaded file is too large")
-            chunks.append(chunk)
-
-        content = b"".join(chunks)
-
         filename = file.filename or "unknown"
         file_extension = os.path.splitext(filename)[1].lower()
-        extracted_text = ""
+        total_size = 0
+        with tempfile.NamedTemporaryFile(delete=False, suffix=file_extension or "") as temp_file:
+            temp_path = temp_file.name
+            while True:
+                chunk = await file.read(CHUNK_SIZE)
+                if not chunk:
+                    break
+                total_size += len(chunk)
+                if total_size > MAX_UPLOAD_SIZE:
+                    raise HTTPException(status_code=413, detail="Uploaded file is too large")
+                temp_file.write(chunk)
 
-        # Perform MIME-aware preprocessing and signature validation
-        validate_mime_and_bytes(content, file.content_type or "", filename)
+        # Read only first 4096 bytes for MIME validation
+        with open(temp_path, "rb") as temp_file:
+            content_prefix = temp_file.read(4096)
+
+        validate_mime_and_bytes(content_prefix, file.content_type or "", filename)
 
         if file_extension == ".docx":
-            validate_docx_archive_safety(content)
-
-        # Process by type
-        if file_extension == '.pdf' or content.startswith(b'%PDF-'):
-            try:
-                extracted_text = await _run_bounded_parser(_extract_pdf_text, content)
-            except HTTPException:
-                raise
-            except Exception as e:
-                logger.error(f"PDF parse error: {e}")
-                raise HTTPException(status_code=400, detail="Invalid or corrupted PDF")
-
-        elif file_extension == '.docx':
-            try:
-                extracted_text = await _run_bounded_parser(_extract_docx_text, content)
-            except HTTPException:
-                raise
-            except Exception:
-                raise HTTPException(
-                    status_code=400,
-                    detail="Invalid or corrupted DOCX file."
-                )
-
-        elif file_extension == '.txt':
-            extracted_text = content.decode('utf-8')
-
-        # Truncate extracted text to avoid sending huge payloads to models
-        extracted_text = extracted_text[:MAX_EXTRACTED_TEXT_CHARS]
-
-        return {"filename": filename, "text": extracted_text}
+            validate_docx_archive_safety(temp_path)
 
     except ValidationError as e:
+        if temp_path and os.path.exists(temp_path):
+            os.unlink(temp_path)
         raise HTTPException(status_code=400, detail=str(e))
     except HTTPException:
+        if temp_path and os.path.exists(temp_path):
+            os.unlink(temp_path)
         raise
     except Exception as e:
+        if temp_path and os.path.exists(temp_path):
+            os.unlink(temp_path)
         logger.error(f"Upload error: {e}", exc_info=True)
-        raise HTTPException(status_code=500, detail="Failed to process document")
+        raise HTTPException(status_code=500, detail="Failed to receive document")
+
+    # Register the task as "queued" and launch the background worker
+    _upload_tasks[task_id] = {"status": "processing", "progress": 0, "result": None}
+
+    background_tasks.add_task(
+        _process_document_background,
+        task_id=task_id,
+        temp_path=temp_path,
+        filename=filename,
+        file_extension=file_extension,
+        content_prefix=content_prefix,
+    )
+
+    return JSONResponse(
+        status_code=202,
+        content={"task_id": task_id, "filename": filename, "status": "processing"},
+    )
+
+
+async def _process_document_background(
+    task_id: str,
+    temp_path: str,
+    filename: str,
+    file_extension: str,
+    content_prefix: bytes,
+):
+    """Background worker: parse text, update progress, clean up temp file."""
+    try:
+        _upload_tasks[task_id]["progress"] = 20
+
+        extracted_text = ""
+        if file_extension == ".pdf" or content_prefix.startswith(b"%PDF-"):
+            extracted_text = await _run_bounded_parser(_extract_pdf_text, temp_path)
+        elif file_extension == ".docx":
+            extracted_text = await _run_bounded_parser(_extract_docx_text, temp_path)
+        elif file_extension == ".txt":
+            with open(temp_path, "r", encoding="utf-8") as tf:
+                extracted_text = tf.read(10000)
+
+        _upload_tasks[task_id]["progress"] = 70
+
+        extracted_text = extracted_text[:MAX_EXTRACTED_TEXT_CHARS]
+
+        _upload_tasks[task_id]["progress"] = 100
+        _upload_tasks[task_id]["status"] = "done"
+        _upload_tasks[task_id]["result"] = {"filename": filename, "text": extracted_text}
+        logger.info(f"Background processing complete for task {task_id} ({filename})")
+    except Exception as e:
+        logger.error(f"Background processing failed for task {task_id}: {e}", exc_info=True)
+        _upload_tasks[task_id]["status"] = "failed"
+        _upload_tasks[task_id]["progress"] = 0
+        _upload_tasks[task_id]["result"] = {"error": str(e)}
+    finally:
+        if os.path.exists(temp_path):
+            try:
+                os.unlink(temp_path)
+            except OSError:
+                pass
+
+
+@app.get("/upload/status/{task_id}")
+async def upload_status(task_id: str, identity: AuthIdentity = Depends(validate_token_or_api_key)):
+    """Poll the processing status of an async upload task (#365)."""
+    task = _upload_tasks.get(task_id)
+    if not task:
+        raise HTTPException(status_code=404, detail="Task not found")
+    return {
+        "task_id": task_id,
+        "status": task["status"],
+        "progress": task["progress"],
+        "result": task["result"],
+    }
+
 
 
 @app.post("/summarize")
-async def summarize(request: Request, payload: SummarizeRequest, identity: str = Depends(validate_token_or_api_key)):
+async def summarize(request: Request, payload: SummarizeRequest, identity: AuthIdentity = Depends(validate_token_or_api_key)):
 
     # Sanitize input
     sanitized_text = sanitize_text(payload.text)
@@ -471,15 +539,35 @@ async def health():
     uptime = time.monotonic() - _app_start_time
     timestamp = datetime.utcnow().isoformat() + "Z"
 
+    # Database connectivity check
+    db_status = "ok"
+    try:
+        from sqlalchemy import text
+        db = SessionLocal()
+        db.execute(text("SELECT 1"))
+        db.close()
+    except Exception as e:
+        logger.error(f"Database health check failed: {e}")
+        db_status = "down"
+
+    status = health_data.get("status", "unknown")
+    if db_status == "down":
+        status = "degraded"
+
+    details = health_data.get("details") or {}
+    if not isinstance(details, dict):
+        details = {"ai_details": details}
+    details["database"] = db_status
+
     response = HealthResponse(
-        status=health_data.get("status", "unknown"),
+        status=status,
         uptime_seconds=round(uptime, 2),
         timestamp=timestamp,
-        details=health_data.get("details"),
+        details=details,
     )
 
     if response.status == "degraded":
-        raise HTTPException(status_code=503, detail=response.model_dump())
+        return JSONResponse(status_code=503, content={"detail": response.model_dump()})
 
     return response
 

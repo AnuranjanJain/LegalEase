@@ -1,10 +1,47 @@
 import { useState, useRef, useEffect } from 'react';
 import { NavLink, useNavigate } from 'react-router-dom';
-import { Menu, X, Bell, Moon, Sun, User, Settings, FileText, Shield, Info, LogOut } from 'lucide-react';
+import { Menu, X, Bell, Moon, Sun, User, Settings, FileText, Shield, Info, LogOut, Loader2 } from 'lucide-react';
 import { useDarkMode } from '../hooks/useDarkMode';
 import { useNotifications, AppNotification } from '../contexts/NotificationContext';
 import { useAuth } from '../contexts/AuthContext';
 import { useToast } from '../contexts/ToastContext';
+import { StorageService } from '../services/storage';
+
+/**
+ * Resolves the display details for the authenticated user.
+ * Prefers a saved profile whose email matches the logged-in account;
+ * otherwise derives a friendly name from the email's local part.
+ */
+function deriveUserDisplay(email: string | null): { name: string; email: string; initials: string } {
+  const resolvedEmail = email?.trim() ?? '';
+  let name = '';
+
+  const profile = StorageService.getProfile();
+  if (resolvedEmail && profile.email.trim().toLowerCase() === resolvedEmail.toLowerCase()) {
+    name = `${profile.firstName} ${profile.lastName}`.trim();
+  }
+
+  if (!name) {
+    const local = resolvedEmail.split('@')[0];
+    name = local
+      .split(/[._-]+/)
+      .filter(Boolean)
+      .map((w) => w.charAt(0).toUpperCase() + w.slice(1))
+      .join(' ');
+  }
+
+  if (!name) name = 'User';
+
+  const initials =
+    name
+      .split(/\s+/)
+      .filter(Boolean)
+      .slice(0, 2)
+      .map((w) => w.charAt(0).toUpperCase())
+      .join('') || 'U';
+
+  return { name, email: resolvedEmail || 'No email', initials };
+}
 
 function timeAgo(date: Date): string {
   const diff = Math.floor((Date.now() - date.getTime()) / 1000);
@@ -27,14 +64,15 @@ export function Header() {
   const userMenuRef = useRef<HTMLDivElement>(null);
   const notificationRef = useRef<HTMLDivElement>(null);
   const { isDarkMode, toggleDarkMode } = useDarkMode();
-  const { notifications, unreadCount, markAllRead, markRead } = useNotifications();
+  const { notifications, unreadCount, isLoading, markAllRead, markRead } = useNotifications();
   const navigate = useNavigate();
 
   const toggleNotificationMenu = () => setIsNotificationOpen((s) => !s);
   const toggleMobileMenu = () => setIsMobileMenuOpen((s) => !s);
   const toggleUserMenu = () => setIsUserMenuOpen((s) => !s);
-  const { logout } = useAuth();
+  const { isAuthenticated, userEmail, logout } = useAuth();
   const { showToast } = useToast();
+  const userDisplay = isAuthenticated ? deriveUserDisplay(userEmail) : null;
 
   const handleLogout = () => {
     try {
@@ -44,6 +82,14 @@ export function Header() {
       navigate('/login');
     } catch {
       showToast('Failed to log out. Please try again.', 'error');
+    }
+  };
+
+  const handleMarkAllRead = async () => {
+    try {
+      await markAllRead();
+    } catch {
+      showToast('Failed to mark all as read', 'error');
     }
   };
 
@@ -131,7 +177,12 @@ export function Header() {
                   </div>
 
                   <div className="max-h-96 overflow-y-auto">
-                    {notifications.length > 0 ? (
+                    {isLoading ? (
+                      <div className="px-4 py-8 flex flex-col items-center justify-center">
+                        <Loader2 size={24} className="text-gray-400 animate-spin mb-2" />
+                        <p className="text-sm text-gray-500 dark:text-gray-400">Loading...</p>
+                      </div>
+                    ) : notifications.length > 0 ? (
                       notifications.map((n, index) => (
                         <div
                           key={n.id}
@@ -163,7 +214,7 @@ export function Header() {
 
                   <div className="px-4 py-2 border-t border-gray-100 dark:border-gray-700 flex items-center justify-between">
                     {unreadCount > 0 && (
-                      <button className="text-xs text-primary hover:underline" onClick={markAllRead}>
+                      <button className="text-xs text-primary hover:underline" onClick={handleMarkAllRead}>
                         Mark all as read
                       </button>
                     )}
@@ -188,35 +239,46 @@ export function Header() {
               {isMobileMenuOpen ? <X size={24} /> : <Menu size={24} />}
             </button>
 
-            {/* Profile Dropdown */}
-            <div className="relative ml-2" ref={userMenuRef}>
-              <button
-                onClick={toggleUserMenu}
-                className="flex items-center justify-center h-9 w-9 rounded-full bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-400 hover:text-primary hover:bg-primary/10 transition-all focus:outline-none focus-visible:ring-2 focus-visible:ring-primary"
-                aria-haspopup="true"
-                aria-expanded={isUserMenuOpen}
-                aria-label="Open user profile menu"
-              >
-                <User size={20} />
-              </button>
+            {/* Profile Dropdown — only for authenticated users; otherwise a Sign In CTA */}
+            {isAuthenticated && userDisplay ? (
+              <div className="relative ml-2" ref={userMenuRef}>
+                <button
+                  onClick={toggleUserMenu}
+                  className="flex items-center justify-center h-9 w-9 rounded-full bg-gray-100 dark:bg-gray-800 text-sm font-semibold text-gray-600 dark:text-gray-300 hover:text-primary hover:bg-primary/10 transition-all focus:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+                  aria-haspopup="true"
+                  aria-expanded={isUserMenuOpen}
+                  aria-label="Open user profile menu"
+                >
+                  {userDisplay.initials}
+                </button>
 
-              {isUserMenuOpen && (
-                <div className="absolute right-0 mt-4 w-60 rounded-3xl bg-white/90 dark:bg-[#0a0a0a]/90 backdrop-blur-3xl border border-gray-100 dark:border-white/10 shadow-2xl p-2 z-50 animate-in fade-in slide-in-from-top-4">
-                  <div className="px-4 py-3 border-b border-gray-100 dark:border-white/5 mb-2">
-                    <p className="text-sm font-medium text-gray-900 dark:text-white">Sarah Wilson</p>
-                    <p className="text-xs text-gray-500 dark:text-white/40">sarah.w@example.com</p>
+                {isUserMenuOpen && (
+                  <div className="absolute right-0 mt-4 w-60 rounded-3xl bg-white/90 dark:bg-[#0a0a0a]/90 backdrop-blur-3xl border border-gray-100 dark:border-white/10 shadow-2xl p-2 z-50 animate-in fade-in slide-in-from-top-4">
+                    <div className="px-4 py-3 border-b border-gray-100 dark:border-white/5 mb-2">
+                      <p className="text-sm font-medium text-gray-900 dark:text-white truncate">{userDisplay.name}</p>
+                      <p className="text-xs text-gray-500 dark:text-white/40 truncate">{userDisplay.email}</p>
+                    </div>
+                    <NavLink to="/profile" onClick={() => setIsUserMenuOpen(false)} className="flex items-center gap-3 px-4 py-2.5 text-sm text-gray-600 dark:text-white/70 hover:bg-gray-100 dark:hover:bg-white/5 rounded-xl transition-colors"><User size={16} /> Profile</NavLink>
+                    <NavLink to="/settings" onClick={() => setIsUserMenuOpen(false)} className="flex items-center gap-3 px-4 py-2.5 text-sm text-gray-600 dark:text-white/70 hover:bg-gray-100 dark:hover:bg-white/5 rounded-xl transition-colors"><Settings size={16} /> Settings</NavLink>
+                    <button
+                      onClick={handleLogout}
+                      className="flex items-center gap-3 w-full text-left px-4 py-2.5 mt-1 text-sm text-red-500 font-medium hover:bg-red-50 dark:hover:bg-red-500/10 rounded-xl transition-colors"
+                    >
+                      <LogOut size={16} />
+                      Sign out
+                    </button>
                   </div>
-                  <NavLink to="/profile" className="flex items-center gap-3 px-4 py-2.5 text-sm text-gray-600 dark:text-white/70 hover:bg-gray-100 dark:hover:bg-white/5 rounded-xl transition-colors"><User size={16} /> Profile</NavLink>
-                  <NavLink to="/settings" className="flex items-center gap-3 px-4 py-2.5 text-sm text-gray-600 dark:text-white/70 hover:bg-gray-100 dark:hover:bg-white/5 rounded-xl transition-colors"><Settings size={16} /> Settings</NavLink>
-                 <button
-  onClick={handleLogout}
-  className="flex items-center gap-3 w-full text-left px-4 py-2.5 mt-1 text-sm text-red-500 font-medium hover:bg-red-50 dark:hover:bg-red-500/10 rounded-xl transition-colors"
->
-  <LogOut size={16} />
-  Sign out
-</button></div>
-              )}
-            </div>
+                )}
+              </div>
+            ) : (
+              <NavLink
+                to="/login"
+                className="ml-2 inline-flex items-center gap-2 px-4 py-2 rounded-full text-sm font-medium text-white bg-primary hover:bg-primary/90 transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+              >
+                <User size={16} />
+                Sign In
+              </NavLink>
+            )}
           </div>
         </div>
 

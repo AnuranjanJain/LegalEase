@@ -2,8 +2,7 @@ import { useState, FormEvent } from 'react';
 import { Link, useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { Eye, EyeOff, Mail, Lock, ArrowRight } from 'lucide-react';
-
-const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000';
+import { api } from '../services/api';
 
 export function LoginPage() {
   const [email, setEmail] = useState('');
@@ -29,25 +28,23 @@ export function LoginPage() {
       return;
     }
 
+    // Normalize email so casing variations resolve to the same account
+    const normalizedEmail = email.trim().toLowerCase();
+
     setIsLoading(true);
     try {
-      const response = await fetch(`${API_BASE_URL}/auth/login`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email, password }),
-      });
+      const data: any = await api.post('/auth/login', { email: normalizedEmail, password });
 
-      const data = await response.json();
-
-      if (!response.ok) {
-        setError(data.detail || 'Invalid email or password');
-        return;
-      }
-
-      login(data.access_token);
+      await login(data.access_token);
       navigate(redirectTo);
-    } catch {
-      setError('Unable to connect to the server. Please try again.');
+    } catch (err: any) {
+      console.error('Login request failed:', err);
+      const isNetworkError = err instanceof TypeError || (err && err.message && err.message.toLowerCase().includes('fetch'));
+      if (isNetworkError) {
+        setError('Server is unavailable. Please verify the backend server is running.');
+      } else {
+        setError(err.message || 'Unable to connect to the server. Please try again.');
+      }
     } finally {
       setIsLoading(false);
     }
