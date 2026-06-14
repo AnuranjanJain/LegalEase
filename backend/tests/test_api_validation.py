@@ -6,7 +6,7 @@ from backend.main import ChatRequest, SummarizeRequest
 
 @pytest.mark.unit
 def test_validate_api_key_with_x_api_key():
-    """Test API key validation with X-API-Key header"""
+    """Test API key validation with X-API-Key header — a valid key must succeed."""
     import os
     from unittest.mock import Mock, patch
     
@@ -14,9 +14,9 @@ def test_validate_api_key_with_x_api_key():
     request.headers = {"x-api-key": "test-api-key"}
     
     with patch.dict(os.environ, {"API_KEYS": "test-api-key", "ALLOW_DEV": "false"}):
-        with pytest.raises(HTTPException) as exc_info:
-            _validate_api_key(request)
-        assert exc_info.value.status_code == 401
+        # A valid key should be accepted — _validate_api_key returns the key string.
+        result = _validate_api_key(request)
+        assert result == "test-api-key"
 
 
 @pytest.mark.unit
