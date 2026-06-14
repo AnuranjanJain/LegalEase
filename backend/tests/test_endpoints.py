@@ -135,11 +135,9 @@ async def test_upload_endpoint_with_text_file():
     
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as ac:
         r = await ac.post("/upload", files=files, headers=headers)
-        assert r.status_code == 200
+        assert r.status_code == 202
         data = r.json()
-        assert "filename" in data
-        assert "text" in data
-        assert data["filename"] == "sample.txt"
+        assert "task_id" in data
     
     if "ALLOW_DEV" in os.environ:
         del os.environ["ALLOW_DEV"]
@@ -158,8 +156,8 @@ async def test_upload_endpoint_with_pdf():
     
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as ac:
         r = await ac.post("/upload", files=files, headers=headers)
-        # Will return 503 if PyMuPDF not available, or 400 for invalid PDF
-        assert r.status_code in [200, 503, 400]
+        # Will return 202
+        assert r.status_code == 202
     
     if "ALLOW_DEV" in os.environ:
         del os.environ["ALLOW_DEV"]
@@ -193,12 +191,9 @@ async def test_upload_endpoint_with_docx():
     with patch("backend.main.DocxDocument", return_value=mock_doc):
         async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as ac:
             r = await ac.post("/upload", files=files, headers=headers)
-            assert r.status_code == 200
+            assert r.status_code == 202
             data = r.json()
-            assert "filename" in data
-            assert data["filename"] == "sample.docx"
-            assert "text" in data
-            assert data["text"] == "Sample mock docx content."
+            assert "task_id" in data
 
     if "ALLOW_DEV" in os.environ:
         del os.environ["ALLOW_DEV"]
