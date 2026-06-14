@@ -147,12 +147,12 @@ def change_password(
     db: Session = Depends(get_db),
 ):
     """Verify the current password and update to the new one."""
-    user = current_user.user
-    if not user:
+    if not current_user.user:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="User not found",
         )
+    user = current_user.user
     
     if not verify_password(payload.current_password, user.hashed_password):
         raise HTTPException(
@@ -221,6 +221,25 @@ def verify_token(current_user: models.User = Depends(get_current_user)):
     return {
         "valid": True,
         "email": current_user.email
+    }
+
+
+@router.get("/verify")
+def verify_token(current_user: AuthIdentity = Depends(get_current_user)):
+    """
+    Verify that the current JWT token is valid and return user information.
+    Used by frontend for authentication validation during startup, page refresh,
+    and token verification after login.
+    """
+    email = current_user.get_user_email()
+    if not email:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="User not found",
+        )
+    return {
+        "valid": True,
+        "email": email
     }
 
 
