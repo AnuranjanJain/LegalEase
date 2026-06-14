@@ -413,3 +413,7 @@ def get_optional_user(request: Request, db: Session = Depends(get_db)) -> Option
     except JWTError:
         pass
     return None
+
+# Aliases for test suite backward compatibility
+extract_jwt_from_authorization = _extract_jwt_token
+extract_api_key = _extract_api_key
