@@ -40,6 +40,7 @@ export function ChatbotPage() {
   const [isTyping, setIsTyping] = useState(false);
   const [uploadedDoc, setUploadedDoc] = useState<{ name: string; text: string } | null>(null);
   const [isUploading, setIsUploading] = useState(false);
+  const [uploadProgress, setUploadProgress] = useState(0);
   const [showSessions, setShowSessions] = useState(false);
   
   // State to track which message ID was copied to show the checkmark temporarily
@@ -299,32 +300,59 @@ export function ChatbotPage() {
     if (!file) return;
 
     setIsUploading(true);
-    showToast(`Uploading "${file.name}" to AI sandbox...`, 'info');
-    
+    showToast(`Uploading "${file.name}"...`, 'info');
+
     const formData = new FormData();
     formData.append('file', file);
 
     try {
-      const data = await api.upload<{ filename: string; text: string }>('/upload', formData);
-      setUploadedDoc({ name: data.filename, text: data.text });
-      showToast(`Document "${data.filename}" context integrated successfully!`, 'success');
+      // POST upload — backend returns 202 + task_id immediately (#365)
+      const initial = await api.upload<{ task_id: string; filename: string; status: string }>(
+        '/upload', formData
+      );
+      const taskId = initial.task_id;
+      const filename = initial.filename;
 
-      const systemMsg: ChatMessage = {
-        id: crypto.randomUUID(),
-        text: `Successfully uploaded ${data.filename}. I now have context of this document.`,
-        sender: 'bot',
-        time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-        timestamp: new Date().toISOString(),
-      };
-      setMessages((prev) => [...prev, systemMsg]);
+      // Poll /upload/status/:task_id until done or failed
+      let progress = 0;
+      while (true) {
+        await new Promise(r => setTimeout(r, 1500));
+        const status = await api.get<{ status: string; progress: number; result: { filename: string; text: string } | null }>(
+          `/upload/status/${taskId}`
+        );
+        progress = status.progress;
+
+        // Update progress toast label via state
+        setUploadProgress(progress);
+
+        if (status.status === 'done' && status.result) {
+          setUploadedDoc({ name: status.result.filename, text: status.result.text });
+          showToast(`Document "${filename}" context integrated successfully!`, 'success');
+          const systemMsg: ChatMessage = {
+            id: crypto.randomUUID(),
+            text: `Successfully uploaded ${filename}. I now have context of this document.`,
+            sender: 'bot',
+            time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+            timestamp: new Date().toISOString(),
+          };
+          setMessages(prev => [...prev, systemMsg]);
+          break;
+        }
+        if (status.status === 'failed') {
+          showToast('Failed to process document.', 'error');
+          break;
+        }
+      }
     } catch (error) {
       console.error('Upload failed:', error);
       showToast('Failed to process document context.', 'error');
     } finally {
       setIsUploading(false);
+      setUploadProgress(0);
       if (fileInputRef.current) fileInputRef.current.value = '';
     }
   };
+
 
   const handleSummarize = async () => {
     if (!uploadedDoc) return;
@@ -506,6 +534,20 @@ export function ChatbotPage() {
           <div className="mb-2 flex items-center gap-1.5 text-[10px] font-semibold text-emerald-600 dark:text-emerald-400">
             <ShieldCheck size={12} />
             <span>PII Redaction active — sensitive data masked in AI responses</span>
+          </div>
+        )}
+        {isUploading && (
+          <div className="mb-3 px-3 py-2 rounded-lg bg-primary/5 border border-primary/20">
+            <div className="flex items-center justify-between mb-1">
+              <span className="text-xs font-semibold text-primary">Processing document...</span>
+              <span className="text-xs font-bold text-primary">{uploadProgress}%</span>
+            </div>
+            <div className="w-full h-1.5 bg-gray-200 dark:bg-gray-700 rounded-full overflow-hidden">
+              <div
+                className="h-full bg-gradient-to-r from-primary to-indigo-500 rounded-full transition-all duration-500"
+                style={{ width: `${uploadProgress || 10}%` }}
+              />
+            </div>
           </div>
         )}
         {uploadedDoc && (

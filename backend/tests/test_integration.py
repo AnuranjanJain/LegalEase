@@ -19,8 +19,19 @@ async def test_complete_document_upload_and_summarize_flow():
         files = {"file": ("contract.txt", content, "text/plain")}
         upload_response = await ac.post("/upload", files=files, headers=headers)
         
-        assert upload_response.status_code == 200
-        upload_data = upload_response.json()
+        assert upload_response.status_code == 202
+        task_id = upload_response.json()["task_id"]
+        
+        import asyncio
+        upload_data = {}
+        for _ in range(20):
+            status_response = await ac.get(f"/upload/status/{task_id}", headers=headers)
+            status_data = status_response.json()
+            if status_data["status"] == "done":
+                upload_data = status_data["result"]
+                break
+            await asyncio.sleep(0.1)
+            
         assert "text" in upload_data
         assert "filename" in upload_data
         
@@ -54,8 +65,18 @@ async def test_document_upload_and_chat_flow():
         files = {"file": ("employment.txt", content, "text/plain")}
         upload_response = await ac.post("/upload", files=files, headers=headers)
         
-        assert upload_response.status_code == 200
-        upload_data = upload_response.json()
+        assert upload_response.status_code == 202
+        task_id = upload_response.json()["task_id"]
+        
+        import asyncio
+        upload_data = {}
+        for _ in range(20):
+            status_response = await ac.get(f"/upload/status/{task_id}", headers=headers)
+            status_data = status_response.json()
+            if status_data["status"] == "done":
+                upload_data = status_data["result"]
+                break
+            await asyncio.sleep(0.1)
         
         # Step 2: Ask a question about the document
         chat_payload = {
@@ -112,9 +133,20 @@ async def test_multiple_document_uploads():
             files = {"file": (filename, content, "text/plain")}
             response = await ac.post("/upload", files=files, headers=headers)
             
-            assert response.status_code == 200
-            data = response.json()
-            assert data["filename"] == filename
+            assert response.status_code == 202
+            task_id = response.json()["task_id"]
+            
+            import asyncio
+            data = {}
+            for _ in range(20):
+                status_response = await ac.get(f"/upload/status/{task_id}", headers=headers)
+                status_data = status_response.json()
+                if status_data["status"] == "done":
+                    data = status_data["result"]
+                    break
+                await asyncio.sleep(0.1)
+                
+            assert data.get("filename") == filename
     
     if "ALLOW_DEV" in os.environ:
         del os.environ["ALLOW_DEV"]
@@ -142,7 +174,7 @@ async def test_error_recovery_flow():
         files = {"file": ("valid.txt", valid_content, "text/plain")}
         response = await ac.post("/upload", files=files, headers=headers)
         
-        assert response.status_code == 200
+        assert response.status_code == 202
     
     if "ALLOW_DEV" in os.environ:
         del os.environ["ALLOW_DEV"]
