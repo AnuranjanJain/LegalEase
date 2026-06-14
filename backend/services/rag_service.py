@@ -4,6 +4,8 @@ import threading
 from typing import List
 from fastapi.concurrency import run_in_threadpool
 
+logger = logging.getLogger(__name__)
+
 # Import at module level (main thread) to avoid Windows DLL loading crashes in background threads
 try:
     from langchain_postgres.vectorstores import PGVector
@@ -14,8 +16,6 @@ try:
 except Exception as e:
     logger.warning(f"Could not pre-import RAG dependencies (expected in stub/limited environments): {e}")
     RAG_DEPS_AVAILABLE = False
-
-logger = logging.getLogger(__name__)
 
 class RAGService:
     def __init__(self):
