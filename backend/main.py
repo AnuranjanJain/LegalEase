@@ -1,5 +1,5 @@
 import asyncio
-from fastapi import Depends, FastAPI, HTTPException, UploadFile, File, Request
+from fastapi import BackgroundTasks, Depends, FastAPI, HTTPException, UploadFile, File, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, StreamingResponse
 from pydantic import BaseModel
@@ -21,6 +21,12 @@ from backend.routers.notifications import router as notifications_router
 from backend.auth import validate_token_or_api_key, AuthIdentity
 from backend.utils.limiter import SimpleRateLimiter
 
+# ---------------------------------------------------------------------------
+# In-memory task store for async document processing (#365)
+# Structure: { task_id: {"status": str, "progress": int, "result": dict|None} }
+# ---------------------------------------------------------------------------
+_upload_tasks: dict[str, dict] = {}
+
 # Optional imports (wrap in try/except so server can start without optional deps)
 try:
     import fitz  # PyMuPDF
@@ -41,6 +47,8 @@ from backend.core.validation import (
     validate_docx_archive_safety
 )
 from backend.services.ai_service import ai_service, correlation_id_var
+from backend.services.rag_service import rag_service
+from backend.services.cache_service import semantic_cache
 
 #Middleware import 
 from backend.middleware.rate_limit import RateLimitMiddleware
@@ -300,20 +308,25 @@ async def chat(request: Request, payload: ChatRequest, identity: AuthIdentity = 
     sanitized_message = sanitize_text(payload.message)
     sanitized_context = sanitize_text(payload.context) if payload.context else None
 
-    # Handle RAG context retrieval for large documents
-    if sanitized_context:
+    # Handle RAG context retrieval for non-streaming requests early.
+    # Streaming requests handle RAG inside the generator to avoid blocking initial response.
+    if sanitized_context and not payload.stream:
         import hashlib
-        from backend.services.rag_service import rag_service
         
         doc_hash = hashlib.md5(sanitized_context.encode()).hexdigest()
-        if doc_hash not in rag_service.indexed_docs:
-            rag_service.add_document(sanitized_context, doc_hash)
-        sanitized_context = rag_service.get_context(sanitized_message, doc_hash)
+        try:
+            if doc_hash not in rag_service.indexed_docs:
+                await rag_service.add_document(sanitized_context, doc_hash)
+            sanitized_context = await rag_service.get_context(sanitized_message, doc_hash)
+        except Exception as e:
+            logger.warning(f"RAG retrieval failed: {e}. Falling back to non-RAG heuristic.")
+            # Fall back gracefully to a non-RAG heuristic (truncating context)
+            if len(sanitized_context) > 5000:
+                sanitized_context = sanitized_context[:5000] + "\n... [Context truncated due to RAG failure] ..."
 
     # Early payload validation
     validate_chat_input(sanitized_message, sanitized_context)
 
-    from backend.services.cache_service import semantic_cache
     cache_key = f"{sanitized_message} || {sanitized_context}" if sanitized_context else sanitized_message
     cached_response = semantic_cache.get(cache_key)
 
@@ -322,10 +335,14 @@ async def chat(request: Request, payload: ChatRequest, identity: AuthIdentity = 
         if payload.stream:
             async def stream_cached():
                 import asyncio
+                import json
                 words = cached_response.split(" ")
                 for i, word in enumerate(words):
-                    yield word + (" " if i < len(words) - 1 else "")
+                    chunk = word + (" " if i < len(words) - 1 else "")
+                    payload_data = json.dumps({"response": chunk})
+                    yield f"data: {payload_data}\n\n"
                     await asyncio.sleep(0.01)
+                yield "data: [DONE]\n\n"
             return StreamingResponse(stream_cached(), media_type="text/event-stream")
         else:
             return {"response": cached_response}
@@ -333,17 +350,43 @@ async def chat(request: Request, payload: ChatRequest, identity: AuthIdentity = 
     # Streaming or standard block handling
     if payload.stream:
         async def stream_generator():
+            nonlocal sanitized_context
             full_response = ""
             try:
+                # Perform RAG retrieval inside the stream generator asynchronously to prevent blocking the initial response
+                if sanitized_context:
+                    import hashlib
+                    
+                    doc_hash = hashlib.md5(sanitized_context.encode()).hexdigest()
+                    try:
+                        if doc_hash not in rag_service.indexed_docs:
+                            await rag_service.add_document(sanitized_context, doc_hash)
+                        sanitized_context = await rag_service.get_context(sanitized_message, doc_hash)
+                    except Exception as e:
+                        logger.warning(f"RAG retrieval failed inside stream generator: {e}. Falling back to non-RAG heuristic.")
+                        if len(sanitized_context) > 5000:
+                            sanitized_context = sanitized_context[:5000] + "\n... [Context truncated due to RAG failure] ..."
+
                 async for chunk in ai_service.generate_chat_response(
                     message=sanitized_message,
                     context=sanitized_context,
                     history=payload.conversation_history,
                     stream=True
                 ):
-                    full_response += chunk
+                    # Clean the SSE format to cache clean raw text
+                    if chunk.startswith("data: ") and chunk != "data: [DONE]\n\n":
+                        try:
+                            import json
+                            json_str = chunk.replace("data: ", "").strip()
+                            data = json.loads(json_str)
+                            full_response += data.get("response", "")
+                        except Exception:
+                            pass
                     yield chunk
-                semantic_cache.set(cache_key, full_response)
+                
+                # Re-calculate the cache key using the post-RAG context
+                final_cache_key = f"{sanitized_message} || {sanitized_context}" if sanitized_context else sanitized_message
+                semantic_cache.set(final_cache_key, full_response)
             except Exception as e:
                 logger.error(f"[{correlation_id_var.get()}] Stream generation error: {e}")
                 yield "\n[Error: Inference stream failed]"
@@ -363,8 +406,15 @@ async def chat(request: Request, payload: ChatRequest, identity: AuthIdentity = 
         return {"response": response_text}
 
 
-@app.post("/upload")
-async def upload_document(request: Request, file: UploadFile = File(...), identity: AuthIdentity = Depends(validate_token_or_api_key)):
+@app.post("/upload", status_code=202)
+async def upload_document(
+    request: Request,
+    background_tasks: BackgroundTasks,
+    file: UploadFile = File(...),
+    identity: AuthIdentity = Depends(validate_token_or_api_key)
+):
+    """Accept a document upload, immediately return 202 with a task_id,
+    and embed it in a background worker to avoid gateway timeouts (#365)."""
     # Content-Length pre-check
     try:
         content_length = int(request.headers.get("content-length", "0"))
@@ -373,11 +423,11 @@ async def upload_document(request: Request, file: UploadFile = File(...), identi
     if content_length and content_length > MAX_UPLOAD_SIZE:
         raise HTTPException(status_code=413, detail="Uploaded file is too large")
 
+    task_id = str(uuid.uuid4())
     temp_path = None
     try:
         filename = file.filename or "unknown"
         file_extension = os.path.splitext(filename)[1].lower()
-        extracted_text = ""
         total_size = 0
         with tempfile.NamedTemporaryFile(delete=False, suffix=file_extension or "") as temp_file:
             temp_path = temp_file.name
@@ -394,58 +444,97 @@ async def upload_document(request: Request, file: UploadFile = File(...), identi
         with open(temp_path, "rb") as temp_file:
             content_prefix = temp_file.read(4096)
 
-        # Perform MIME-aware preprocessing and signature validation using only the
-        # minimum bytes needed for structural checks.
         validate_mime_and_bytes(content_prefix, file.content_type or "", filename)
 
         if file_extension == ".docx":
             validate_docx_archive_safety(temp_path)
 
-        # Process by type using file path to avoid loading entire file into memory
-        if file_extension == '.pdf' or content_prefix.startswith(b'%PDF-'):
-            try:
-                extracted_text = await _run_bounded_parser(_extract_pdf_text, temp_path)
-            except HTTPException:
-                raise
-            except Exception as e:
-                if isinstance(e, HTTPException):
-                    raise
-                logger.error(f"PDF parse error: {e}")
-                raise HTTPException(status_code=400, detail="Invalid or corrupted PDF")
-
-        elif file_extension == '.docx':
-            try:
-                extracted_text = await _run_bounded_parser(_extract_docx_text, temp_path)
-            except HTTPException:
-                raise
-            except Exception:
-                raise HTTPException(
-                    status_code=400,
-                    detail="Invalid or corrupted DOCX file."
-                )
-
-        elif file_extension == '.txt':
-            with open(temp_path, 'r', encoding='utf-8') as text_file:
-                extracted_text = text_file.read(10000)
-
-        # Truncate extracted text to avoid sending huge payloads to models
-        extracted_text = extracted_text[:MAX_EXTRACTED_TEXT_CHARS]
-
-        return {"filename": filename, "text": extracted_text}
-
     except ValidationError as e:
+        if temp_path and os.path.exists(temp_path):
+            os.unlink(temp_path)
         raise HTTPException(status_code=400, detail=str(e))
     except HTTPException:
+        if temp_path and os.path.exists(temp_path):
+            os.unlink(temp_path)
         raise
     except Exception as e:
-        logger.error(f"Upload error: {e}", exc_info=True)
-        raise HTTPException(status_code=500, detail="Failed to process document")
-    finally:
         if temp_path and os.path.exists(temp_path):
+            os.unlink(temp_path)
+        logger.error(f"Upload error: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail="Failed to receive document")
+
+    # Register the task as "queued" and launch the background worker
+    _upload_tasks[task_id] = {"status": "processing", "progress": 0, "result": None}
+
+    background_tasks.add_task(
+        _process_document_background,
+        task_id=task_id,
+        temp_path=temp_path,
+        filename=filename,
+        file_extension=file_extension,
+        content_prefix=content_prefix,
+    )
+
+    return JSONResponse(
+        status_code=202,
+        content={"task_id": task_id, "filename": filename, "status": "processing"},
+    )
+
+
+async def _process_document_background(
+    task_id: str,
+    temp_path: str,
+    filename: str,
+    file_extension: str,
+    content_prefix: bytes,
+):
+    """Background worker: parse text, update progress, clean up temp file."""
+    try:
+        _upload_tasks[task_id]["progress"] = 20
+
+        extracted_text = ""
+        if file_extension == ".pdf" or content_prefix.startswith(b"%PDF-"):
+            extracted_text = await _run_bounded_parser(_extract_pdf_text, temp_path)
+        elif file_extension == ".docx":
+            extracted_text = await _run_bounded_parser(_extract_docx_text, temp_path)
+        elif file_extension == ".txt":
+            with open(temp_path, "r", encoding="utf-8") as tf:
+                extracted_text = tf.read(10000)
+
+        _upload_tasks[task_id]["progress"] = 70
+
+        extracted_text = extracted_text[:MAX_EXTRACTED_TEXT_CHARS]
+
+        _upload_tasks[task_id]["progress"] = 100
+        _upload_tasks[task_id]["status"] = "done"
+        _upload_tasks[task_id]["result"] = {"filename": filename, "text": extracted_text}
+        logger.info(f"Background processing complete for task {task_id} ({filename})")
+    except Exception as e:
+        logger.error(f"Background processing failed for task {task_id}: {e}", exc_info=True)
+        _upload_tasks[task_id]["status"] = "failed"
+        _upload_tasks[task_id]["progress"] = 0
+        _upload_tasks[task_id]["result"] = {"error": str(e)}
+    finally:
+        if os.path.exists(temp_path):
             try:
                 os.unlink(temp_path)
             except OSError:
                 pass
+
+
+@app.get("/upload/status/{task_id}")
+async def upload_status(task_id: str, identity: AuthIdentity = Depends(validate_token_or_api_key)):
+    """Poll the processing status of an async upload task (#365)."""
+    task = _upload_tasks.get(task_id)
+    if not task:
+        raise HTTPException(status_code=404, detail="Task not found")
+    return {
+        "task_id": task_id,
+        "status": task["status"],
+        "progress": task["progress"],
+        "result": task["result"],
+    }
+
 
 
 @app.post("/summarize")
