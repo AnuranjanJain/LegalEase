@@ -77,10 +77,16 @@ def get_current_user(token: str = Depends(oauth2_scheme), db: Session = Depends(
     except JWTError:
         raise credentials_exception
 
+    # Check if the token has been revoked
+    revoked = db.query(models.RevokedToken).filter(models.RevokedToken.token == token).first()
+    if revoked:
+        raise credentials_exception
+
     user = db.query(models.User).filter(models.User.email == email).first()
     if user is None:
         raise credentials_exception
     return user
+
 
 
 def _extract_bearer_token(request: Request) -> str:
@@ -121,9 +127,12 @@ def validate_token_or_api_key(request: Request, db: Session = Depends(get_db)) -
             payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
             email: Optional[str] = payload.get("sub")
             if email:
-                user = db.query(models.User).filter(models.User.email == email).first()
-                if user:
-                    return email
+                # Check if the token has been revoked
+                revoked = db.query(models.RevokedToken).filter(models.RevokedToken.token == token).first()
+                if not revoked:
+                    user = db.query(models.User).filter(models.User.email == email).first()
+                    if user:
+                        return email
         except JWTError:
             pass
 

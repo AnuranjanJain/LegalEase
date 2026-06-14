@@ -1,4 +1,5 @@
 import asyncio
+from contextlib import asynccontextmanager
 from fastapi import Depends, FastAPI, HTTPException, UploadFile, File, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, StreamingResponse
@@ -18,6 +19,7 @@ from backend.routers import auth_routes
 from backend.routers import legal_routes
 from backend.auth import validate_token_or_api_key
 from backend.utils.limiter import SimpleRateLimiter
+from backend.utils.cleanup import start_token_cleanup_task
 
 # Optional imports (wrap in try/except so server can start without optional deps)
 try:
@@ -55,7 +57,21 @@ load_dotenv()
 # Track application start time for uptime calculation
 _app_start_time = time.monotonic()
 
-app = FastAPI()
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    # Start the token blacklist cleanup worker in the background (defaulting to 3600s/1h)
+    cleanup_interval = int(os.getenv("TOKEN_CLEANUP_INTERVAL_SECONDS", "3600"))
+    cleanup_task = asyncio.create_task(start_token_cleanup_task(interval_seconds=cleanup_interval))
+    try:
+        yield
+    finally:
+        cleanup_task.cancel()
+        try:
+            await cleanup_task
+        except asyncio.CancelledError:
+            pass
+
+app = FastAPI(lifespan=lifespan)
 
 
 # Exception Handlers to match standardized error contracts
