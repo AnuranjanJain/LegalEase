@@ -1,4 +1,4 @@
-import { Send, User, Bot, Paperclip, X, FileText, Sparkles, RefreshCcw, PlusCircle, Trash2, History, Copy, Check, ShieldCheck, BookOpen, ChevronDown } from 'lucide-react';
+import { Send, User, Bot, Paperclip, X, FileText, Sparkles, RefreshCcw, PlusCircle, Trash2, History, Copy, Check, ShieldCheck, BookOpen, ChevronDown, Download } from 'lucide-react';
 import { api } from '../services/api';
 import { ChatStorageService, ChatMessage, ChatSessionMetadata } from '../services/storage';
 import { useRef, useState, useEffect, useCallback } from 'react';
@@ -6,7 +6,11 @@ import { useToast } from '../contexts/ToastContext';
 import LegalMapping from '../components/LegalMapping';
 import { useRedaction } from '../contexts/RedactionContext';
 import { redact } from '../utils/redaction';
-import { RedactedText } from '../components/RedactedText';
+import ReactMarkdown from 'react-markdown';
+import remarkGfm from 'remark-gfm';
+import rehypeRaw from 'rehype-raw';
+// @ts-ignore
+import html2pdf from 'html2pdf.js';
 
 function makeGreeting(): ChatMessage {
   return {
@@ -40,6 +44,7 @@ export function ChatbotPage() {
   const [isTyping, setIsTyping] = useState(false);
   const [uploadedDoc, setUploadedDoc] = useState<{ name: string; text: string } | null>(null);
   const [isUploading, setIsUploading] = useState(false);
+  const [uploadProgress, setUploadProgress] = useState(0);
   const [showSessions, setShowSessions] = useState(false);
 
   // State to track which message ID was copied to show the checkmark temporarily
@@ -287,37 +292,83 @@ export function ChatbotPage() {
     }
   };
 
+  const handleExportPDF = () => {
+    const element = document.getElementById('chat-history-container');
+    if (!element) return;
+    showToast('Generating PDF...', 'info');
+    const opt: any = {
+      margin:       [10, 10, 10, 10],
+      filename:     'LegalEase_Chat_Export.pdf',
+      image:        { type: 'jpeg', quality: 0.98 },
+      html2canvas:  { scale: 2, useCORS: true },
+      jsPDF:        { unit: 'mm', format: 'a4', orientation: 'portrait' }
+    };
+    html2pdf().set(opt).from(element).save().then(() => {
+      showToast('Export successful!', 'success');
+    }).catch((err: any) => {
+      console.error('PDF export error:', err);
+      showToast('Failed to export PDF.', 'error');
+    });
+  };
+
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
 
     setIsUploading(true);
-    showToast(`Uploading "${file.name}" to AI sandbox...`, 'info');
-    
+    showToast(`Uploading "${file.name}"...`, 'info');
+
     const formData = new FormData();
     formData.append('file', file);
 
     try {
-      const data = await api.upload<{ filename: string; text: string }>('/upload', formData);
-      setUploadedDoc({ name: data.filename, text: data.text });
-      showToast(`Document "${data.filename}" context integrated successfully!`, 'success');
+      // POST upload — backend returns 202 + task_id immediately (#365)
+      const initial = await api.upload<{ task_id: string; filename: string; status: string }>(
+        '/upload', formData
+      );
+      const taskId = initial.task_id;
+      const filename = initial.filename;
 
-      const systemMsg: ChatMessage = {
-        id: crypto.randomUUID(),
-        text: `Successfully uploaded ${data.filename}. I now have context of this document.`,
-        sender: 'bot',
-        time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-        timestamp: new Date().toISOString(),
-      };
-      setMessages((prev) => [...prev, systemMsg]);
+      // Poll /upload/status/:task_id until done or failed
+      let progress = 0;
+      while (true) {
+        await new Promise(r => setTimeout(r, 1500));
+        const status = await api.get<{ status: string; progress: number; result: { filename: string; text: string } | null }>(
+          `/upload/status/${taskId}`
+        );
+        progress = status.progress;
+
+        // Update progress toast label via state
+        setUploadProgress(progress);
+
+        if (status.status === 'done' && status.result) {
+          setUploadedDoc({ name: status.result.filename, text: status.result.text });
+          showToast(`Document "${filename}" context integrated successfully!`, 'success');
+          const systemMsg: ChatMessage = {
+            id: crypto.randomUUID(),
+            text: `Successfully uploaded ${filename}. I now have context of this document.`,
+            sender: 'bot',
+            time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+            timestamp: new Date().toISOString(),
+          };
+          setMessages(prev => [...prev, systemMsg]);
+          break;
+        }
+        if (status.status === 'failed') {
+          showToast('Failed to process document.', 'error');
+          break;
+        }
+      }
     } catch (error) {
       console.error('Upload failed:', error);
       showToast('Failed to process document context.', 'error');
     } finally {
       setIsUploading(false);
+      setUploadProgress(0);
       if (fileInputRef.current) fileInputRef.current.value = '';
     }
   };
+
 
   const handleSummarize = async () => {
     if (!uploadedDoc) return;
@@ -344,14 +395,14 @@ export function ChatbotPage() {
   };
 
   return (
-    <div className="flex flex-col h-[calc(100vh-64px)] bg-gray-50 dark:bg-gray-900 border-l border-gray-200 dark:border-gray-800 relative">
+    <div className="flex flex-col h-screen bg-gray-50 dark:bg-gray-900 border-l border-gray-200 dark:border-gray-800 relative overflow-hidden">
 
       {/* Session panel */}
       {showSessions && (
-        <div className="absolute top-0 left-0 right-0 z-10 bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 shadow-md max-h-64 overflow-y-auto">
-          <div className="flex items-center justify-between px-4 py-2 border-b border-gray-100 dark:border-gray-700">
+        <div className="absolute top-0 left-0 right-0 z-20 bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 shadow-lg max-h-64 overflow-y-auto flex-shrink-0">
+          <div className="flex items-center justify-between px-4 py-3 border-b border-gray-100 dark:border-gray-700 sticky top-0 bg-white dark:bg-gray-800">
             <span className="text-sm font-semibold text-gray-700 dark:text-gray-300">Conversations</span>
-            <button onClick={() => setShowSessions(false)} className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-200">
+            <button onClick={() => setShowSessions(false)} className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 p-1 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors">
               <X size={16} />
             </button>
           </div>
@@ -361,16 +412,16 @@ export function ChatbotPage() {
           {sessions.map(session => (
             <div
               key={session.id}
-              className={`flex items-center justify-between px-4 py-2 cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-700 ${session.id === activeSessionId ? 'bg-primary/5 dark:bg-primary/10' : ''}`}
+              className={`flex items-center justify-between px-4 py-3 cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors ${session.id === activeSessionId ? 'bg-primary/5 dark:bg-primary/10' : ''}`}
               onClick={() => handleSwitchSession(session.id)}
             >
-              <div className="overflow-hidden">
+              <div className="overflow-hidden flex-1 min-w-0">
                 <p className="text-sm font-medium text-gray-800 dark:text-gray-200 truncate">{session.title}</p>
                 <p className="text-xs text-gray-400">{session.messageCount} messages · {new Date(session.updatedAt).toLocaleDateString()}</p>
               </div>
               <button
                 onClick={e => { e.stopPropagation(); handleDeleteSession(session.id); }}
-                className="ml-2 flex-shrink-0 text-gray-300 hover:text-red-500 transition-colors"
+                className="ml-2 flex-shrink-0 p-1.5 text-gray-300 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-500/10 rounded-lg transition-colors"
                 title="Delete conversation"
               >
                 <Trash2 size={14} />
@@ -380,8 +431,8 @@ export function ChatbotPage() {
         </div>
       )}
 
-      {/* Message list */}
-      <div className="flex-grow overflow-y-auto px-6 py-8 space-y-6 relative z-10">
+      {/* Message list - takes remaining space */}
+      <div className="flex-grow overflow-y-auto px-4 sm:px-6 py-6 sm:py-8 space-y-4 sm:space-y-6 relative z-10 min-h-0">
         {messages.map((msg: ChatMessage) => {
           const isUser = msg.sender === 'user';
 
@@ -411,19 +462,19 @@ export function ChatbotPage() {
               key={msg.id} 
               className={`flex w-full ${isUser ? 'justify-end' : 'justify-start'} animate-slide-up`}
             >
-              <div className={`flex items-start max-w-[80%] gap-3 ${isUser ? 'flex-row-reverse' : 'flex-row'}`}>
+              <div className={`flex items-start max-w-[85%] sm:max-w-[80%] gap-2 sm:gap-3 ${isUser ? 'flex-row-reverse' : 'flex-row'}`}>
                 
                 {/* Glowing Avatar Circles */}
-                <div className={`flex-shrink-0 h-9 w-9 rounded-xl flex items-center justify-center shadow-md ${
+                <div className={`flex-shrink-0 h-8 w-8 sm:h-9 sm:w-9 rounded-lg sm:rounded-xl flex items-center justify-center shadow-md ${
                   isUser 
                     ? 'bg-gradient-to-tr from-primary to-indigo-600 text-white' 
                     : 'bg-gradient-to-tr from-emerald-600 to-teal-500 text-white'
                 }`}>
-                  {isUser ? <User size={16} /> : <Bot size={16} />}
+                  {isUser ? <User size={14} /> : <Bot size={14} />}
                 </div>
 
                 {/* Message Bubble Card */}
-                <div className={`p-4 rounded-2xl shadow-sm text-left leading-relaxed relative group ${
+                <div className={`p-3 sm:p-4 rounded-2xl shadow-sm text-left leading-relaxed relative group ${
                   isUser 
                     ? 'bg-primary text-white rounded-tr-none' 
                     : 'bg-white/80 dark:bg-gray-900/60 backdrop-blur-md text-gray-900 dark:text-gray-150 rounded-tl-none border border-gray-150 dark:border-gray-800'
@@ -441,9 +492,21 @@ export function ChatbotPage() {
                     </button>
                   )}
 
-                  <p className="text-sm font-medium whitespace-pre-wrap pr-4">
-                    <RedactedText text={displayText} />
-                  </p>
+                  <div className="text-sm font-medium whitespace-pre-wrap pr-4 markdown-body">
+                    <ReactMarkdown 
+                      remarkPlugins={[remarkGfm]} 
+                      rehypePlugins={[rehypeRaw]}
+                      components={{
+                        table: ({node, ...props}) => <table className="border-collapse table-auto w-full text-sm my-2 border border-gray-300 dark:border-gray-600 rounded-lg overflow-hidden" {...props} />,
+                        th: ({node, ...props}) => <th className="border border-gray-300 dark:border-gray-600 px-4 py-2 bg-gray-100 dark:bg-gray-800 text-left font-bold" {...props} />,
+                        td: ({node, ...props}) => <td className="border border-gray-300 dark:border-gray-600 px-4 py-2" {...props} />,
+                        blockquote: ({node, ...props}) => <blockquote className="border-l-4 border-gray-300 dark:border-gray-500 pl-4 italic text-gray-600 dark:text-gray-400 my-2" {...props} />,
+                        a: ({node, ...props}) => <a className="text-primary hover:underline" {...props} />
+                      }}
+                    >
+                      {displayText}
+                    </ReactMarkdown>
+                  </div>
                   <p className={`text-[9px] font-semibold mt-2 ${isUser ? 'text-blue-100 text-right' : 'text-gray-400 dark:text-gray-500'}`}>
                     {msg.time}
                   </p>
@@ -508,12 +571,26 @@ export function ChatbotPage() {
         {redactionAnnouncement || (isTyping ? 'LegalEase AI is writing an answer...' : '')}
       </div>
 
-      <div className="p-4 bg-white dark:bg-gray-800 border-t border-gray-200 dark:border-gray-800">
+      <div className="p-3 sm:p-4 bg-white dark:bg-gray-800 border-t border-gray-200 dark:border-gray-800 flex-shrink-0">
         {/* PII Redaction active indicator */}
         {isRedactionEnabled && (
           <div className="mb-2 flex items-center gap-1.5 text-[10px] font-semibold text-emerald-600 dark:text-emerald-400">
             <ShieldCheck size={12} />
             <span>PII Redaction active — sensitive data masked in AI responses</span>
+          </div>
+        )}
+        {isUploading && (
+          <div className="mb-3 px-3 py-2 rounded-lg bg-primary/5 border border-primary/20">
+            <div className="flex items-center justify-between mb-1">
+              <span className="text-xs font-semibold text-primary">Processing document...</span>
+              <span className="text-xs font-bold text-primary">{uploadProgress}%</span>
+            </div>
+            <div className="w-full h-1.5 bg-gray-200 dark:bg-gray-700 rounded-full overflow-hidden">
+              <div
+                className="h-full bg-gradient-to-r from-primary to-indigo-500 rounded-full transition-all duration-500"
+                style={{ width: `${uploadProgress || 10}%` }}
+              />
+            </div>
           </div>
         )}
         {uploadedDoc && (
@@ -557,6 +634,14 @@ export function ChatbotPage() {
           </button>
 
           <button
+            onClick={handleExportPDF}
+            className="p-2 text-gray-400 hover:text-primary dark:hover:text-primary transition-colors"
+            title="Export to PDF"
+          >
+            <Download size={20} />
+          </button>
+
+          <button
             onClick={() => setShowSessions(prev => !prev)}
             className={`p-2 transition-colors ${showSessions ? 'text-primary' : 'text-gray-400 hover:text-gray-600 dark:hover:text-gray-300'}`}
             title="Conversation history"
@@ -580,7 +665,7 @@ export function ChatbotPage() {
             <Trash2 size={20} />
           </button>
 
-          <div className="flex-1 relative">
+          <div className="flex-1 relative min-w-0">
             {/* Dynamic Context Badge Indicator */}
             {uploadedDoc && (
               <span 
@@ -600,10 +685,15 @@ export function ChatbotPage() {
               maxLength={MAX_INPUT_CHARS}
               value={input}
               onChange={(e) => setInput(e.target.value)}
-              onKeyDown={(e) => e.key === 'Enter' && !isTyping && handleSend()}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' && !e.shiftKey && !isTyping) {
+                  e.preventDefault();
+                  handleSend();
+                }
+              }}
             />
 
-            {/* NEW: Dynamic Character Counter */}
+            {/* Dynamic Character Counter */}
             <div 
               className={`absolute bottom-2 right-3 text-[10px] font-medium transition-colors duration-300 pointer-events-none ${
                 input.length >= MAX_INPUT_CHARS ? 'text-red-500 animate-pulse' :
@@ -618,7 +708,7 @@ export function ChatbotPage() {
           <button
             onClick={handleSend}
             disabled={!input.trim() || isTyping || input.length > MAX_INPUT_CHARS}
-            className="bg-primary text-white p-2 rounded-lg hover:bg-primary/90 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+            className="bg-primary text-white p-2 rounded-lg hover:bg-primary/90 disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex-shrink-0"
           >
             <Send size={20} />
           </button>
