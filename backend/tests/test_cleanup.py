@@ -28,6 +28,9 @@ def db_session():
 
 @pytest.mark.asyncio
 async def test_blacklisted_token_auth_fails(db_session):
+    from jose import jwt
+    from backend.auth import SECRET_KEY, ALGORITHM
+
     # Create a test user
     user = User(email="blacklisted_test@example.com", hashed_password="hashedpassword")
     db_session.add(user)
@@ -38,10 +41,14 @@ async def test_blacklisted_token_auth_fails(db_session):
 
     # Initially auth should succeed
     current_user = get_current_user(token=token, db=db_session)
-    assert current_user.email == user.email
+    assert current_user.get_user_email() == user.email
+
+    # Extract jti from the token
+    payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
+    jti = payload.get("jti")
 
     # Blacklist the token
-    revoked = RevokedToken(token=token, expires_at=datetime.utcnow() + timedelta(hours=1))
+    revoked = RevokedToken(jti=jti, expires_at=datetime.utcnow() + timedelta(hours=1))
     db_session.add(revoked)
     db_session.commit()
 
@@ -54,9 +61,9 @@ async def test_blacklisted_token_auth_fails(db_session):
 async def test_purge_expired_tokens(db_session):
     now = datetime.utcnow()
     # Add expired token
-    expired = RevokedToken(token="expired-token", expires_at=now - timedelta(seconds=1))
+    expired = RevokedToken(jti="expired-token-jti", expires_at=now - timedelta(seconds=1))
     # Add valid token
-    valid = RevokedToken(token="valid-token", expires_at=now + timedelta(hours=1))
+    valid = RevokedToken(jti="valid-token-jti", expires_at=now + timedelta(hours=1))
 
     db_session.add_all([expired, valid])
     db_session.commit()
@@ -67,14 +74,14 @@ async def test_purge_expired_tokens(db_session):
     # Query tokens
     remaining_tokens = db_session.query(RevokedToken).all()
     assert len(remaining_tokens) == 1
-    assert remaining_tokens[0].token == "valid-token"
+    assert remaining_tokens[0].jti == "valid-token-jti"
 
 @pytest.mark.asyncio
 async def test_purge_batch_deletion(db_session):
     now = datetime.utcnow()
     # Create 5 expired tokens
     expired_tokens = [
-        RevokedToken(token=f"expired-{i}", expires_at=now - timedelta(seconds=1))
+        RevokedToken(jti=f"expired-jti-{i}", expires_at=now - timedelta(seconds=1))
         for i in range(5)
     ]
     db_session.add_all(expired_tokens)
@@ -89,7 +96,7 @@ async def test_purge_batch_deletion(db_session):
 @pytest.mark.asyncio
 async def test_purge_rollback_on_failure(db_session):
     now = datetime.utcnow()
-    expired = RevokedToken(token="expired-token-rollback", expires_at=now - timedelta(seconds=1))
+    expired = RevokedToken(jti="expired-token-rollback-jti", expires_at=now - timedelta(seconds=1))
     db_session.add(expired)
     db_session.commit()
 
