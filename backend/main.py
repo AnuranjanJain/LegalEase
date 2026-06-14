@@ -47,6 +47,8 @@ from backend.core.validation import (
     validate_docx_archive_safety
 )
 from backend.services.ai_service import ai_service, correlation_id_var
+from backend.services.rag_service import rag_service
+from backend.services.cache_service import semantic_cache
 
 #Middleware import 
 from backend.middleware.rate_limit import RateLimitMiddleware
@@ -306,20 +308,25 @@ async def chat(request: Request, payload: ChatRequest, identity: AuthIdentity = 
     sanitized_message = sanitize_text(payload.message)
     sanitized_context = sanitize_text(payload.context) if payload.context else None
 
-    # Handle RAG context retrieval for large documents
-    if sanitized_context:
+    # Handle RAG context retrieval for non-streaming requests early.
+    # Streaming requests handle RAG inside the generator to avoid blocking initial response.
+    if sanitized_context and not payload.stream:
         import hashlib
-        from backend.services.rag_service import rag_service
         
         doc_hash = hashlib.md5(sanitized_context.encode()).hexdigest()
-        if doc_hash not in rag_service.indexed_docs:
-            rag_service.add_document(sanitized_context, doc_hash)
-        sanitized_context = rag_service.get_context(sanitized_message, doc_hash)
+        try:
+            if doc_hash not in rag_service.indexed_docs:
+                await rag_service.add_document(sanitized_context, doc_hash)
+            sanitized_context = await rag_service.get_context(sanitized_message, doc_hash)
+        except Exception as e:
+            logger.warning(f"RAG retrieval failed: {e}. Falling back to non-RAG heuristic.")
+            # Fall back gracefully to a non-RAG heuristic (truncating context)
+            if len(sanitized_context) > 5000:
+                sanitized_context = sanitized_context[:5000] + "\n... [Context truncated due to RAG failure] ..."
 
     # Early payload validation
     validate_chat_input(sanitized_message, sanitized_context)
 
-    from backend.services.cache_service import semantic_cache
     cache_key = f"{sanitized_message} || {sanitized_context}" if sanitized_context else sanitized_message
     cached_response = semantic_cache.get(cache_key)
 
@@ -328,10 +335,14 @@ async def chat(request: Request, payload: ChatRequest, identity: AuthIdentity = 
         if payload.stream:
             async def stream_cached():
                 import asyncio
+                import json
                 words = cached_response.split(" ")
                 for i, word in enumerate(words):
-                    yield word + (" " if i < len(words) - 1 else "")
+                    chunk = word + (" " if i < len(words) - 1 else "")
+                    payload_data = json.dumps({"response": chunk})
+                    yield f"data: {payload_data}\n\n"
                     await asyncio.sleep(0.01)
+                yield "data: [DONE]\n\n"
             return StreamingResponse(stream_cached(), media_type="text/event-stream")
         else:
             return {"response": cached_response}
@@ -339,17 +350,43 @@ async def chat(request: Request, payload: ChatRequest, identity: AuthIdentity = 
     # Streaming or standard block handling
     if payload.stream:
         async def stream_generator():
+            nonlocal sanitized_context
             full_response = ""
             try:
+                # Perform RAG retrieval inside the stream generator asynchronously to prevent blocking the initial response
+                if sanitized_context:
+                    import hashlib
+                    
+                    doc_hash = hashlib.md5(sanitized_context.encode()).hexdigest()
+                    try:
+                        if doc_hash not in rag_service.indexed_docs:
+                            await rag_service.add_document(sanitized_context, doc_hash)
+                        sanitized_context = await rag_service.get_context(sanitized_message, doc_hash)
+                    except Exception as e:
+                        logger.warning(f"RAG retrieval failed inside stream generator: {e}. Falling back to non-RAG heuristic.")
+                        if len(sanitized_context) > 5000:
+                            sanitized_context = sanitized_context[:5000] + "\n... [Context truncated due to RAG failure] ..."
+
                 async for chunk in ai_service.generate_chat_response(
                     message=sanitized_message,
                     context=sanitized_context,
                     history=payload.conversation_history,
                     stream=True
                 ):
-                    full_response += chunk
+                    # Clean the SSE format to cache clean raw text
+                    if chunk.startswith("data: ") and chunk != "data: [DONE]\n\n":
+                        try:
+                            import json
+                            json_str = chunk.replace("data: ", "").strip()
+                            data = json.loads(json_str)
+                            full_response += data.get("response", "")
+                        except Exception:
+                            pass
                     yield chunk
-                semantic_cache.set(cache_key, full_response)
+                
+                # Re-calculate the cache key using the post-RAG context
+                final_cache_key = f"{sanitized_message} || {sanitized_context}" if sanitized_context else sanitized_message
+                semantic_cache.set(final_cache_key, full_response)
             except Exception as e:
                 logger.error(f"[{correlation_id_var.get()}] Stream generation error: {e}")
                 yield "\n[Error: Inference stream failed]"

@@ -413,3 +413,13 @@ def get_optional_user(request: Request, db: Session = Depends(get_db)) -> Option
     except JWTError:
         pass
     return None
+
+
+def extract_jwt_from_authorization(request: Request) -> Optional[str]:
+    """Helper alias for backward compatibility with older test suites."""
+    return _extract_jwt_token(request)
+
+
+def extract_api_key(request: Request) -> Optional[str]:
+    """Helper alias for backward compatibility with older test suites."""
+    return _extract_api_key(request)
