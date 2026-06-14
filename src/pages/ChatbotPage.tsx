@@ -6,6 +6,7 @@ import { useToast } from '../contexts/ToastContext';
 import LegalMapping from '../components/LegalMapping';
 import { useRedaction } from '../contexts/RedactionContext';
 import { redact } from '../utils/redaction';
+import { RedactedText } from '../components/RedactedText';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import rehypeRaw from 'rehype-raw';
