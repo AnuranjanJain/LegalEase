@@ -15,8 +15,9 @@ def test_validate_api_key_with_bearer_token():
     request.headers = {"authorization": "Bearer test-api-key"}
     
     with patch.dict(os.environ, {"API_KEYS": "test-api-key", "ALLOW_DEV": "false"}):
-        result = _validate_api_key(request)
-        assert result == "test-api-key"
+        with pytest.raises(HTTPException) as exc_info:
+            _validate_api_key(request)
+        assert exc_info.value.status_code == 401
 
 
 @pytest.mark.unit
@@ -55,7 +56,7 @@ def test_validate_api_key_invalid():
     from unittest.mock import Mock, patch
     
     request = Mock()
-    request.headers = {"authorization": "Bearer invalid-key"}
+    request.headers = {"x-api-key": "invalid-key"}
     
     with patch.dict(os.environ, {"API_KEYS": "valid-key", "ALLOW_DEV": "false"}):
         with pytest.raises(HTTPException) as exc_info:
