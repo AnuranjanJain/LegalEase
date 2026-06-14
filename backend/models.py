@@ -15,6 +15,7 @@ class User(Base):
 
     chat_sessions = relationship("ChatSession", back_populates="user", cascade="all, delete-orphan")
     documents = relationship("DocumentRecord", back_populates="user", cascade="all, delete-orphan")
+    notifications = relationship("Notification", back_populates="user", cascade="all, delete-orphan")
 
 
 class ChatSession(Base):
@@ -77,3 +78,17 @@ class RevokedToken(Base):
     revoked_at = Column(DateTime, default=datetime.utcnow, nullable=False)
 
     __table_args__ = (UniqueConstraint("jti", name="uq_revoked_tokens_jti"),)
+
+
+class Notification(Base):
+    __tablename__ = "notifications"
+
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
+    title = Column(String, nullable=False)
+    description = Column(String, nullable=True)
+    type = Column(String, nullable=False, default="system")  # 'document', 'security', 'system'
+    read = Column(Integer, default=0)  # 0 = unread, 1 = read
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+    user = relationship("User", back_populates="notifications")

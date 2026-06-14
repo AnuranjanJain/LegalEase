@@ -156,12 +156,24 @@ def get_current_user(token: str = Depends(oauth2_scheme), db: Session = Depends(
     )
 
 
-def _extract_bearer_token(request: Request) -> str:
-    """Pull the bearer token from Authorization or X-API-Key headers."""
-    auth = request.headers.get("authorization") or ""
+def extract_jwt_from_authorization(request: Request) -> Optional[str]:
+    """Extract JWT token from Authorization: Bearer header only.
+    
+    Returns the token if Authorization header exists and starts with 'Bearer ',
+    otherwise returns None.
+    """
+    auth = request.headers.get("authorization", "")
     if auth.lower().startswith("bearer "):
         return auth.split(" ", 1)[1].strip()
-    return request.headers.get("x-api-key", "").strip()
+    return None
+
+
+def extract_api_key(request: Request) -> Optional[str]:
+    """Extract API key from X-API-Key header only.
+    
+    Returns the API key if X-API-Key header exists, otherwise returns None.
+    """
+    return request.headers.get("x-api-key", "").strip() or None
 
 
 def _is_valid_api_key(token: str) -> bool:
@@ -180,18 +192,33 @@ def _is_valid_api_key(token: str) -> bool:
 def validate_token_or_api_key(request: Request, db: Session = Depends(get_db)) -> AuthIdentity:
     """
     Unified auth dependency for protected endpoints.
-    Tries JWT authentication first; falls back to static API key
-    validation for service-to-service callers.
+    Authentication mode is determined by header type, not token parsing.
+    
+    JWT Authentication: Authorization: Bearer <token>
+    API Key Authentication: X-API-Key: <key>
+    
     Returns an AuthIdentity object with clear type distinction.
+    Rejects requests with both headers (ambiguous authentication).
     """
-    token = _extract_bearer_token(request)
-    if not token:
-        raise HTTPException(status_code=401, detail="Missing authentication token")
-
-    # 1. Try JWT decode
-    if SECRET_KEY:
+    jwt_token = extract_jwt_from_authorization(request)
+    api_key = extract_api_key(request)
+    
+    # Reject ambiguous authentication (both headers present)
+    if jwt_token and api_key:
+        raise HTTPException(
+            status_code=400, 
+            detail="Ambiguous authentication: provide either Authorization: Bearer or X-API-Key, not both"
+        )
+    
+    # JWT authentication path
+    if jwt_token:
+        if not SECRET_KEY:
+            raise HTTPException(
+                status_code=503, 
+                detail="Authentication service unavailable"
+            )
         try:
-            payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
+            payload = jwt.decode(jwt_token, SECRET_KEY, algorithms=[ALGORITHM])
             email: Optional[str] = payload.get("sub")
             jti: Optional[str] = payload.get("jti")
             if email and not (jti and is_token_revoked(jti, db)):
@@ -203,35 +230,51 @@ def validate_token_or_api_key(request: Request, db: Session = Depends(get_db)) -
                         user=user
                     )
         except JWTError:
-            pass
-
-    # 2. Fall back to static API key
-    if _is_valid_api_key(token):
-        # Hash the API key to avoid storing the secret in memory
-        # Use SHA-256 and take first 16 characters as identifier
-        key_hash = hashlib.sha256(token.encode()).hexdigest()[:16]
-        return AuthIdentity(
-            identity_type="api_key",
-            identifier=key_hash,
-            user=None
+            raise HTTPException(
+                status_code=401, 
+                detail="Invalid or expired JWT token"
+            )
+        raise HTTPException(
+            status_code=401, 
+            detail="Invalid or expired JWT token"
         )
-
-    raise HTTPException(status_code=403, detail="Invalid or expired authentication token")
+    
+    # API key authentication path
+    if api_key:
+        if _is_valid_api_key(api_key):
+            # Hash the API key to avoid storing the secret in memory
+            # Use SHA-256 and take first 16 characters as identifier
+            key_hash = hashlib.sha256(api_key.encode()).hexdigest()[:16]
+            return AuthIdentity(
+                identity_type="api_key",
+                identifier=key_hash,
+                user=None
+            )
+        raise HTTPException(
+            status_code=403, 
+            detail="Invalid API key"
+        )
+    
+    # No authentication provided
+    raise HTTPException(
+        status_code=401, 
+        detail="Missing authentication: provide Authorization: Bearer or X-API-Key header"
+    )
 
 
 def _validate_api_key(request: Request) -> str:
     """
     API key-only validation helper (used for testing).
-    Extracts bearer token from Authorization or X-API-Key headers,
+    Extracts API key from X-API-Key header only,
     validates it against configured static API keys, and returns
     the key if valid. Raises HTTPException for missing or invalid keys.
     """
-    token = _extract_bearer_token(request)
-    if not token:
+    api_key = extract_api_key(request)
+    if not api_key:
         raise HTTPException(status_code=401, detail="Missing API key")
 
-    if _is_valid_api_key(token):
-        return token
+    if _is_valid_api_key(api_key):
+        return api_key
 
     raise HTTPException(status_code=403, detail="Invalid API key")
 
@@ -239,18 +282,19 @@ def _validate_api_key(request: Request) -> str:
 def get_optional_user(request: Request, db: Session = Depends(get_db)) -> Optional[AuthIdentity]:
     """Try to extract a JWT-authenticated user from the request.
 
-    Returns an AuthIdentity object if the caller provided a valid JWT token,
-    or None if the caller is using a static API key (service-to-service).
+    Returns an AuthIdentity object if the caller provided a valid JWT token
+    via Authorization: Bearer header, or None otherwise.
     This allows endpoints to conditionally persist history for real users
     without breaking API-key authentication.
     """
-    token = _extract_bearer_token(request)
-    if not token or not SECRET_KEY:
+    jwt_token = extract_jwt_from_authorization(request)
+    if not jwt_token or not SECRET_KEY:
         return None
     try:
-        payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
+        payload = jwt.decode(jwt_token, SECRET_KEY, algorithms=[ALGORITHM])
         email: Optional[str] = payload.get("sub")
-        if email:
+        jti: Optional[str] = payload.get("jti")
+        if email and not (jti and is_token_revoked(jti, db)):
             user = db.query(models.User).filter(models.User.email == email).first()
             if user:
                 return AuthIdentity(

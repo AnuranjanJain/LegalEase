@@ -35,7 +35,7 @@ export function LoginPage() {
     try {
       const data: any = await api.post('/auth/login', { email: normalizedEmail, password });
 
-      login(data.access_token);
+      await login(data.access_token);
       navigate(redirectTo);
     } catch (err: any) {
       console.error('Login request failed:', err);
