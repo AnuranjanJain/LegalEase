@@ -186,6 +186,19 @@ def _extract_api_key(request: Request) -> Optional[str]:
     return None
 
 
+# Public aliases — used by tests and external callers.
+# These wrap the private implementations so internal refactoring does not
+# break the public interface.
+def extract_jwt_from_authorization(request: Request) -> Optional[str]:
+    """Public alias for _extract_jwt_token. Extracts JWT from Authorization: Bearer header."""
+    return _extract_jwt_token(request)
+
+
+def extract_api_key(request: Request) -> Optional[str]:
+    """Public alias for _extract_api_key. Extracts API key from X-API-Key header."""
+    return _extract_api_key(request)
+
+
 def _determine_auth_mode(request: Request) -> Literal["jwt", "api_key", "none"]:
     """Determine authentication mode from request headers.
     
