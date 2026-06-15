@@ -216,11 +216,23 @@ def resend_verification(payload: ResendVerificationRequest, db: Session = Depend
 
 
 @router.get("/verify")
-def verify_token(current_user: models.User = Depends(get_current_user)):
-    """Verify that the provided JWT token is valid and return user info."""
+def verify_token(current_user: AuthIdentity = Depends(get_current_user)):
+    """Verify the current JWT token and return user information.
+    
+    This endpoint validates the authentication token and returns basic user information
+    for frontend session validation. It correctly handles the AuthIdentity return type
+    from get_current_user().
+    """
+    user = current_user.user
+    if not user:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="User not found",
+        )
+    
     return {
         "valid": True,
-        "email": current_user.email
+        "email": user.email
     }
 
 
