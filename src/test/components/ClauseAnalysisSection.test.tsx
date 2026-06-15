@@ -3,10 +3,15 @@ import { describe, it, expect } from 'vitest';
 import { ClauseAnalysisSection } from '../../components/ClauseAnalysisSection';
 import { ClauseAnalysis } from '../../services/storage';
 import { RedactionProvider } from '../../contexts/RedactionContext';
+import { ToastProvider } from '../../contexts/ToastContext';
 
-// Helper: renders with the required RedactionProvider
+// Helper: renders with the required RedactionProvider and ToastProvider
 function renderWithProvider(ui: React.ReactElement) {
-  return render(<RedactionProvider>{ui}</RedactionProvider>);
+  return render(
+    <ToastProvider>
+      <RedactionProvider>{ui}</RedactionProvider>
+    </ToastProvider>
+  );
 }
 
 describe('ClauseAnalysisSection Component', () => {
@@ -32,7 +37,7 @@ describe('ClauseAnalysisSection Component', () => {
       }
     ];
 
-    render(<RedactionProvider><ClauseAnalysisSection clauses={sampleClauses} /></RedactionProvider>);
+    renderWithProvider(<ClauseAnalysisSection clauses={sampleClauses} />);
 
     // Header exists
     expect(screen.getByText('Clause-Level Risk Assessment')).toBeInTheDocument();
