@@ -1,4 +1,10 @@
 import os
+os.environ["KMP_DUPLICATE_LIB_OK"] = "TRUE"
+try:
+    import torch
+except Exception:
+    pass
+
 from pathlib import Path
 import sys
 

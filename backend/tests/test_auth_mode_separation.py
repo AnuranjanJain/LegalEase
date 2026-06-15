@@ -177,6 +177,7 @@ def test_validate_jwt_with_authorization_header(mock_request, mock_db, valid_jwt
     assert exc_info.value.status_code == 401
     assert "jwt" in exc_info.value.detail.lower() or "token" in exc_info.value.detail.lower()
 
+    assert "JWT" in exc_info.value.detail or "token" in exc_info.value.detail.lower()
 
 
 @pytest.mark.unit
@@ -305,6 +306,7 @@ def test_jwt_identity_creates_user_type(mock_request, mock_db, valid_jwt_token):
     assert exc_info.value.status_code == 401
     assert "jwt" in exc_info.value.detail.lower() or "token" in exc_info.value.detail.lower()
 
+    assert "JWT" in exc_info.value.detail or "token" in exc_info.value.detail.lower()
 
 
 @pytest.mark.unit
@@ -336,6 +338,7 @@ def test_user_identity_rate_limit_key(mock_request, mock_db, valid_jwt_token):
     assert exc_info.value.status_code == 401
     assert "jwt" in exc_info.value.detail.lower() or "token" in exc_info.value.detail.lower()
 
+    assert "JWT" in exc_info.value.detail or "token" in exc_info.value.detail.lower()
 
 
 @pytest.mark.unit
