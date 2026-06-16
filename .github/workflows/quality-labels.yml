@@ -64,8 +64,14 @@ jobs:
               return ['success', 'failure', 'cancelled', 'timed_out', 'action_required', 'neutral', 'skipped'].includes(check.conclusion);
             }
 
-            async function applyLabels(issueNumber, labelsToAdd, labelsToRemove) {
+            async function applyLabels(issueNumber, currentLabels, labelsToAdd, labelsToRemove) {
+              const currentLabelNames = new Set(currentLabels.map((label) => label.name));
+
               for (const label of labelsToRemove) {
+                if (!currentLabelNames.has(label)) {
+                  continue;
+                }
+
                 try {
                   await github.rest.issues.removeLabel({
                     owner,
@@ -75,18 +81,23 @@ jobs:
                   });
                   console.log(`Removed ${label} from #${issueNumber}`);
                 } catch (error) {
-                  if (error.status !== 404) throw error;
+                  if (error.status === 404 || error.status === 403) {
+                    core.warning(`Could not remove ${label} from #${issueNumber}: ${error.message}`);
+                    continue;
+                  }
+                  throw error;
                 }
               }
 
-              if (labelsToAdd.length) {
+              const missingLabels = labelsToAdd.filter((label) => !currentLabelNames.has(label));
+              if (missingLabels.length) {
                 await github.rest.issues.addLabels({
                   owner,
                   repo,
                   issue_number: issueNumber,
-                  labels: labelsToAdd,
+                  labels: missingLabels,
                 });
-                console.log(`Added ${labelsToAdd.join(', ')} to #${issueNumber}`);
+                console.log(`Added ${missingLabels.join(', ')} to #${issueNumber}`);
               }
             }
 
@@ -122,10 +133,10 @@ jobs:
               console.log(`#${issueNumber}: ${passedSecurityChecks.length}/${securityChecks.length} security checks passed.`);
 
               if (allSecurityPassed) {
-                await applyLabels(issueNumber, [EXCEPTIONAL_LABEL], [CLEAN_LABEL]);
+                await applyLabels(issueNumber, pull.labels || [], [EXCEPTIONAL_LABEL], [CLEAN_LABEL]);
               } else if (cleanThresholdMet) {
-                await applyLabels(issueNumber, [CLEAN_LABEL], [EXCEPTIONAL_LABEL]);
+                await applyLabels(issueNumber, pull.labels || [], [CLEAN_LABEL], [EXCEPTIONAL_LABEL]);
               } else {
-                await applyLabels(issueNumber, [], [CLEAN_LABEL, EXCEPTIONAL_LABEL]);
+                await applyLabels(issueNumber, pull.labels || [], [], [CLEAN_LABEL, EXCEPTIONAL_LABEL]);
               }
             }
