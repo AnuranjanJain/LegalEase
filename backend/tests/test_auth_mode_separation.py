@@ -12,8 +12,8 @@ from fastapi import HTTPException, status
 from jose import jwt
 
 from backend.auth import (
-    extract_jwt_from_authorization,
-    extract_api_key,
+    _extract_jwt_token as extract_jwt_from_authorization,
+    _extract_api_key as extract_api_key,
     validate_token_or_api_key,
     _is_valid_api_key,
     AuthIdentity,
