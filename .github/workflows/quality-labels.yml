@@ -3,10 +3,9 @@ name: Quality Labels
 on:
   pull_request_target:
     types: [opened, synchronize, reopened, ready_for_review]
-  check_run:
-    types: [completed, rerequested]
-  workflow_run:
-    types: [completed, requested]
+  workflow_dispatch:
+  schedule:
+    - cron: '*/15 * * * *'
 
 permissions:
   checks: read
@@ -38,34 +37,18 @@ jobs:
               "GSSoC'26 Welcome Bot / welcome",
             ]);
 
-            async function getOpenPullRequestsForSha(sha) {
-              const { data: pulls } = await github.rest.repos.listPullRequestsAssociatedWithCommit({
-                owner,
-                repo,
-                commit_sha: sha,
-              });
-
-              return pulls.filter((pull) => pull.state === 'open');
-            }
-
             async function getPullRequests() {
               if (context.eventName === 'pull_request_target') {
                 return [context.payload.pull_request].filter((pull) => pull.state === 'open');
               }
 
-              if (context.eventName === 'check_run') {
-                return getOpenPullRequestsForSha(context.payload.check_run.head_sha);
-              }
-
-              if (context.eventName === 'workflow_run') {
-                const run = context.payload.workflow_run;
-                if (run.pull_requests?.length) {
-                  return run.pull_requests.filter((pull) => pull.base?.repo?.full_name === `${owner}/${repo}`);
-                }
-                return getOpenPullRequestsForSha(run.head_sha);
-              }
-
-              return [];
+              return github.paginate(github.rest.pulls.list, {
+                owner,
+                repo,
+                state: 'open',
+                base: 'main',
+                per_page: 100,
+              });
             }
 
             function normalizeCheckName(check) {
