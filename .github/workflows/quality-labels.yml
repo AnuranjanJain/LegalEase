@@ -1,0 +1,148 @@
+name: Quality Labels
+
+on:
+  pull_request_target:
+    types: [opened, synchronize, reopened, ready_for_review]
+  check_run:
+    types: [completed, rerequested]
+  workflow_run:
+    types: [completed, requested]
+
+permissions:
+  checks: read
+  contents: read
+  issues: write
+  pull-requests: read
+  statuses: read
+
+jobs:
+  apply-quality-labels:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Add quality labels from checks
+        uses: actions/github-script@v9
+        with:
+          script: |
+            const { owner, repo } = context.repo;
+            const CLEAN_LABEL = 'quality:clean';
+            const EXCEPTIONAL_LABEL = 'quality:exceptional';
+            const QUALITY_CHECK_TARGET = 13;
+            const CLEAN_PASS_THRESHOLD = 11;
+            const REQUIRED_SECURITY_CHECKS = [
+              'Dependency Audit',
+              'CodeQL Security Analysis',
+              'GitGuardian Security Checks',
+            ];
+            const ignoredCheckNames = new Set([
+              "GSSoC'26 Auto Label PR / label-pr",
+              "GSSoC'26 Welcome Bot / welcome",
+            ]);
+
+            async function getOpenPullRequestsForSha(sha) {
+              const { data: pulls } = await github.rest.repos.listPullRequestsAssociatedWithCommit({
+                owner,
+                repo,
+                commit_sha: sha,
+              });
+
+              return pulls.filter((pull) => pull.state === 'open');
+            }
+
+            async function getPullRequests() {
+              if (context.eventName === 'pull_request_target') {
+                return [context.payload.pull_request].filter((pull) => pull.state === 'open');
+              }
+
+              if (context.eventName === 'check_run') {
+                return getOpenPullRequestsForSha(context.payload.check_run.head_sha);
+              }
+
+              if (context.eventName === 'workflow_run') {
+                const run = context.payload.workflow_run;
+                if (run.pull_requests?.length) {
+                  return run.pull_requests.filter((pull) => pull.base?.repo?.full_name === `${owner}/${repo}`);
+                }
+                return getOpenPullRequestsForSha(run.head_sha);
+              }
+
+              return [];
+            }
+
+            function normalizeCheckName(check) {
+              return `${check.app?.name || 'GitHub Actions'} / ${check.name}`;
+            }
+
+            function isTrackedQualityCheck(check) {
+              if (!['completed', 'success'].includes(check.status)) return false;
+              const fullName = normalizeCheckName(check);
+              if (ignoredCheckNames.has(fullName) || ignoredCheckNames.has(check.name)) return false;
+              if (check.name.toLowerCase().includes('welcome')) return false;
+              if (check.name.toLowerCase().includes('label-pr')) return false;
+              return ['success', 'failure', 'cancelled', 'timed_out', 'action_required', 'neutral', 'skipped'].includes(check.conclusion);
+            }
+
+            async function applyLabels(issueNumber, labelsToAdd, labelsToRemove) {
+              for (const label of labelsToRemove) {
+                try {
+                  await github.rest.issues.removeLabel({
+                    owner,
+                    repo,
+                    issue_number: issueNumber,
+                    name: label,
+                  });
+                  console.log(`Removed ${label} from #${issueNumber}`);
+                } catch (error) {
+                  if (error.status !== 404) throw error;
+                }
+              }
+
+              if (labelsToAdd.length) {
+                await github.rest.issues.addLabels({
+                  owner,
+                  repo,
+                  issue_number: issueNumber,
+                  labels: labelsToAdd,
+                });
+                console.log(`Added ${labelsToAdd.join(', ')} to #${issueNumber}`);
+              }
+            }
+
+            const pulls = await getPullRequests();
+            if (!pulls.length) {
+              console.log('No open pull request found for this event.');
+              return;
+            }
+
+            for (const pull of pulls) {
+              const sha = pull.head.sha;
+              const issueNumber = pull.number;
+              const { data } = await github.rest.checks.listForRef({
+                owner,
+                repo,
+                ref: sha,
+                per_page: 100,
+              });
+
+              const checks = data.check_runs.filter(isTrackedQualityCheck);
+              const securityChecks = checks.filter((check) => REQUIRED_SECURITY_CHECKS.includes(check.name));
+              const passedChecks = checks.filter((check) => check.conclusion === 'success');
+              const passedSecurityChecks = securityChecks.filter((check) => check.conclusion === 'success');
+              const allSecurityPassed =
+                REQUIRED_SECURITY_CHECKS.every((name) =>
+                  securityChecks.some((check) => check.name === name && check.conclusion === 'success')
+                );
+              const cleanThresholdMet =
+                checks.length >= QUALITY_CHECK_TARGET &&
+                passedChecks.length >= CLEAN_PASS_THRESHOLD;
+
+              console.log(`#${issueNumber}: ${passedChecks.length}/${checks.length} tracked checks passed.`);
+              console.log(`#${issueNumber}: ${passedSecurityChecks.length}/${securityChecks.length} security checks passed.`);
+
+              if (allSecurityPassed) {
+                await applyLabels(issueNumber, [EXCEPTIONAL_LABEL], [CLEAN_LABEL]);
+              } else if (cleanThresholdMet) {
+                await applyLabels(issueNumber, [CLEAN_LABEL], [EXCEPTIONAL_LABEL]);
+              } else {
+                await applyLabels(issueNumber, [], [CLEAN_LABEL, EXCEPTIONAL_LABEL]);
+              }
+            }
