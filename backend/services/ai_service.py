@@ -213,6 +213,42 @@ class AIService:
                 logger.error(f"[{self._get_corr_id()}] Error in summary generation, graceful degradation disabled: {e}")
                 raise
 
+    async def simplify_clause(self, text: str) -> str:
+        """
+        Simplify the legal text into plain English.
+        """
+        prompt = (
+            "Explain the following legal text in simple, plain English. "
+            "Preserve the original meaning, highlight obligations, risks, and important actions, "
+            "and keep the explanation concise and understandable for non-lawyers.\n\n"
+            f"Legal Text:\n{text}"
+        )
+        
+        # Truncation for model input constraints
+        if len(prompt) > self.max_model_input_chars:
+            logger.info(f"[{self._get_corr_id()}] Simplify prompt length ({len(prompt)}) exceeds max limit ({self.max_model_input_chars}). Truncating.")
+            prompt = prompt[:self.max_model_input_chars]
+            
+        messages = [{"role": "user", "content": prompt}]
+        
+        try:
+            if self.stub_mode:
+                return f"[STUB SIMPLIFY RESPONSE] Simplified explanation for input of length {len(text)} characters."
+                
+            output = await self._execute_with_retry_and_timeout(self.chat_model_name, messages)
+            return output.output if hasattr(output, 'output') else str(output)
+        except Exception as e:
+            if self.graceful_degradation:
+                logger.info(f"[{self._get_corr_id()}] Graceful degradation fallback activated for simplify error: {e}")
+                return (
+                    "I am currently operating in legal-assistant fallback mode because the AI provider is unavailable. "
+                    "Based on general principles of contract analysis, please review the obligations and risks in this clause manually. "
+                    "This section details specific terms regarding the contract duration, termination rights, or liability."
+                )
+            else:
+                logger.error(f"[{self._get_corr_id()}] Error in simplify generation, graceful degradation disabled: {e}")
+                raise
+
     async def analyze_clauses(self, text: str) -> List[Dict[str, Any]]:
         """
         Analyze contract clauses and extract key clauses with risk levels and reasons.

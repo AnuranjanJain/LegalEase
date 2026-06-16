@@ -8,6 +8,7 @@ from backend.core.exceptions import ValidationError
 # Configuration limits with fallback defaults
 MAX_CHAT_INPUT_CHARS = int(os.getenv("MAX_CHAT_INPUT_CHARS", "4000"))
 MAX_SUMMARIZE_INPUT_CHARS = int(os.getenv("MAX_SUMMARIZE_INPUT_CHARS", "20000"))
+MAX_SIMPLIFY_INPUT_CHARS = int(os.getenv("MAX_SIMPLIFY_INPUT_CHARS", "10000"))
 MAX_CONTEXT_INPUT_CHARS = int(os.getenv("MAX_CONTEXT_INPUT_CHARS", "10000"))
 MAX_DOCX_ARCHIVE_ENTRIES = int(os.getenv("MAX_DOCX_ARCHIVE_ENTRIES", "200"))
 MAX_DOCX_ARCHIVE_UNCOMPRESSED_BYTES = int(os.getenv("MAX_DOCX_ARCHIVE_UNCOMPRESSED_BYTES", str(10 * 1024 * 1024)))
@@ -41,6 +42,18 @@ def validate_summarize_input(text: str):
         
     if len(text) > MAX_SUMMARIZE_INPUT_CHARS:
         raise ValidationError(f"Text to summarize exceeds the maximum allowed length of {MAX_SUMMARIZE_INPUT_CHARS} characters")
+
+
+def validate_simplify_input(text: str):
+    """
+    Validate the text to simplify.
+    Rejects early if character counts exceed safe limits.
+    """
+    if not text or not text.strip():
+        raise ValidationError("Text to simplify cannot be empty or only whitespace")
+        
+    if len(text) > MAX_SIMPLIFY_INPUT_CHARS:
+        raise ValidationError(f"Text to simplify exceeds the maximum allowed length of {MAX_SIMPLIFY_INPUT_CHARS} characters")
 
 
 def sanitize_text(text: str) -> str:
