@@ -1,0 +1,58 @@
+name: GSSoC'26 Auto Label PR
+
+on:
+  pull_request_target:
+    types: [opened]
+
+permissions:
+  issues: read
+  pull-requests: write
+
+jobs:
+  label-pr:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Copy labels from issue to PR
+        uses: actions/github-script@v9
+        with:
+          script: |
+            const prBody = context.payload.pull_request.body || '';
+            const issueRegex = /(?:fix|fixes|fixed|close|closes|closed|resolve|resolves|resolved)\s+#(\d+)/gi;
+            let match;
+            const labelsToAdd = new Set();
+            let isGssoc = false;
+            
+            while ((match = issueRegex.exec(prBody)) !== null) {
+              const issueNumber = parseInt(match[1], 10);
+              try {
+                const { data: issue } = await github.rest.issues.get({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  issue_number: issueNumber
+                });
+                
+                issue.labels.forEach(label => {
+                  labelsToAdd.add(label.name);
+                  if (label.name === "GSSoC'26") {
+                    isGssoc = true;
+                  }
+                });
+              } catch (e) {
+                console.log(`Could not fetch issue #${issueNumber}: ${e.message}`);
+              }
+            }
+            
+            if (isGssoc) {
+              labelsToAdd.add('gssoc:approved');
+              const labels = Array.from(labelsToAdd);
+              
+              if (labels.length > 0) {
+                await github.rest.issues.addLabels({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  issue_number: context.issue.number,
+                  labels: labels
+                });
+                console.log(`Added labels: ${labels.join(', ')}`);
+              }
+            }

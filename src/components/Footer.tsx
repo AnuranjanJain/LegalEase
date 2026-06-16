@@ -1,48 +1,98 @@
 import { NavLink } from 'react-router-dom';
 
+const linkClass = ({ isActive }: { isActive: boolean }) =>
+  `text-sm transition-colors duration-200 whitespace-nowrap ${
+    isActive
+      ? 'text-blue-600 dark:text-blue-400 font-medium'
+      : 'text-gray-500 dark:text-white/50 hover:text-blue-600 dark:hover:text-white'
+  }`;
+
+  const ComingSoonIcon = ({ children }: { children: React.ReactNode }) => (
+  <div className="relative group">
+    {children}
+    <span className="absolute -top-8 left-1/2 -translate-x-1/2 px-2 py-1 text-xs rounded bg-gray-900 dark:bg-white text-white dark:text-gray-900 whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity duration-200 pointer-events-none">
+      Coming soon
+    </span>
+  </div>
+);
+
 export function Footer() {
   return (
-    <footer className="bg-white dark:bg-gray-900 border-t border-gray-100 dark:border-gray-800 py-12">
-      <div className="container mx-auto px-4 flex flex-col items-center">
-        
-        {/* Logo & Brand */}
-        <div className="flex items-center gap-2 mb-6">
-          <div className="text-primary">
-            <svg className="h-6 w-6" fill="none" viewBox="0 0 48 48" xmlns="http://www.w3.org/2000/svg">
-              <path d="M44 11.2727C44 14.0109 39.8386 16.3957 33.69 17.6364C39.8386 18.877 44 21.2618 44 24C44 26.7382 39.8386 29.123 33.69 30.3636C39.8386 31.6043 44 33.9891 44 36.7273C44 40.7439 35.0457 44 24 44C12.9543 44 4 40.7439 4 36.7273C4 33.9891 8.16144 31.6043 14.31 30.3636C8.16144 29.123 4 26.7382 4 24C4 21.2618 8.16144 18.877 14.31 17.6364C8.16144 16.3957 4 14.0109 4 11.2727C4 7.25611 12.9543 4 24 4C35.0457 4 44 7.25611 44 11.2727Z" fill="currentColor"></path>
-            </svg>
+    <footer className="relative bg-gray-50 dark:bg-[#030303] border-t border-gray-200 dark:border-white/5 overflow-hidden transition-colors duration-300">
+
+      {/* Background Graphic Grid */}
+      <div className="absolute inset-0 bg-[linear-gradient(rgba(0,0,0,0.03)_1px,transparent_1px),linear-gradient(90deg,rgba(0,0,0,0.03)_1px,transparent_1px)] dark:bg-[linear-gradient(rgba(255,255,255,0.02)_1px,transparent_1px),linear-gradient(90deg,rgba(255,255,255,0.02)_1px,transparent_1px)] bg-[size:64px_64px] pointer-events-none" />
+
+      {/* Bottom Glow */}
+      <div className="absolute bottom-0 left-1/2 -translate-x-1/2 w-[80%] h-[200px] bg-blue-600/10 dark:bg-blue-500/20 blur-[150px] pointer-events-none rounded-full" />
+
+      <div className="relative z-10 max-w-7xl mx-auto px-6 lg:px-8 pt-24 pb-12">
+
+        {/* Main grid: branding left, nav columns right */}
+        <div className="grid grid-cols-1 lg:grid-cols-4 gap-12 mb-20">
+
+          {/* Branding — spans 2 of 4 cols on large screens */}
+          <div className="lg:col-span-2">
+            <h2 className="text-4xl md:text-5xl font-semibold tracking-tighter text-gray-900 dark:text-white mb-4">
+              LegalEase.
+            </h2>
+            <p className="text-base text-gray-500 dark:text-white/40 max-w-sm leading-relaxed">
+              The intelligence layer for your legal documents. Secure, fast, and driven by AI.
+            </p>
           </div>
-          <span className="text-xl font-bold text-gray-900 dark:text-white tracking-tight">LegalEase</span>
-        </div>
 
-        {/* Navigation Links */}
-        <nav className="flex flex-wrap justify-center gap-x-8 gap-y-4 mb-8">
-          <NavLink to="/dashboard" className="text-sm font-medium text-gray-600 dark:text-gray-400 hover:text-primary transition-colors">Dashboard</NavLink>
-          <NavLink to="/documents" className="text-sm font-medium text-gray-600 dark:text-gray-400 hover:text-primary transition-colors">Documents</NavLink>
-          <NavLink to="/chatbot" className="text-sm font-medium text-gray-600 dark:text-gray-400 hover:text-primary transition-colors">Legal AI Chat</NavLink>
-          <a href="#" className="text-sm font-medium text-gray-600 dark:text-gray-400 hover:text-primary transition-colors">Documentation</a>
-          <a href="#" className="text-sm font-medium text-gray-600 dark:text-gray-400 hover:text-primary transition-colors">Help Center</a>
-        </nav>
-
-        {/* Social Icons */}
-        <div className="flex space-x-6 mb-8">
-          <a href="https://twitter.com" className="text-gray-400 hover:text-primary transition-colors" aria-label="Follow us on Twitter">
-            <svg className="h-5 w-5" fill="currentColor" viewBox="0 0 24 24"><path d="M24 4.557c-.883.392-1.832.656-2.828.775 1.017-.609 1.798-1.574 2.165-2.724-.951.564-2.005.974-3.127 1.195-.897-.957-2.178-1.555-3.594-1.555-3.179 0-5.515 2.966-4.797 6.045-4.091-.205-7.719-2.165-10.148-5.144-1.29 2.213-.669 5.108 1.523 6.574-.806-.026-1.566-.247-2.229-.616-.054 2.281 1.581 4.415 3.949 4.89-.693.188-1.452.232-2.224.084.626 1.956 2.444 3.379 4.6 3.419-2.07 1.623-4.678 2.348-7.29 2.04 2.179 1.397 4.768 2.212 7.548 2.212 9.142 0 14.307-7.721 13.995-14.646.962-.695 1.797-1.562 2.457-2.549z"/></svg>
-          </a>
-          <a href="https://linkedin.com" className="text-gray-400 hover:text-primary transition-colors" aria-label="Join our LinkedIn">
-            <svg className="h-5 w-5" fill="currentColor" viewBox="0 0 24 24"><path d="M19 0h-14c-2.761 0-5 2.239-5 5v14c0 2.761 2.239 5 5 5h14c2.762 0 5-2.239 5-5v-14c0-2.761-2.238-5-5-5zm-11 19h-3v-11h3v11zm-1.5-12.268c-.966 0-1.75-.79-1.75-1.764s.784-1.764 1.75-1.764 1.75.79 1.75 1.764-.783 1.764-1.75 1.764zm13.5 12.268h-3v-5.604c0-3.368-4-3.113-4 0v5.604h-3v-11h3v1.765c1.396-2.586 7-2.777 7 2.476v6.759z"/></svg>
-          </a>
-        </div>
-
-        {/* Copyright & Secondary Links */}
-        <div className="flex flex-col md:flex-row items-center gap-4 text-xs text-gray-500 dark:text-gray-500">
-          <p>&copy; {new Date().getFullYear()} LegalEase Inc. All rights reserved.</p>
-          <div className="hidden md:block w-1 h-1 bg-gray-300 rounded-full dark:bg-gray-700"></div>
-          <div className="flex gap-4">
-            <a href="#" className="hover:text-primary transition-colors">Privacy Policy</a>
-            <a href="#" className="hover:text-primary transition-colors">Terms of Service</a>
+          {/* Platform links */}
+          <div className="flex flex-col gap-3">
+            <h3 className="text-xs font-bold text-gray-900 dark:text-white uppercase tracking-widest mb-1">
+              Platform
+            </h3>
+            <NavLink to="/dashboard" className={linkClass}>Dashboard</NavLink>
+            <NavLink to="/documents" className={linkClass}>Documents</NavLink>
+            <NavLink to="/documentation" className={linkClass}>Legal Resources</NavLink>
           </div>
+
+          {/* Legal links */}
+          <div className="flex flex-col gap-3">
+            <h3 className="text-xs font-bold text-gray-900 dark:text-white uppercase tracking-widest mb-1">
+              Legal
+            </h3>
+            <NavLink to="/privacy" className={linkClass}>Privacy Policy</NavLink>
+            <NavLink to="/terms" className={linkClass}>Terms of Service</NavLink>
+            <NavLink to="/security" className={linkClass}>Security</NavLink>
+          </div>
+
         </div>
+
+        {/* Divider */}
+        <div className="w-full h-px bg-gray-200 dark:bg-white/10 mb-8" />
+
+        {/* Bottom Bar */}
+        <div className="flex flex-col sm:flex-row justify-between items-center gap-4">
+          <p className="text-sm text-gray-400 dark:text-white/30">
+            &copy; {new Date().getFullYear()} LegalEase Inc. All rights reserved.
+          </p>
+
+          <div className="flex items-center space-x-5">
+  <ComingSoonIcon>
+    <a href="#" onClick={(e) => e.preventDefault()} aria-label="X"
+      className="text-gray-400 dark:text-white/30 hover:text-gray-900 dark:hover:text-white transition-colors cursor-not-allowed">
+      <svg className="h-5 w-5" fill="currentColor" viewBox="0 0 24 24">
+        <path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z" />
+      </svg>
+    </a>
+  </ComingSoonIcon>
+
+  <ComingSoonIcon>
+    <a href="#" onClick={(e) => e.preventDefault()} aria-label="LinkedIn"
+      className="text-gray-400 dark:text-white/30 hover:text-gray-900 dark:hover:text-white transition-colors cursor-not-allowed">
+      <svg className="h-5 w-5" fill="currentColor" viewBox="0 0 24 24">
+        <path d="M19 0h-14c-2.761 0-5 2.239-5 5v14c0 2.761 2.239 5 5 5h14c2.762 0 5-2.239 5-5v-14c0-2.761-2.238-5-5-5zm-11 19h-3v-11h3v11zm-1.5-12.268c-.966 0-1.75-.79-1.75-1.764s.784-1.764 1.75-1.764 1.75.79 1.75 1.764-.783 1.764-1.75 1.764zm13.5 12.268h-3v-5.604c0-3.368-4-3.113-4 0v5.604h-3v-11h3v1.765c1.396-2.586 7-2.777 7 2.476v6.759z" />
+      </svg>
+    </a>
+  </ComingSoonIcon>
+</div>
+        </div>
+
       </div>
     </footer>
   );

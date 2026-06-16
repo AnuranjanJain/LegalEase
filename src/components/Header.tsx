@@ -1,79 +1,141 @@
 import { useState, useRef, useEffect } from 'react';
-import { NavLink } from 'react-router-dom';
-import { Menu, X, Bell, Moon, Sun, User, Settings } from 'lucide-react';
-import { useDarkMode } from '../hooks/useDarkMode';
+import { NavLink, useNavigate } from 'react-router-dom';
+import { Menu, X, Bell, User, Settings, FileText, Shield, Info, LogOut, Loader2 } from 'lucide-react';
+import { ThemeToggleSwitch } from './ThemeToggleSwitch';
+import { useNotifications, AppNotification } from '../contexts/NotificationContext';
+import { useAuth } from '../contexts/AuthContext';
+import { useToast } from '../contexts/ToastContext';
+import { StorageService } from '../services/storage';
+
+/**
+ * Resolves the display details for the authenticated user.
+ * Prefers a saved profile whose email matches the logged-in account;
+ * otherwise derives a friendly name from the email's local part.
+ */
+function deriveUserDisplay(email: string | null): { name: string; email: string; initials: string } {
+  const resolvedEmail = email?.trim() ?? '';
+  let name = '';
+
+  const profile = StorageService.getProfile();
+  if (resolvedEmail && profile.email.trim().toLowerCase() === resolvedEmail.toLowerCase()) {
+    name = `${profile.firstName} ${profile.lastName}`.trim();
+  }
+
+  if (!name) {
+    const local = resolvedEmail.split('@')[0];
+    name = local
+      .split(/[._-]+/)
+      .filter(Boolean)
+      .map((w) => w.charAt(0).toUpperCase() + w.slice(1))
+      .join(' ');
+  }
+
+  if (!name) name = 'User';
+
+  const initials =
+    name
+      .split(/\s+/)
+      .filter(Boolean)
+      .slice(0, 2)
+      .map((w) => w.charAt(0).toUpperCase())
+      .join('') || 'U';
+
+  return { name, email: resolvedEmail || 'No email', initials };
+}
+
+function timeAgo(date: Date): string {
+  const diff = Math.floor((Date.now() - date.getTime()) / 1000);
+  if (diff < 60) return 'just now';
+  if (diff < 3600) return `${Math.floor(diff / 60)}m ago`;
+  if (diff < 86400) return `${Math.floor(diff / 3600)}h ago`;
+  return `${Math.floor(diff / 86400)}d ago`;
+}
+
+function notifIcon(type: AppNotification['type']) {
+  if (type === 'document') return <FileText size={14} className="text-primary" />;
+  if (type === 'security') return <Shield size={14} className="text-amber-500" />;
+  return <Info size={14} className="text-gray-400" />;
+}
 
 export function Header() {
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [isUserMenuOpen, setIsUserMenuOpen] = useState(false);
-  const userMenuRef = useRef<HTMLDivElement>(null);
-  const { isDarkMode, toggleDarkMode } = useDarkMode();
   const [isNotificationOpen, setIsNotificationOpen] = useState(false);
+  const userMenuRef = useRef<HTMLDivElement>(null);
   const notificationRef = useRef<HTMLDivElement>(null);
+  const { notifications, unreadCount, isLoading, markAllRead, markRead } = useNotifications();
+  const navigate = useNavigate();
 
-  const toggleNotificationMenu = () =>
-  setIsNotificationOpen(!isNotificationOpen);
+  const toggleNotificationMenu = () => setIsNotificationOpen((s) => !s);
+  const toggleMobileMenu = () => setIsMobileMenuOpen((s) => !s);
+  const toggleUserMenu = () => setIsUserMenuOpen((s) => !s);
+  const { isAuthenticated, userEmail, logout } = useAuth();
+  const { showToast } = useToast();
+  const userDisplay = isAuthenticated ? deriveUserDisplay(userEmail) : null;
 
-  const toggleMobileMenu = () => setIsMobileMenuOpen(!isMobileMenuOpen);
-  const toggleUserMenu = () => setIsUserMenuOpen(!isUserMenuOpen);
+  const handleLogout = () => {
+    try {
+      logout();
+      showToast('Logged out successfully!', 'success');
+      setIsUserMenuOpen(false);
+      navigate('/login');
+    } catch {
+      showToast('Failed to log out. Please try again.', 'error');
+    }
+  };
 
-  // Close user menu on outside click
+  const handleMarkAllRead = async () => {
+    try {
+      await markAllRead();
+    } catch {
+      showToast('Failed to mark all as read', 'error');
+    }
+  };
+
   useEffect(() => {
-        function handleClickOutside(event: MouseEvent) {
-      if (
-        userMenuRef.current &&
-        !userMenuRef.current.contains(event.target as Node)
-      ) {
+    function handleClickOutside(event: MouseEvent) {
+      if (userMenuRef.current && !userMenuRef.current.contains(event.target as Node)) {
         setIsUserMenuOpen(false);
       }
-
-      if (
-        notificationRef.current &&
-        !notificationRef.current.contains(event.target as Node)
-      ) {
+      if (notificationRef.current && !notificationRef.current.contains(event.target as Node)) {
         setIsNotificationOpen(false);
       }
     }
     document.addEventListener('mousedown', handleClickOutside);
-    return () => {
-      document.removeEventListener('mousedown', handleClickOutside);
-    };
+    return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
 
   const navLinks = [
     { name: 'Home', path: '/' },
     { name: 'Dashboard', path: '/dashboard' },
     { name: 'Documents', path: '/documents' },
-    { name: 'Documentation', path: '/documentation' },
-    { name: 'Chatbot', path: '/chatbot' },
-    { name: 'Profile', path: '/profile' },
+    { name: 'Legal Resources', path: '/documentation' },
   ];
 
   return (
     <header className="bg-white dark:bg-gray-900 border-b border-gray-200 dark:border-gray-800 sticky top-0 z-50">
       <div className="app-container">
         <div className="flex items-center justify-between h-16">
-          {/* Logo & Brand */}
+          {/* Logo */}
           <div className="flex items-center gap-4">
             <NavLink to="/" className="flex items-center gap-2 group">
               <div className="text-primary transition-transform group-hover:scale-105">
                 <svg className="h-8 w-8" fill="none" viewBox="0 0 48 48" xmlns="http://www.w3.org/2000/svg">
-                  <path d="M44 11.2727C44 14.0109 39.8386 16.3957 33.69 17.6364C39.8386 18.877 44 21.2618 44 24C44 26.7382 39.8386 29.123 33.69 30.3636C39.8386 31.6043 44 33.9891 44 36.7273C44 40.7439 35.0457 44 24 44C12.9543 44 4 40.7439 4 36.7273C4 33.9891 8.16144 31.6043 14.31 30.3636C8.16144 29.123 4 26.7382 4 24C4 21.2618 8.16144 18.877 14.31 17.6364C8.16144 16.3957 4 14.0109 4 11.2727C4 7.25611 12.9543 4 24 4C35.0457 4 44 7.25611 44 11.2727Z" fill="currentColor"></path>
+                  <path d="M44 11.2727C44 14.0109 39.8386 16.3957 33.69 17.6364C39.8386 18.877 44 21.2618 44 24C44 26.7382 39.8386 29.123 33.69 30.3636C39.8386 31.6043 44 33.9891 44 36.7273C44 40.7439 35.0457 44 24 44C12.9543 44 4 40.7439 4 36.7273C4 33.9891 8.16144 31.6043 14.31 30.3636C8.16144 29.123 4 26.7382 4 24C4 21.2618 8.16144 18.877 14.31 17.6364C8.16144 16.3957 4 14.0109 4 11.2727C4 7.25611 12.9543 4 24 4C35.0457 4 44 7.25611 44 11.2727Z" fill="currentColor" />
                 </svg>
               </div>
-              <h1 className="text-xl font-bold text-gray-900 dark:text-white">LegalEase</h1>
+              <h1 className="text-lg font-medium tracking-tight text-gray-900 dark:text-white hidden sm:block">LegalEase</h1>
             </NavLink>
           </div>
 
-          {/* Desktop Navigation */}
+          {/* Desktop Nav */}
           <nav className="hidden md:flex items-center space-x-8">
             {navLinks.map((link) => (
               <NavLink
                 key={link.name}
                 to={link.path}
                 className={({ isActive }) =>
-                  `text-sm font-medium transition-colors ${isActive ? 'text-primary' : 'text-gray-600 dark:text-gray-300 hover:text-primary dark:hover:text-primary'
-                  }`
+                  `text-sm font-medium transition-colors ${isActive ? 'text-primary' : 'text-gray-600 dark:text-gray-300 hover:text-primary dark:hover:text-primary'}`
                 }
               >
                 {link.name}
@@ -82,82 +144,87 @@ export function Header() {
           </nav>
 
           {/* Actions */}
-          <div className="flex items-center gap-2 sm:gap-4">
-            <button
-              onClick={toggleDarkMode}
-              className="p-2 rounded-full text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-primary"
-              aria-label="Toggle dark mode"
-            >
-              {isDarkMode ? <Sun size={20} /> : <Moon size={20} />}
-            </button>
+          <div className="flex items-center gap-1 sm:gap-2 pr-1">
+            <ThemeToggleSwitch />
 
+            {/* Notification Bell */}
             <div className="relative hidden sm:flex" ref={notificationRef}>
-  <button
-    onClick={toggleNotificationMenu}
-    className="p-2 rounded-full text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-primary relative"
-    aria-label="View notifications"
-  >
-    <Bell size={20} />
+              <button
+                onClick={toggleNotificationMenu}
+                className="p-2 rounded-full text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-primary relative"
+                aria-label="View notifications"
+              >
+                <Bell size={20} />
+                {unreadCount > 0 && (
+                  <span className="absolute top-1 right-1 h-2 w-2 rounded-full bg-red-500" />
+                )}
+              </button>
 
-    {/* Notification Dot */}
-    <span className="absolute top-1 right-1 h-2 w-2 rounded-full bg-red-500"></span>
-  </button>
+              {isNotificationOpen && (
+                <div className="absolute right-0 mt-12 w-80 rounded-xl shadow-xl bg-white dark:bg-gray-800 border border-gray-100 dark:border-gray-700 z-50 animate-slide-up overflow-hidden">
+                  <div className="px-4 py-3 border-b border-gray-100 dark:border-gray-700 flex items-center justify-between">
+                    <h3 className="text-sm font-semibold text-gray-900 dark:text-white">
+                      Notifications
+                    </h3>
+                    {unreadCount > 0 && (
+                      <span className="text-xs font-medium px-2 py-0.5 rounded-full bg-primary/10 text-primary">
+                        {unreadCount} unread
+                      </span>
+                    )}
+                  </div>
 
-  {/* Notification Dropdown */}
-  {isNotificationOpen && (
-    <div className="absolute right-0 mt-12 w-80 rounded-xl shadow-xl bg-white dark:bg-gray-800 border border-gray-100 dark:border-gray-700 z-50 animate-slide-up overflow-hidden">
-      
-      {/* Header */}
-      <div className="px-4 py-3 border-b border-gray-100 dark:border-gray-700">
-        <h3 className="text-sm font-semibold text-gray-900 dark:text-white">
-          Notifications
-        </h3>
-      </div>
+                  <div className="max-h-96 overflow-y-auto">
+                    {isLoading ? (
+                      <div className="px-4 py-8 flex flex-col items-center justify-center">
+                        <Loader2 size={24} className="text-gray-400 animate-spin mb-2" />
+                        <p className="text-sm text-gray-500 dark:text-gray-400">Loading...</p>
+                      </div>
+                    ) : notifications.length > 0 ? (
+                      notifications.map((n, index) => (
+                        <div
+                          key={n.id}
+                          onClick={() => markRead(n.id)}
+                          className={`px-4 py-3 cursor-pointer transition-colors flex gap-3 ${!n.read ? 'bg-primary/5 dark:bg-primary/10' : 'hover:bg-gray-50 dark:hover:bg-gray-700'} ${index !== notifications.length - 1 ? 'border-b border-gray-100 dark:border-gray-700' : ''}`}
+                        >
+                          <div className="mt-0.5 flex-shrink-0">{notifIcon(n.type)}</div>
+                          <div className="flex-1 min-w-0">
+                            <p className={`text-sm font-medium truncate ${!n.read ? 'text-gray-900 dark:text-white' : 'text-gray-700 dark:text-gray-300'}`}>
+                              {n.title}
+                            </p>
+                            <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">{n.description}</p>
+                            <p className="text-xs text-gray-400 dark:text-gray-500 mt-1">{timeAgo(n.timestamp)}</p>
+                          </div>
+                          {!n.read && (
+                            <div className="flex-shrink-0 mt-1">
+                              <span className="h-2 w-2 rounded-full bg-primary block" />
+                            </div>
+                          )}
+                        </div>
+                      ))
+                    ) : (
+                      <div className="px-4 py-8 text-center">
+                        <Bell size={24} className="mx-auto text-gray-300 dark:text-gray-600 mb-2" />
+                        <p className="text-sm text-gray-500 dark:text-gray-400">No notifications</p>
+                      </div>
+                    )}
+                  </div>
 
-        {/* Notifications */}
-        <div className="max-h-96 overflow-y-auto">
-
-          <div className="px-4 py-3 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors border-b border-gray-100 dark:border-gray-700">
-            <p className="text-sm font-medium text-gray-800 dark:text-gray-200">
-              Document Uploaded
-            </p>
-            <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
-              Your legal document was uploaded successfully.
-            </p>
-          </div>
-
-          <div className="px-4 py-3 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors border-b border-gray-100 dark:border-gray-700">
-            <p className="text-sm font-medium text-gray-800 dark:text-gray-200">
-              Profile Updated
-            </p>
-            <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
-              Your profile information has been updated.
-            </p>
-          </div>
-
-          <div className="px-4 py-3 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors">
-            <p className="text-sm font-medium text-gray-800 dark:text-gray-200">
-              Welcome to LegalEase
-            </p>
-            <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
-              Explore dashboard features and documentation.
-            </p>
-          </div>
-
-        </div>
-
-        {/* Footer */}
-        <div className="px-4 py-2 border-t border-gray-100 dark:border-gray-700 text-center">
-          <button
-            className="text-sm text-primary hover:underline"
-            onClick={() => setIsNotificationOpen(false)}
-          >
-            Mark all as read
-          </button>
-        </div>
-      </div>
-    )}
-  </div>
+                  <div className="px-4 py-2 border-t border-gray-100 dark:border-gray-700 flex items-center justify-between">
+                    {unreadCount > 0 && (
+                      <button className="text-xs text-primary hover:underline" onClick={handleMarkAllRead}>
+                        Mark all as read
+                      </button>
+                    )}
+                    <button
+                      className="text-xs text-gray-500 dark:text-gray-400 hover:text-primary ml-auto"
+                      onClick={() => { setIsNotificationOpen(false); navigate('/profile/notifications'); }}
+                    >
+                      Manage preferences →
+                    </button>
+                  </div>
+                </div>
+              )}
+            </div>
 
             {/* Mobile Menu Button */}
             <button
@@ -169,62 +236,58 @@ export function Header() {
               {isMobileMenuOpen ? <X size={24} /> : <Menu size={24} />}
             </button>
 
-            {/* Profile Dropdown Container */}
-            <div className="relative ml-2" ref={userMenuRef}>
-              <button
-                onClick={toggleUserMenu}
-                className="flex items-center justify-center h-9 w-9 rounded-full bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-400 hover:text-primary hover:bg-primary/10 transition-all focus:outline-none focus-visible:ring-2 focus-visible:ring-primary"
-                aria-haspopup="true"
-                aria-expanded={isUserMenuOpen}
-                aria-label="Open user profile menu"
-              >
-                <User size={20} />
-              </button>
+            {/* Profile Dropdown — only for authenticated users; otherwise a Sign In CTA */}
+            {isAuthenticated && userDisplay ? (
+              <div className="relative ml-2" ref={userMenuRef}>
+                <button
+                  onClick={toggleUserMenu}
+                  className="flex items-center justify-center h-9 w-9 rounded-full bg-gray-100 dark:bg-gray-800 text-sm font-semibold text-gray-600 dark:text-gray-300 hover:text-primary hover:bg-primary/10 transition-all focus:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+                  aria-haspopup="true"
+                  aria-expanded={isUserMenuOpen}
+                  aria-label="Open user profile menu"
+                >
+                  {userDisplay.initials}
+                </button>
 
-              {/* Dropdown (Hidden by default) */}
-              {isUserMenuOpen && (
-                <div className="absolute right-0 mt-3 w-64 rounded-xl shadow-xl py-3 bg-white dark:bg-gray-800 ring-1 ring-black ring-opacity-5 focus:outline-none z-50 animate-slide-up origin-top-right border border-gray-100 dark:border-gray-700">
-                  <div className="px-4 py-3 border-b border-gray-50 dark:border-gray-700 mb-2">
-                    <p className="text-sm font-semibold text-gray-900 dark:text-white">Sarah Wilson</p>
-                    <p className="text-xs text-gray-500 dark:text-gray-400 truncate">sarah.w@example.com</p>
-                  </div>
-                  <NavLink to="/profile" className="flex items-center gap-3 px-4 py-2.5 text-sm text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 hover:text-primary transition-colors" onClick={() => setIsUserMenuOpen(false)}>
-                    <User size={18} />
-                    <span>Your Profile</span>
-                  </NavLink>
-                  <a href="#" className="flex items-center gap-3 px-4 py-2.5 text-sm text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 hover:text-primary transition-colors" onClick={() => setIsUserMenuOpen(false)}>
-                    <Settings size={18} />
-                    <span>Settings</span>
-                  </a>
-                  <div className="px-2 mt-2 pt-2 border-t border-gray-50 dark:border-gray-700">
-                    <button className="flex items-center gap-3 w-full text-left px-2 py-2.5 text-sm text-red-500 font-medium hover:bg-red-50 dark:hover:bg-red-900/10 rounded-lg transition-colors" onClick={() => setIsUserMenuOpen(false)}>
-                      <X size={18} />
-                      <span>Sign out</span>
+                {isUserMenuOpen && (
+                  <div className="absolute right-0 mt-4 w-60 rounded-3xl bg-white/90 dark:bg-[#0a0a0a]/90 backdrop-blur-3xl border border-gray-100 dark:border-white/10 shadow-2xl p-2 z-50 animate-in fade-in slide-in-from-top-4">
+                    <div className="px-4 py-3 border-b border-gray-100 dark:border-white/5 mb-2">
+                      <p className="text-sm font-medium text-gray-900 dark:text-white truncate">{userDisplay.name}</p>
+                      <p className="text-xs text-gray-500 dark:text-white/40 truncate">{userDisplay.email}</p>
+                    </div>
+                    <NavLink to="/profile" onClick={() => setIsUserMenuOpen(false)} className="flex items-center gap-3 px-4 py-2.5 text-sm text-gray-600 dark:text-white/70 hover:bg-gray-100 dark:hover:bg-white/5 rounded-xl transition-colors"><User size={16} /> Profile</NavLink>
+                    <NavLink to="/settings" onClick={() => setIsUserMenuOpen(false)} className="flex items-center gap-3 px-4 py-2.5 text-sm text-gray-600 dark:text-white/70 hover:bg-gray-100 dark:hover:bg-white/5 rounded-xl transition-colors"><Settings size={16} /> Settings</NavLink>
+                    <button
+                      onClick={handleLogout}
+                      className="flex items-center gap-3 w-full text-left px-4 py-2.5 mt-1 text-sm text-red-500 font-medium hover:bg-red-50 dark:hover:bg-red-500/10 rounded-xl transition-colors"
+                    >
+                      <LogOut size={16} />
+                      Sign out
                     </button>
                   </div>
-                </div>
-              )}
-            </div>
+                )}
+              </div>
+            ) : (
+              <NavLink
+                to="/login"
+                className="ml-2 inline-flex items-center gap-2 px-4 py-2 rounded-full text-sm font-medium text-white bg-primary hover:bg-primary/90 transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+              >
+                <User size={16} />
+                Sign In
+              </NavLink>
+            )}
           </div>
         </div>
 
-
-        {/* Mobile Backdrop Overlay */}
+        {/* Mobile Backdrop */}
         <div
-          className={`fixed top-16 left-0 w-full h-[calc(100vh-4rem)] z-40 bg-black/10 backdrop-blur-[2px] transition-all duration-300 md:hidden ${isMobileMenuOpen
-            ? 'opacity-100 visible'
-            : 'opacity-0 invisible'
-            }`}
+          className={`fixed top-16 left-0 w-full h-[calc(100vh-4rem)] z-40 bg-black/10 backdrop-blur-[2px] transition-all duration-300 md:hidden ${isMobileMenuOpen ? 'opacity-100 visible' : 'opacity-0 invisible'}`}
           onClick={() => setIsMobileMenuOpen(false)}
         />
 
-        {/* Mobile menu */}
-
+        {/* Mobile Menu */}
         <div
-          className={`absolute top-16 left-0 w-full md:hidden z-50 overflow-hidden transition-all duration-300 ease-in-out border-b border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900 shadow-lg ${isMobileMenuOpen
-            ? 'max-h-96 opacity-100 py-3'
-            : 'max-h-0 opacity-0 py-0'
-            }`}
+          className={`absolute top-16 left-0 w-full md:hidden z-50 overflow-hidden transition-all duration-300 ease-in-out border-b border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900 shadow-lg ${isMobileMenuOpen ? 'max-h-96 opacity-100 py-3' : 'max-h-0 opacity-0 py-0'}`}
         >
           <div className="flex flex-col space-y-1 px-1">
             {navLinks.map((link, index) => (
@@ -232,17 +295,9 @@ export function Header() {
                 key={link.name}
                 to={link.path}
                 className={({ isActive }) =>
-                  `block px-3 py-2 rounded-md text-base font-medium transform transition-all duration-300 ${isActive
-                    ? 'bg-primary/10 text-primary'
-                    : 'text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 hover:text-gray-900 dark:hover:text-white'
-                  } ${isMobileMenuOpen
-                    ? 'translate-y-0 opacity-100'
-                    : '-translate-y-2 opacity-0'
-                  }`
+                  `block px-3 py-2 rounded-md text-base font-medium transform transition-all duration-300 ${isActive ? 'bg-primary/10 text-primary' : 'text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 hover:text-gray-900 dark:hover:text-white'} ${isMobileMenuOpen ? 'translate-y-0 opacity-100' : '-translate-y-2 opacity-0'}`
                 }
-                style={{
-                  transitionDelay: `${index * 50}ms`,
-                }}
+                style={{ transitionDelay: `${index * 50}ms` }}
                 onClick={() => setIsMobileMenuOpen(false)}
               >
                 {link.name}

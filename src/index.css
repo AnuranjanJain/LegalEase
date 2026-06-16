@@ -3,9 +3,13 @@
 @tailwind utilities;
 
 @layer base {
-  html, body, #root {
-    @apply h-full;
+
+  html,
+  body,
+  #root {
+    min-height: 100%;
   }
+
   body {
     @apply antialiased bg-background-light dark:bg-background-dark text-gray-900 dark:text-gray-100;
   }
@@ -19,11 +23,12 @@
 
 @layer utilities {
   .scrollbar-hide::-webkit-scrollbar {
-      display: none;
+    display: none;
   }
+
   .scrollbar-hide {
-      -ms-overflow-style: none;
-      scrollbar-width: none;
+    -ms-overflow-style: none;
+    scrollbar-width: none;
   }
 }
 
@@ -39,4 +44,65 @@
 
 ::-webkit-scrollbar-thumb {
   @apply bg-gray-300 dark:bg-gray-700 rounded-full hover:bg-gray-400 dark:hover:bg-gray-600;
+}
+
+
+html {
+  scroll-behavior: smooth;
+}
+
+body,
+div,
+section,
+main,
+header,
+footer,
+nav,
+aside,
+button,
+a,
+input,
+textarea,
+select,
+svg,
+path {
+  transition:
+    background-color 0.45s cubic-bezier(0.4, 0, 0.2, 1),
+    color 0.45s cubic-bezier(0.4, 0, 0.2, 1),
+    border-color 0.45s cubic-bezier(0.4, 0, 0.2, 1),
+    fill 0.45s cubic-bezier(0.4, 0, 0.2, 1),
+    stroke 0.45s cubic-bezier(0.4, 0, 0.2, 1),
+    box-shadow 0.45s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+html.dark,
+html.light {
+  transition: background-color 0.5s ease, color 0.5s ease;
+}
+
+html,
+body,
+#root {
+  overflow-x: hidden;
+  overflow-y: auto;
+  height: auto;
+  min-height: 100%;
+}
+
+/* Accessibility: Respect prefers-reduced-motion
+   Disables animations and reduces transitions for users who prefer less motion.
+   Fixes #183 */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+
+  html {
+    scroll-behavior: auto;
+  }
 }
