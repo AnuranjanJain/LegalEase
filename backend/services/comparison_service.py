@@ -17,8 +17,9 @@ Design decisions:
 from __future__ import annotations
 
 import logging
-import os
 from typing import Any, Dict, List, Optional
+
+from backend.config import get_settings
 
 logger = logging.getLogger(__name__)
 
@@ -26,12 +27,16 @@ logger = logging.getLogger(__name__)
 # Tuneable constants (can be overridden via environment variables)
 # ---------------------------------------------------------------------------
 
+# Get configuration from centralized settings
+settings = get_settings()
+comparison_config = settings.comparison
+
 # Hard cap on the total character count fed to the LLM.
 # At ~4 chars/token this equates to roughly 3 500 tokens of context.
-MAX_TOTAL_CONTEXT_CHARS: int = int(os.getenv("COMPARE_MAX_CONTEXT_CHARS", "14000"))
+MAX_TOTAL_CONTEXT_CHARS: int = comparison_config.compare_max_context_chars
 
 # Maximum number of documents allowed in a single comparison request.
-MAX_DOCUMENTS: int = int(os.getenv("COMPARE_MAX_DOCUMENTS", "10"))
+MAX_DOCUMENTS: int = comparison_config.compare_max_documents
 
 # ---------------------------------------------------------------------------
 # System prompt

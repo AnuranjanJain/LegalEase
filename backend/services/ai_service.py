@@ -1,9 +1,10 @@
-import os
 import time
 import logging
 import asyncio
 from typing import Optional, List, Dict, Any, AsyncGenerator
 from contextvars import ContextVar
+
+from backend.config import get_settings
 
 # Optional imports
 try:
@@ -21,17 +22,21 @@ correlation_id_var: ContextVar[str] = ContextVar("correlation_id", default="syst
 
 class AIService:
     def __init__(self):
-        self.api_key = os.getenv("BYTEZ_API_KEY")
-        self.chat_model_name = os.getenv("CHAT_MODEL", "inference-net/Schematron-3B")
-        self.summarize_model_name = os.getenv("SUMMARIZE_MODEL", "inference-net/Schematron-3B")
-        self.max_model_input_chars = int(os.getenv("MAX_MODEL_INPUT_CHARS", "15000"))
+        # Get configuration from centralized settings
+        settings = get_settings()
+        ai_config = settings.ai
+        
+        self.api_key = ai_config.bytez_api_key
+        self.chat_model_name = ai_config.chat_model
+        self.summarize_model_name = ai_config.summarize_model
+        self.max_model_input_chars = ai_config.max_model_input_chars
         
         # Resilience parameters
-        self.provider_timeout = float(os.getenv("PROVIDER_TIMEOUT", "30.0"))
-        self.max_retries = int(os.getenv("PROVIDER_RETRIES", "3"))
-        self.retry_backoff_factor = float(os.getenv("RETRY_BACKOFF_FACTOR", "2.0"))
-        self.graceful_degradation = os.getenv("GRACEFUL_DEGRADATION", "true").lower() in ("true", "1", "yes")
-        self.stub_mode = os.getenv("STUB_MODE", "false").lower() in ("true", "1", "yes")
+        self.provider_timeout = ai_config.provider_timeout
+        self.max_retries = ai_config.provider_retries
+        self.retry_backoff_factor = ai_config.retry_backoff_factor
+        self.graceful_degradation = ai_config.graceful_degradation
+        self.stub_mode = ai_config.stub_mode
         
         # Client initialization
         self.client = None
@@ -523,7 +528,8 @@ class AIService:
         if not self.client and not self.stub_mode:
             status = "degraded"
 
-        if os.getenv("HEALTH_DEBUG", "false").lower() in ("true", "1", "yes"):
+        settings = get_settings()
+        if settings.ai.health_debug:
             details = {
                 "bytez": bool(self.client),
                 "initialized": bool(self.client),

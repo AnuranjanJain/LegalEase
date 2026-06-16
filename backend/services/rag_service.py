@@ -1,8 +1,9 @@
 import logging
-import os
 import threading
 from typing import List
 from fastapi.concurrency import run_in_threadpool
+
+from backend.config import get_settings
 
 logger = logging.getLogger(__name__)
 
@@ -48,8 +49,9 @@ class RAGService:
                 
                 self.embeddings = HuggingFaceEmbeddings(model_name="all-MiniLM-L6-v2")
                 
-                # Read database URL from environment
-                _database_url = os.getenv("DATABASE_URL", "")
+                # Read database URL from centralized settings
+                settings = get_settings()
+                _database_url = settings.database.database_url or ""
                 
                 # Use PGVector if connected to Postgres, otherwise fallback to local Chroma
                 if _database_url.startswith("postgres"):
