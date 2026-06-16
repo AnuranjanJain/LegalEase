@@ -1,4 +1,5 @@
 fastapi
+uvicorn
 bytez
 pydantic
 pymupdf
@@ -6,7 +7,16 @@ python-docx
 python-multipart
 python-dotenv
 sqlalchemy
-psycopg2-binary
+psycopg2-binary  # Required only for PostgreSQL
 bcrypt
 python-jose[cryptography]
 email-validator
+redis
+# RAG and Semantic Cache dependencies
+langchain
+langchain-community
+langchain-huggingface
+langchain-text-splitters
+langchain-postgres
+sentence-transformers
+torch
