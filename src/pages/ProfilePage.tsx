@@ -1,5 +1,3 @@
-import PasswordInput from "../components/PasswordInput";
-import { User, Bell, Shield, Globe, Check } from 'lucide-react';
 import { User, Bell, Shield, Globe, Check, Eye, EyeOff, Trash2, FileText, Info, Key, Monitor, Smartphone, RefreshCcw } from 'lucide-react';
 import { StorageService, UserProfile } from '../services/storage';
 import { useState } from 'react';
@@ -8,7 +6,6 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { useNotifications, AppNotification } from '../contexts/NotificationContext';
 import { useAuth } from '../contexts/AuthContext';
 import { api } from '../services/api';
-
 type Section = 'profile' | 'security' | 'notifications' | 'language';
 
 const VALID_TABS: Section[] = ['profile', 'security', 'notifications', 'language'];
@@ -102,7 +99,6 @@ const readOnlyCls = 'w-full bg-gray-100 dark:bg-gray-900/60 border border-gray-2
 
 export function ProfilePage() {
   const [profile, setProfile] = useState<UserProfile>(StorageService.getProfile());
-  const [password, setPassword] = useState("");
   const [isSaving, setIsSaving] = useState(false);
   const { showToast } = useToast();
   const { logout } = useAuth();
@@ -417,19 +413,7 @@ export function ProfilePage() {
                   ))}
                 </div>
               </div>
-            </div>
-            <div className="space-y-2">
-              <label className="text-xs font-bold uppercase tracking-wider text-gray-400 dark:text-gray-500">
-                Password
-                </label>
-                <PasswordInput 
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                placeholder="Enter your password"
-                />
-                </div>
-            )}
-
+   )}
             {/* ── NOTIFICATIONS PREFERENCES TAB ── */}
             {section === 'notifications' && (
               <div className="space-y-8 max-w-2xl animate-slide-up">
