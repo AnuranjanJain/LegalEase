@@ -1,44 +1,51 @@
 import threading
 import time
 from typing import Dict, List
+import os
+import logging
+import redis
+
+logger = logging.getLogger(__name__)
 
 
-class SimpleRateLimiter:
-    """In-process sliding-window rate limiter.
+class BaseStorage:
+    """Base class for rate limiter storage backends."""
 
-    This implementation stores request timestamps in an in-memory dictionary
-    protected by a threading lock.  It works correctly for single-process
-    deployments (e.g. ``uvicorn main:app``).
+    def check(self, key: str, calls: int, period: int) -> dict:
+        raise NotImplementedError
 
-    **Production note**: When running multiple worker processes (e.g.
-    ``gunicorn -w 4 -k uvicorn.workers.UvicornWorker``), each worker has
-    its own memory space, so rate-limit state is NOT shared across workers.
-    For multi-worker deployments, consider replacing this with a
-    Redis-backed solution such as ``slowapi`` with a Redis storage backend.
-    """
+    def cleanup(self, period: int) -> int:
+        raise NotImplementedError
 
-    def __init__(self, calls: int, period: int):
-        self.calls = calls
-        self.period = period
-        self._storage: Dict[str, List[float]] = {}
+    def contains(self, key: str) -> bool:
+        raise NotImplementedError
+
+    def delete(self, key: str) -> None:
+        raise NotImplementedError
+
+    def clear(self) -> None:
+        raise NotImplementedError
+
+
+class InMemoryStorage(BaseStorage):
+    """Thread-safe in-memory sliding-window storage."""
+
+    def __init__(self):
+        self.storage: Dict[str, List[float]] = {}
         self._lock = threading.Lock()
-    @property
-    def storage(self) -> Dict[str, List[float]]:
-        """Expose limiter state for tests and diagnostics."""
-        return self._storage
 
-    def check(self, key: str):
+    def check(self, key: str, calls: int, period: int) -> dict:
         now = time.time()
-        window = now - self.period
+        window = now - period
 
         with self._lock:
-            timestamps = self._storage.get(key, [])
+            timestamps = self.storage.get(key, [])
             timestamps = [t for t in timestamps if t > window]
-            remaining = self.calls - len(timestamps)
+            remaining = calls - len(timestamps)
 
             if remaining <= 0:
-                retry_after = max(1, int(timestamps[0] + self.period - now) + 1) if timestamps else 1
-                self._storage[key] = timestamps
+                retry_after = max(1, int(timestamps[0] + period - now) + 1) if timestamps else 1
+                self.storage[key] = timestamps
                 return {
                     "allowed": False,
                     "remaining": 0,
@@ -46,12 +53,236 @@ class SimpleRateLimiter:
                 }
 
             timestamps.append(now)
-            self._storage[key] = timestamps
+            self.storage[key] = timestamps
             return {
                 "allowed": True,
-                "remaining": max(0, self.calls - len(timestamps)),
+                "remaining": max(0, calls - len(timestamps)),
                 "retry_after": 0,
             }
+
+    def cleanup(self, period: int) -> int:
+        now = time.time()
+        window = now - period
+        evicted = 0
+
+        with self._lock:
+            stale_keys = [
+                k for k, ts in self.storage.items()
+                if not any(t > window for t in ts)
+            ]
+            for k in stale_keys:
+                del self.storage[k]
+                evicted += 1
+
+        return evicted
+
+    def contains(self, key: str) -> bool:
+        with self._lock:
+            return key in self.storage
+
+    def delete(self, key: str) -> None:
+        with self._lock:
+            if key in self.storage:
+                del self.storage[key]
+
+    def clear(self) -> None:
+        with self._lock:
+            self.storage.clear()
+
+
+class RedisStorage(BaseStorage):
+    """Process-safe, distributed Redis-based rate limiting storage.
+
+    Uses Redis atomic INCR and EXPIRE operations.
+    """
+
+    def __init__(self, redis_url: str):
+        self.redis_url = redis_url
+        self.client = redis.from_url(redis_url, decode_responses=True)
+
+    def check(self, key: str, calls: int, period: int) -> dict:
+        now = time.time()
+        window_id = int(now / period)
+        redis_key = f"rate_limit:{key}:{window_id}"
+
+        # Atomic increment and expire using pipeline
+        pipe = self.client.pipeline()
+        pipe.incr(redis_key)
+        pipe.expire(redis_key, period)
+        val, _ = pipe.execute()
+
+        remaining = calls - val
+        if remaining < 0:
+            retry_after = int(period - (now % period))
+            if retry_after <= 0:
+                retry_after = 1
+            return {
+                "allowed": False,
+                "remaining": 0,
+                "retry_after": retry_after,
+            }
+
+        return {
+            "allowed": True,
+            "remaining": remaining,
+            "retry_after": 0,
+        }
+
+    def cleanup(self, period: int) -> int:
+        # Redis expires keys automatically, cleanup is a no-op
+        return 0
+
+    def contains(self, key: str) -> bool:
+        pattern = f"rate_limit:{key}:*"
+        keys = self.client.keys(pattern)
+        return len(keys) > 0
+
+    def delete(self, key: str) -> None:
+        pattern = f"rate_limit:{key}:*"
+        keys = self.client.keys(pattern)
+        if keys:
+            self.client.delete(*keys)
+
+    def clear(self) -> None:
+        pattern = "rate_limit:*"
+        keys = self.client.keys(pattern)
+        if keys:
+            self.client.delete(*keys)
+
+
+class LimiterStorageProxy(dict):
+    """A dictionary-compatible proxy that delegates queries to the active storage backend."""
+
+    def __init__(self, limiter: "SimpleRateLimiter"):
+        super().__init__()
+        self._limiter = limiter
+
+    def __contains__(self, key):
+        if self._limiter._redis_backend:
+            try:
+                return self._limiter._redis_backend.contains(key)
+            except Exception as e:
+                logger.error(f"Redis contains check failed, falling back to local: {e}")
+        return self._limiter._local_storage.contains(key)
+
+    def __delitem__(self, key):
+        if self._limiter._redis_backend:
+            try:
+                self._limiter._redis_backend.delete(key)
+                return
+            except Exception as e:
+                logger.error(f"Redis delete failed, falling back to local: {e}")
+        self._limiter._local_storage.delete(key)
+
+    def __getitem__(self, key):
+        if self._limiter._redis_backend:
+            try:
+                pattern = f"rate_limit:{key}:*"
+                keys = self._limiter._redis_backend.client.keys(pattern)
+                total_hits = 0
+                for k in keys:
+                    val = self._limiter._redis_backend.client.get(k)
+                    if val:
+                        total_hits += int(val)
+                return [time.time()] * total_hits
+            except Exception as e:
+                logger.error(f"Redis getitem failed, falling back to local: {e}")
+        with self._limiter._local_storage._lock:
+            return self._limiter._local_storage.storage.get(key, [])
+
+    def __setitem__(self, key, value):
+        if self._limiter._redis_backend:
+            try:
+                now = time.time()
+                window_id = int(now / self._limiter.period)
+                redis_key = f"rate_limit:{key}:{window_id}"
+                self._limiter._redis_backend.client.set(redis_key, len(value))
+                self._limiter._redis_backend.client.expire(redis_key, self._limiter.period)
+                return
+            except Exception as e:
+                logger.error(f"Redis setitem failed, falling back to local: {e}")
+        with self._limiter._local_storage._lock:
+            self._limiter._local_storage.storage[key] = value
+
+    def clear(self):
+        if self._limiter._redis_backend:
+            try:
+                self._limiter._redis_backend.clear()
+                return
+            except Exception as e:
+                logger.error(f"Redis clear failed, falling back to local: {e}")
+        self._limiter._local_storage.clear()
+
+    def get(self, key, default=None):
+        if key in self:
+            return self[key]
+        return default
+
+    def items(self):
+        if not self._limiter._redis_backend:
+            with self._limiter._local_storage._lock:
+                return list(self._limiter._local_storage.storage.items())
+        try:
+            keys = self._limiter._redis_backend.client.keys("rate_limit:*")
+            unique_keys = set()
+            for k in keys:
+                parts = k.split(":")
+                if len(parts) >= 3:
+                    unique_keys.add(parts[1])
+            return [(uk, self[uk]) for uk in unique_keys]
+        except Exception as e:
+            logger.error(f"Redis items failed, falling back to local: {e}")
+            with self._limiter._local_storage._lock:
+                return list(self._limiter._local_storage.storage.items())
+
+    def __len__(self):
+        if not self._limiter._redis_backend:
+            with self._limiter._local_storage._lock:
+                return len(self._limiter._local_storage.storage)
+        try:
+            return len(self.items())
+        except Exception as e:
+            logger.error(f"Redis len failed, falling back to local: {e}")
+            with self._limiter._local_storage._lock:
+                return len(self._limiter._local_storage.storage)
+
+
+class SimpleRateLimiter:
+    """Thread-safe and process-safe distributed rate limiter.
+
+    This implementation defaults to an in-memory sliding-window backend, but
+    automatically uses a Redis backend if REDIS_URL environment variable is set.
+    """
+
+    def __init__(self, calls: int, period: int):
+        self.calls = calls
+        self.period = period
+        self._local_storage = InMemoryStorage()
+        self._storage = LimiterStorageProxy(self)
+
+        redis_url = os.getenv("REDIS_URL")
+        self._redis_backend = None
+        if redis_url:
+            try:
+                self._redis_backend = RedisStorage(redis_url)
+                logger.info("Redis rate limiting storage backend initialized successfully.")
+            except Exception as e:
+                logger.error(f"Failed to initialize Redis rate limiting backend: {e}")
+
+    @property
+    def storage(self) -> dict:
+        """Expose limiter state for tests and diagnostics."""
+        return self._storage
+
+    def check(self, key: str) -> dict:
+        if self._redis_backend:
+            try:
+                return self._redis_backend.check(key, self.calls, self.period)
+            except Exception as e:
+                logger.error(f"Redis rate limiter check failed, falling back to local storage: {e}")
+                return self._local_storage.check(key, self.calls, self.period)
+
+        return self._local_storage.check(key, self.calls, self.period)
 
     def is_allowed(self, key: str) -> bool:
         return self.check(key)["allowed"]
@@ -61,17 +292,11 @@ class SimpleRateLimiter:
 
         Returns the number of keys evicted.
         """
-        now = time.time()
-        window = now - self.period
-        evicted = 0
+        if self._redis_backend:
+            try:
+                return self._redis_backend.cleanup(self.period)
+            except Exception as e:
+                logger.error(f"Redis cleanup failed, falling back to local storage: {e}")
+                return self._local_storage.cleanup(self.period)
 
-        with self._lock:
-            stale_keys = [
-                k for k, ts in self._storage.items()
-                if not any(t > window for t in ts)
-            ]
-            for k in stale_keys:
-                del self._storage[k]
-                evicted += 1
-
-        return evicted
+        return self._local_storage.cleanup(self.period)
