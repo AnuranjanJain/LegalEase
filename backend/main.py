@@ -20,6 +20,7 @@ from backend.routers import auth_routes
 from backend.routers import legal_routes
 from backend.routers import history_routes
 from backend.routers.notifications import router as notifications_router
+from backend.routers.compare_routes import router as compare_router
 from backend.auth import validate_token_or_api_key, AuthIdentity
 from backend.utils.limiter import SimpleRateLimiter
 from backend.utils.cleanup import start_token_cleanup_task
@@ -175,6 +176,8 @@ app.include_router(legal_routes.router)
 app.include_router(notifications_router)
 # Include history router
 app.include_router(history_routes.router)
+# Include multi-document comparison router
+app.include_router(compare_router)
 
 
 # Enable CORS for frontend communication
