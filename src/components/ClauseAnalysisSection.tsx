@@ -1,6 +1,9 @@
+import { useState } from 'react';
+import { Sparkles } from 'lucide-react';
 import { ClauseAnalysis } from '../services/storage';
 import { useRedactedText } from '../hooks/useRedactedText';
 import { RedactedText } from './RedactedText';
+import { SimplifyModal } from './SimplifyModal';
 
 interface ClauseAnalysisSectionProps {
   clauses?: ClauseAnalysis[];
@@ -8,15 +11,8 @@ interface ClauseAnalysisSectionProps {
 
 // ---------------------------------------------------------------------------
 // Sub-component: renders a single clause card with redaction applied.
-//
-// Design notes:
-//   - idx is intentionally NOT accepted as a prop. The `key` that React needs
-//     for reconciliation belongs on the JSX element in the parent's .map(),
-//     not inside the component body (where it would be a no-op).
-//   - useRedactedText returns the pre-redacted string; RedactedText renders
-//     each [REDACTED] / ██████████ token as a styled inline badge.
 // ---------------------------------------------------------------------------
-function ClauseCard({ item }: { item: ClauseAnalysis }) {
+function ClauseCard({ item, onSimplify }: { item: ClauseAnalysis; onSimplify: (text: string) => void }) {
   const redactedClause = useRedactedText(item.clause);
   const redactedReason = useRedactedText(item.riskReason);
 
@@ -44,8 +40,18 @@ function ClauseCard({ item }: { item: ClauseAnalysis }) {
         <RedactedText text={redactedReason} />
       </div>
       {item.clause && (
-        <div className="mt-2 pl-3 border-l-2 border-gray-300 dark:border-gray-700 text-gray-650 dark:text-gray-400 font-mono leading-relaxed bg-gray-50/50 dark:bg-gray-900/40 p-2 rounded">
-          <RedactedText text={redactedClause} />
+        <div className="mt-2 space-y-2 text-left">
+          <div className="pl-3 border-l-2 border-gray-300 dark:border-gray-700 text-gray-650 dark:text-gray-400 font-mono leading-relaxed bg-gray-50/50 dark:bg-gray-900/40 p-2 rounded">
+            <RedactedText text={redactedClause} />
+          </div>
+          <button
+            onClick={() => onSimplify(item.clause)}
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 text-[10px] font-bold text-primary dark:text-primary-400 hover:text-white bg-primary-600/10 hover:bg-primary-600 border border-primary-600/20 hover:border-transparent rounded-lg transition-all"
+            aria-label="Simplify clause text"
+          >
+            <Sparkles size={11} />
+            <span>Simplify Clause</span>
+          </button>
         </div>
       )}
     </div>
@@ -53,6 +59,8 @@ function ClauseCard({ item }: { item: ClauseAnalysis }) {
 }
 
 export function ClauseAnalysisSection({ clauses }: ClauseAnalysisSectionProps) {
+  const [selectedClause, setSelectedClause] = useState<string | null>(null);
+
   if (!clauses || clauses.length === 0) {
     return null;
   }
@@ -63,11 +71,17 @@ export function ClauseAnalysisSection({ clauses }: ClauseAnalysisSectionProps) {
         Clause-Level Risk Assessment
       </h4>
       <div className="space-y-4">
-        {/* key is placed here — on the mapped element — not inside ClauseCard */}
         {clauses.map((item, idx) => (
-          <ClauseCard key={idx} item={item} />
+          <ClauseCard key={idx} item={item} onSimplify={setSelectedClause} />
         ))}
       </div>
+
+      {selectedClause && (
+        <SimplifyModal
+          clauseText={selectedClause}
+          onClose={() => setSelectedClause(null)}
+        />
+      )}
     </div>
   );
 }
