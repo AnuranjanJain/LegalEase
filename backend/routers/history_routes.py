@@ -4,7 +4,7 @@ from typing import List, Optional
 from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel
 from sqlalchemy import func
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, selectinload
 
 from backend.auth import get_current_user, AuthIdentity
 from backend.database import get_db
@@ -53,6 +53,8 @@ class DocumentRecordOut(BaseModel):
 
 @router.get("/chats", response_model=List[ChatSessionOut])
 def list_chat_sessions(
+    limit: int = 20,
+    offset: int = 0,
     current_user: AuthIdentity = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
@@ -78,6 +80,8 @@ def list_chat_sessions(
         .outerjoin(message_counts, models.ChatSession.id == message_counts.c.session_id)
         .filter(models.ChatSession.user_id == user_id)
         .order_by(models.ChatSession.updated_at.desc())
+        .limit(limit)
+        .offset(offset)
         .all()
     )
     
@@ -111,6 +115,7 @@ def get_chat_messages(
     
     session = (
         db.query(models.ChatSession)
+        .options(selectinload(models.ChatSession.messages))
         .filter(
             models.ChatSession.id == session_id,
             models.ChatSession.user_id == user_id,
