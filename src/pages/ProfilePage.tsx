@@ -1,9 +1,11 @@
+import PasswordInput from "../components/PasswordInput";
 import { User, Bell, Shield, Globe, Check } from 'lucide-react';
 import { StorageService, UserProfile } from '../services/storage';
 import { useState } from 'react';
 
 export function ProfilePage() {
   const [profile, setProfile] = useState<UserProfile>(StorageService.getProfile());
+  const [password, setPassword] = useState("");
   const [isSaving, setIsSaving] = useState(false);
   const [showSavedToast, setShowSavedToast] = useState(false);
 
@@ -120,6 +122,16 @@ export function ProfilePage() {
                 />
               </div>
             </div>
+            <div className="space-y-2">
+              <label className="text-xs font-bold uppercase tracking-wider text-gray-400 dark:text-gray-500">
+                Password
+                </label>
+                <PasswordInput 
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                placeholder="Enter your password"
+                />
+                </div>
 
             <div className="space-y-2">
               <label className="text-xs font-bold uppercase tracking-wider text-gray-400 dark:text-gray-500">Bio</label>
