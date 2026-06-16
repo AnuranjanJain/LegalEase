@@ -1,4 +1,4 @@
-import { Send, User, Bot, History, Paperclip, X, FileText, Sparkles, RefreshCcw } from 'lucide-react';
+import { Send, User, Bot, History, Paperclip, X, FileText, Sparkles, RefreshCcw, Copy, Check } from 'lucide-react';
 import { api } from '../services/api';
 import { useRef, useState, useEffect } from 'react';
 
@@ -28,6 +28,7 @@ export function ChatbotPage() {
 
 
   const [input, setInput] = useState('');
+  const [copiedMessageId, setCopiedMessageId] = useState<number | null>(null);
   const [isTyping, setIsTyping] = useState(false);
   const [uploadedDoc, setUploadedDoc] = useState<{ name: string; text: string } | null>(null);
   const [isUploading, setIsUploading] = useState(false);
@@ -137,18 +138,45 @@ useEffect(() => {
       setIsTyping(false);
     }
   };
+  const handleCopy = async (text: string, id: number) => {
+  try {
+    await navigator.clipboard.writeText(text);
+    setCopiedMessageId(id);
+
+    setTimeout(() => {
+      setCopiedMessageId(null);
+    }, 2000);
+  } catch (error) {
+    console.error("Copy failed:", error);
+  }
+};
 
   return (
     <div className="flex flex-col h-[calc(100vh-64px)] bg-gray-50 dark:bg-gray-900 border-l border-gray-200 dark:border-gray-800 relative">
-      <div className="flex-1 overflow-y-auto p-4 space-y-4">
+      <div className="relative flex-1 overflow-y-auto p-4 space-y-4">
         {messages.map((msg: Message) => (
           <div key={msg.id} className={`flex ${msg.sender === 'user' ? 'justify-end' : 'justify-start'}`}>
             <div className={`flex items-start max-w-[80%] ${msg.sender === 'user' ? 'flex-row-reverse' : 'flex-row'}`}>
               <div className={`flex-shrink-0 h-8 w-8 rounded-full flex items-center justify-center ${msg.sender === 'user' ? 'bg-primary text-white ml-2' : 'bg-gray-200 dark:bg-gray-700 text-gray-600 dark:text-gray-300 mr-2'}`}>
                 {msg.sender === 'user' ? <User size={16} /> : <Bot size={16} />}
               </div>
-              <div className={`p-3 rounded-lg shadow-sm ${msg.sender === 'user' ? 'bg-primary text-white rounded-tr-none' : 'bg-white dark:bg-gray-800 text-gray-800 dark:text-gray-200 rounded-tl-none border border-gray-100 dark:border-gray-700'}`}>
-                <p className="text-sm">{msg.text}</p>
+             <div className={`relative p-3 rounded-lg shadow-sm ${msg.sender === 'user' ? 'bg-primary text-white rounded-tr-none' : 'bg-white dark:bg-gray-800 text-gray-800 dark:text-gray-200 rounded-tl-none border border-gray-100 dark:border-gray-700'}`}>
+              
+              {msg.sender === 'bot' && (
+                <button
+                onClick={() => handleCopy(msg.text, msg.id)}
+                className="absolute top-2 right-2 p-1.5 rounded-md bg-transparent hover:scale-105 hover:bg-gray-100 dark:hover:bg-gray-700 transition-all duration-200"
+                title="Copy text"
+                >
+                  {copiedMessageId === msg.id ? (
+                    <Check size={14} className="text-green-500" />
+                  ) : (
+                  <Copy size={14} />
+                  )}
+                  </button>
+                )}
+
+  <p className="text-sm pr-8">{msg.text}</p>
                 <p className={`text-xs mt-1 ${msg.sender === 'user' ? 'text-blue-100' : 'text-gray-400'}`}>{msg.time}</p>
               </div>
             </div>
