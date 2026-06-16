@@ -21,6 +21,7 @@ jobs:
       - name: Add quality labels from checks
         uses: actions/github-script@v9
         with:
+          github-token: ${{ secrets.QUALITY_LABEL_TOKEN || github.token }}
           script: |
             const { owner, repo } = context.repo;
             const CLEAN_LABEL = 'quality:clean';
@@ -91,13 +92,24 @@ jobs:
 
               const missingLabels = labelsToAdd.filter((label) => !currentLabelNames.has(label));
               if (missingLabels.length) {
-                await github.rest.issues.addLabels({
-                  owner,
-                  repo,
-                  issue_number: issueNumber,
-                  labels: missingLabels,
-                });
-                console.log(`Added ${missingLabels.join(', ')} to #${issueNumber}`);
+                try {
+                  await github.rest.issues.addLabels({
+                    owner,
+                    repo,
+                    issue_number: issueNumber,
+                    labels: missingLabels,
+                  });
+                  console.log(`Added ${missingLabels.join(', ')} to #${issueNumber}`);
+                } catch (error) {
+                  if (error.status === 403) {
+                    core.warning(
+                      `Could not add ${missingLabels.join(', ')} to #${issueNumber}: ${error.message}. ` +
+                      'If this repeats, add a QUALITY_LABEL_TOKEN secret with issues write access.'
+                    );
+                    return;
+                  }
+                  throw error;
+                }
               }
             }
 
