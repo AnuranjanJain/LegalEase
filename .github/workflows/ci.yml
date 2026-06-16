@@ -10,12 +10,14 @@ jobs:
   build-and-lint:
     runs-on: ubuntu-latest
     steps:
-    - uses: actions/checkout@v3
+    - uses: actions/checkout@v6
     - name: Use Node.js
-      uses: actions/setup-node@v3
+      uses: actions/setup-node@v6
       with:
-        node-version: '18.x'
+        node-version: '20'
         cache: 'npm'
+      env:
+        FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
     - run: npm ci
     - run: npm run lint
     - run: npm run build

@@ -28,3 +28,22 @@ dist-ssr
 
 # Vite artifacts
 stats.html
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+backend/__pycache__/
+backend/.venv/
+.venv/
+venv/
+# Coverage reports
+.coverage
+coverage/
+backend/.coverage
+backend/coverage.xml
+backend/.flake8
+*.db
+pnpm-lock.yaml
