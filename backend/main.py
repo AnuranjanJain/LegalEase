@@ -43,7 +43,7 @@ from backend.core.exceptions import (
     AIError, ValidationError, ProviderError, TimeoutError, ServiceUnavailableError
 )
 from backend.core.validation import (
-    validate_chat_input, validate_summarize_input, sanitize_text, validate_mime_and_bytes,
+    validate_chat_input, validate_summarize_input, validate_simplify_input, sanitize_text, validate_mime_and_bytes,
     validate_docx_archive_safety
 )
 from backend.services.ai_service import ai_service, correlation_id_var
@@ -229,6 +229,14 @@ class ChatRequest(BaseModel):
 
 class SummarizeRequest(BaseModel):
     text: str
+
+
+class SimplifyRequest(BaseModel):
+    text: str
+
+
+class SimplifyResponse(BaseModel):
+    simplifiedText: str
 
 
 class HealthResponse(BaseModel):
@@ -548,6 +556,26 @@ async def summarize(request: Request, payload: SummarizeRequest, identity: AuthI
 
     summary = await ai_service.generate_summary(sanitized_text)
     return {"summary": summary}
+
+
+@app.post("/api/simplify", response_model=SimplifyResponse)
+@app.post("/simplify", response_model=SimplifyResponse)
+async def simplify(request: Request, payload: SimplifyRequest, identity: AuthIdentity = Depends(validate_token_or_api_key)):
+    # Rate limiting using the authenticated identity
+    if not key_limiter.check(identity.get_rate_limit_key())["allowed"]:
+        raise HTTPException(status_code=429, detail="Rate limit exceeded")
+
+    # Sanitize input
+    sanitized_text = sanitize_text(payload.text)
+
+    # Early payload validation
+    validate_simplify_input(sanitized_text)
+
+    # Log the action
+    logger.info(f"[{correlation_id_var.get()}] Simplifying clause/text of length {len(sanitized_text)}")
+
+    simplified = await ai_service.simplify_clause(sanitized_text)
+    return SimplifyResponse(simplifiedText=simplified)
 
 
 @app.get("/health", response_model=HealthResponse)
