@@ -6,7 +6,6 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { useNotifications, AppNotification } from '../contexts/NotificationContext';
 import { useAuth } from '../contexts/AuthContext';
 import { api } from '../services/api';
-
 type Section = 'profile' | 'security' | 'notifications' | 'language';
 
 const VALID_TABS: Section[] = ['profile', 'security', 'notifications', 'language'];
@@ -414,8 +413,7 @@ export function ProfilePage() {
                   ))}
                 </div>
               </div>
-            )}
-
+   )}
             {/* ── NOTIFICATIONS PREFERENCES TAB ── */}
             {section === 'notifications' && (
               <div className="space-y-8 max-w-2xl animate-slide-up">
