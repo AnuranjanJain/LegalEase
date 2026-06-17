@@ -1,7 +1,7 @@
 import { useState, useRef, useEffect } from 'react';
 import { NavLink, useNavigate } from 'react-router-dom';
-import { Menu, X, Bell, Moon, Sun, User, Settings, FileText, Shield, Info, LogOut, Loader2 } from 'lucide-react';
-import { useDarkMode } from '../hooks/useDarkMode';
+import { Menu, X, Bell, User, Settings, FileText, Shield, Info, LogOut, Loader2 } from 'lucide-react';
+import { ThemeToggleSwitch } from './ThemeToggleSwitch';
 import { useNotifications, AppNotification } from '../contexts/NotificationContext';
 import { useAuth } from '../contexts/AuthContext';
 import { useToast } from '../contexts/ToastContext';
@@ -63,7 +63,6 @@ export function Header() {
   const [isNotificationOpen, setIsNotificationOpen] = useState(false);
   const userMenuRef = useRef<HTMLDivElement>(null);
   const notificationRef = useRef<HTMLDivElement>(null);
-  const { isDarkMode, toggleDarkMode } = useDarkMode();
   const { notifications, unreadCount, isLoading, markAllRead, markRead } = useNotifications();
   const navigate = useNavigate();
 
@@ -146,9 +145,7 @@ export function Header() {
 
           {/* Actions */}
           <div className="flex items-center gap-1 sm:gap-2 pr-1">
-            <button onClick={toggleDarkMode} className="p-2.5 rounded-full text-gray-500 dark:text-white/50 hover:bg-gray-100 dark:hover:bg-white/10 transition-all">
-              {isDarkMode ? <Sun size={18} /> : <Moon size={18} />}
-            </button>
+            <ThemeToggleSwitch />
 
             {/* Notification Bell */}
             <div className="relative hidden sm:flex" ref={notificationRef}>

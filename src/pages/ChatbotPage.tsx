@@ -1,4 +1,4 @@
-import { Send, User, Bot, Paperclip, X, FileText, Sparkles, RefreshCcw, PlusCircle, Trash2, History, Copy, Check, ShieldCheck, BookOpen, ChevronDown, Download } from 'lucide-react';
+import { Send, User, Bot, Paperclip, X, FileText, Sparkles, RefreshCcw, PlusCircle, Trash2, History, Copy, Check, ShieldCheck, Download, GitCompare, Layers } from 'lucide-react';
 import { api } from '../services/api';
 import { ChatStorageService, ChatMessage, ChatSessionMetadata } from '../services/storage';
 import { useRef, useState, useEffect, useCallback } from 'react';
@@ -47,6 +47,15 @@ export function ChatbotPage() {
   const [uploadProgress, setUploadProgress] = useState(0);
   const [showSessions, setShowSessions] = useState(false);
 
+  /**
+   * Multi-document comparison context.
+   * Populated when the user navigates here from a multi-doc comparison session
+   * created in DocumentsPage. When set, the chat sends `documentIds` to the
+   * comparison endpoint instead of `context` to the regular chat endpoint.
+   * Mutually exclusive with `uploadedDoc` for a given session.
+   */
+  const [multiDocContext, setMultiDocContext] = useState<Array<{ id: string; name: string; text: string }> | null>(null);
+  
   // State to track which message ID was copied to show the checkmark temporarily
   const [copiedId, setCopiedId] = useState<string | null>(null);
 
@@ -105,6 +114,7 @@ export function ChatbotPage() {
         setActiveSessionId(savedId);
         setMessages(sessionData.messages.length > 0 ? sessionData.messages : [makeGreeting()]);
         setUploadedDoc(sessionData.documentContext ?? null);
+        setMultiDocContext(sessionData.multiDocContext ?? null);
         return;
       }
     }
@@ -115,7 +125,7 @@ export function ChatbotPage() {
     setMessages([makeGreeting()]);
   }, []);
 
-  const persistSession = useCallback((msgs: ChatMessage[], docCtx: typeof uploadedDoc, sessionId: string | null) => {
+  const persistSession = useCallback((msgs: ChatMessage[], docCtx: typeof uploadedDoc, sessionId: string | null, multiCtx: typeof multiDocContext) => {
     if (!sessionId) return;
     const firstUser = msgs.find(m => m.sender === 'user');
     const title = firstUser
@@ -126,15 +136,16 @@ export function ChatbotPage() {
       title,
       messages: msgs,
       documentContext: docCtx ?? undefined,
+      multiDocContext: multiCtx ?? undefined,
     });
     setSessions(ChatStorageService.getSessions());
   }, []);
 
   useEffect(() => {
     if (activeSessionId) {
-      persistSession(messages, uploadedDoc, activeSessionId);
+      persistSession(messages, uploadedDoc, activeSessionId, multiDocContext);
     }
-  }, [messages, uploadedDoc, activeSessionId, persistSession]);
+  }, [messages, uploadedDoc, multiDocContext, activeSessionId, persistSession]);
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -145,6 +156,7 @@ export function ChatbotPage() {
     setActiveSessionId(newSession.id);
     setMessages([makeGreeting()]);
     setUploadedDoc(null);
+    setMultiDocContext(null);
     setSessions(ChatStorageService.getSessions());
     setShowSessions(false);
   };
@@ -156,6 +168,7 @@ export function ChatbotPage() {
     setActiveSessionId(id);
     setMessages(sessionData.messages.length > 0 ? sessionData.messages : [makeGreeting()]);
     setUploadedDoc(sessionData.documentContext ?? null);
+    setMultiDocContext(sessionData.multiDocContext ?? null);
     setShowSessions(false);
   };
 
@@ -177,6 +190,7 @@ export function ChatbotPage() {
     const freshGreeting = makeGreeting();
     setMessages([freshGreeting]);
     setUploadedDoc(null);
+    setMultiDocContext(null);
 
     if (activeSessionId) {
       ChatStorageService.saveSession({
@@ -184,6 +198,7 @@ export function ChatbotPage() {
         title: 'New Conversation',
         messages: [freshGreeting],
         documentContext: undefined,
+        multiDocContext: undefined,
       });
       setSessions(ChatStorageService.getSessions());
     }
@@ -217,57 +232,70 @@ export function ChatbotPage() {
         timestamp: new Date().toISOString(),
       };
       setMessages(prev => [...prev, botMessage]);
-      setIsTyping(false); // Hide the bouncing dots immediately since we will stream text
+      setIsTyping(false);
 
-      const response = await api.stream(
-        '/chat',
-        { message: currentInput, context: uploadedDoc?.text },
-        conversationHistory
-      );
-
-      const citationsHeader = response.headers.get('X-Citations');
-      if (citationsHeader) {
-        try {
-          const citations = JSON.parse(atob(citationsHeader));
-          if (citations && citations.length > 0) {
-            setMessageCitations(prev => ({ ...prev, [botId]: citations }));
+      // ---------------------------------------------------------------------------
+      // Route selection:
+      //   - Multi-doc comparison session → POST /compare/chat (structured response)
+      //   - Single-doc or no-doc session  → POST /chat (streaming)
+      // ---------------------------------------------------------------------------
+      if (multiDocContext && multiDocContext.length >= 2) {
+        const data = await api.post<{ response: string }>(
+          '/compare/chat',
+          {
+            message: currentInput,
+            document_ids: multiDocContext.map(d => d.id),
+            document_texts: multiDocContext.map(d => ({ id: d.id, name: d.name, text: d.text })),
+            conversation_history: conversationHistory,
           }
-        } catch (e) {
-          console.error("Failed to parse citations", e);
-        }
-      }
+        );
+        setMessages(prev =>
+          prev.map(msg =>
+            msg.id === botMessageId
+              ? { ...msg, text: data.response || "I couldn't generate a comparison for those documents." }
+              : msg
+          )
+        );
+      } else {
+        // Standard single-doc streaming path
+        const response = await api.stream(
+          '/chat',
+          { message: currentInput, context: uploadedDoc?.text },
+          conversationHistory
+        );
 
-      const reader = response.body?.getReader();
-      const decoder = new TextDecoder('utf-8');
+        const reader = response.body?.getReader();
+        const decoder = new TextDecoder('utf-8');
 
-      if (reader) {
-        let done = false;
-        while (!done) {
-          const { value, done: readerDone } = await reader.read();
-          done = readerDone;
-          if (value) {
-            const chunk = decoder.decode(value, { stream: true });
-            const lines = chunk.split('\n');
-            for (const line of lines) {
-              if (line.startsWith('data: ')) {
-                const dataStr = line.slice(6);
-                if (dataStr === '[DONE]') {
-                  done = true;
-                  break;
-                }
-                try {
-                  const data = JSON.parse(dataStr);
-                  if (data.response) {
-                    setMessages(prev => 
-                      prev.map(msg => 
-                        msg.id === botId 
-                          ? { ...msg, text: msg.text + data.response } 
-                          : msg
-                      )
-                    );
+        if (reader) {
+          let done = false;
+          while (!done) {
+            const { value, done: readerDone } = await reader.read();
+            done = readerDone;
+            if (value) {
+              const chunk = decoder.decode(value, { stream: true });
+              const lines = chunk.split('\n');
+              for (const line of lines) {
+                if (line.startsWith('data: ')) {
+                  const dataStr = line.slice(6);
+                  if (dataStr === '[DONE]') {
+                    done = true;
+                    break;
                   }
-                } catch (e) {
-                  // Ignore incomplete JSON chunks or parse errors, they'll resolve in the next chunk
+                  try {
+                    const data = JSON.parse(dataStr);
+                    if (data.response) {
+                      setMessages(prev =>
+                        prev.map(msg =>
+                          msg.id === botMessageId
+                            ? { ...msg, text: msg.text + data.response }
+                            : msg
+                        )
+                      );
+                    }
+                  } catch (e) {
+                    // Ignore incomplete JSON chunks
+                  }
                 }
               }
             }
@@ -614,6 +642,43 @@ export function ChatbotPage() {
           </div>
         )}
 
+        {/* Multi-document comparison context banner */}
+        {multiDocContext && multiDocContext.length >= 2 && (
+          <div className="mb-3 bg-indigo-500/5 dark:bg-indigo-500/10 border border-indigo-500/20 rounded-xl p-3">
+            <div className="flex items-center justify-between mb-2">
+              <div className="flex items-center gap-2">
+                <GitCompare size={14} className="text-indigo-500 flex-shrink-0" />
+                <span className="text-xs font-bold text-indigo-600 dark:text-indigo-400">
+                  Comparison Mode — {multiDocContext.length} documents
+                </span>
+              </div>
+              <button
+                onClick={() => setMultiDocContext(null)}
+                className="text-gray-400 hover:text-red-500 transition-colors p-0.5"
+                aria-label="Exit comparison mode"
+              >
+                <X size={14} />
+              </button>
+            </div>
+            <div className="flex flex-wrap gap-1.5">
+              {multiDocContext.map(doc => (
+                <span
+                  key={doc.id}
+                  className="inline-flex items-center gap-1 px-2 py-0.5 rounded-lg text-[11px] font-medium
+                             bg-indigo-100 dark:bg-indigo-900/30 text-indigo-700 dark:text-indigo-300
+                             border border-indigo-200 dark:border-indigo-700/50 max-w-[200px]"
+                >
+                  <Layers size={9} />
+                  <span className="truncate">{doc.name}</span>
+                </span>
+              ))}
+            </div>
+            <p className="text-[10px] text-indigo-500/70 dark:text-indigo-400/60 mt-2">
+              Ask questions like "Compare termination clauses" or "Find conflicting obligations"
+            </p>
+          </div>
+        )}
+
         <LegalMapping description={input} onSelect={(s) => setInput(prev => (prev ? prev + '\n\n' + `${s.section} — ${s.title}: ${s.summary}` : `${s.section} — ${s.title}: ${s.summary}`))} />
 
         <div className="flex items-center gap-2">
@@ -680,7 +745,7 @@ export function ChatbotPage() {
             {/* Accessible Multi-line Text Area for Enter / Shift+Enter management WITH COUNTER LIMIT */}
             <textarea
               className="w-full pl-4 pr-16 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent bg-gray-50 dark:bg-gray-700 text-gray-900 dark:text-white placeholder-gray-500 dark:placeholder-gray-400 resize-none max-h-32 min-h-[40px] block align-bottom leading-normal"
-              placeholder={uploadedDoc ? "Ask about this document..." : "Ask a legal question..."}
+              placeholder={multiDocContext ? "Compare clauses, find conflicts, ask about all documents..." : uploadedDoc ? "Ask about this document..." : "Ask a legal question..."}
               rows={1}
               maxLength={MAX_INPUT_CHARS}
               value={input}

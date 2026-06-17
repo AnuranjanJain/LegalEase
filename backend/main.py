@@ -1,4 +1,5 @@
 import asyncio
+from contextlib import asynccontextmanager
 from fastapi import BackgroundTasks, Depends, FastAPI, HTTPException, UploadFile, File, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, StreamingResponse
@@ -17,9 +18,12 @@ from dotenv import load_dotenv
 from backend.database import engine, Base, SessionLocal
 from backend.routers import auth_routes
 from backend.routers import legal_routes
+from backend.routers import history_routes
 from backend.routers.notifications import router as notifications_router
+from backend.routers.compare_routes import router as compare_router
 from backend.auth import validate_token_or_api_key, AuthIdentity
 from backend.utils.limiter import SimpleRateLimiter
+from backend.utils.cleanup import start_token_cleanup_task
 
 # ---------------------------------------------------------------------------
 # In-memory task store for async document processing (#365)
@@ -43,10 +47,12 @@ from backend.core.exceptions import (
     AIError, ValidationError, ProviderError, TimeoutError, ServiceUnavailableError
 )
 from backend.core.validation import (
-    validate_chat_input, validate_summarize_input, sanitize_text, validate_mime_and_bytes,
+    validate_chat_input, validate_summarize_input, validate_simplify_input, sanitize_text, validate_mime_and_bytes,
     validate_docx_archive_safety
 )
 from backend.services.ai_service import ai_service, correlation_id_var
+from backend.services.rag_service import rag_service
+from backend.services.cache_service import semantic_cache
 
 #Middleware import 
 from backend.middleware.rate_limit import RateLimitMiddleware
@@ -64,7 +70,21 @@ load_dotenv()
 # Track application start time for uptime calculation
 _app_start_time = time.monotonic()
 
-app = FastAPI()
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    # Start the token blacklist cleanup worker in the background (defaulting to 3600s/1h)
+    cleanup_interval = int(os.getenv("TOKEN_CLEANUP_INTERVAL_SECONDS", "3600"))
+    cleanup_task = asyncio.create_task(start_token_cleanup_task(interval_seconds=cleanup_interval))
+    try:
+        yield
+    finally:
+        cleanup_task.cancel()
+        try:
+            await cleanup_task
+        except asyncio.CancelledError:
+            pass
+
+app = FastAPI(lifespan=lifespan)
 
 
 # Exception Handlers to match standardized error contracts
@@ -154,6 +174,10 @@ app.include_router(auth_routes.router)
 app.include_router(legal_routes.router)
 # Include notifications router
 app.include_router(notifications_router)
+# Include history router
+app.include_router(history_routes.router)
+# Include multi-document comparison router
+app.include_router(compare_router)
 
 
 # Enable CORS for frontend communication
@@ -228,6 +252,14 @@ class ChatRequest(BaseModel):
 
 class SummarizeRequest(BaseModel):
     text: str
+
+
+class SimplifyRequest(BaseModel):
+    text: str
+
+
+class SimplifyResponse(BaseModel):
+    simplifiedText: str
 
 
 class HealthResponse(BaseModel):
@@ -307,31 +339,25 @@ async def chat(request: Request, payload: ChatRequest, identity: AuthIdentity = 
     sanitized_message = sanitize_text(payload.message)
     sanitized_context = sanitize_text(payload.context) if payload.context else None
 
-    # Handle RAG context retrieval for large documents
-    citations = []
-    if sanitized_context:
+    # Handle RAG context retrieval for non-streaming requests early.
+    # Streaming requests handle RAG inside the generator to avoid blocking initial response.
+    if sanitized_context and not payload.stream:
         import hashlib
-        from backend.services.rag_service import rag_service
-
+        
         doc_hash = hashlib.md5(sanitized_context.encode()).hexdigest()
-        if doc_hash not in rag_service.indexed_docs:
-            # Pass the filename from payload if available, else fall back to "document"
-            doc_filename = getattr(payload, 'filename', None) or "document"
-            rag_service.add_document(sanitized_context, doc_hash, filename=doc_filename)
-
-        raw_citations = rag_service.get_context_with_citations(sanitized_message, doc_hash)
-        citations = raw_citations
-
-        # Build a numbered context string with citation markers for the AI prompt
-        context_parts = []
-        for i, c in enumerate(raw_citations, start=1):
-            context_parts.append(f"[{i}] {c['text']}")
-        sanitized_context = "\n\n".join(context_parts) if context_parts else ""
+        try:
+            if doc_hash not in rag_service.indexed_docs:
+                await rag_service.add_document(sanitized_context, doc_hash)
+            sanitized_context = await rag_service.get_context(sanitized_message, doc_hash)
+        except Exception as e:
+            logger.warning(f"RAG retrieval failed: {e}. Falling back to non-RAG heuristic.")
+            # Fall back gracefully to a non-RAG heuristic (truncating context)
+            if len(sanitized_context) > 5000:
+                sanitized_context = sanitized_context[:5000] + "\n... [Context truncated due to RAG failure] ..."
 
     # Early payload validation
     validate_chat_input(sanitized_message, sanitized_context)
 
-    from backend.services.cache_service import semantic_cache
     cache_key = f"{sanitized_message} || {sanitized_context}" if sanitized_context else sanitized_message
     cached_response = semantic_cache.get(cache_key)
 
@@ -340,10 +366,14 @@ async def chat(request: Request, payload: ChatRequest, identity: AuthIdentity = 
         if payload.stream:
             async def stream_cached():
                 import asyncio
+                import json
                 words = cached_response.split(" ")
                 for i, word in enumerate(words):
-                    yield word + (" " if i < len(words) - 1 else "")
+                    chunk = word + (" " if i < len(words) - 1 else "")
+                    payload_data = json.dumps({"response": chunk})
+                    yield f"data: {payload_data}\n\n"
                     await asyncio.sleep(0.01)
+                yield "data: [DONE]\n\n"
             return StreamingResponse(stream_cached(), media_type="text/event-stream")
         else:
             return {"response": cached_response}
@@ -351,17 +381,43 @@ async def chat(request: Request, payload: ChatRequest, identity: AuthIdentity = 
     # Streaming or standard block handling
     if payload.stream:
         async def stream_generator():
+            nonlocal sanitized_context
             full_response = ""
             try:
+                # Perform RAG retrieval inside the stream generator asynchronously to prevent blocking the initial response
+                if sanitized_context:
+                    import hashlib
+                    
+                    doc_hash = hashlib.md5(sanitized_context.encode()).hexdigest()
+                    try:
+                        if doc_hash not in rag_service.indexed_docs:
+                            await rag_service.add_document(sanitized_context, doc_hash)
+                        sanitized_context = await rag_service.get_context(sanitized_message, doc_hash)
+                    except Exception as e:
+                        logger.warning(f"RAG retrieval failed inside stream generator: {e}. Falling back to non-RAG heuristic.")
+                        if len(sanitized_context) > 5000:
+                            sanitized_context = sanitized_context[:5000] + "\n... [Context truncated due to RAG failure] ..."
+
                 async for chunk in ai_service.generate_chat_response(
                     message=sanitized_message,
                     context=sanitized_context,
                     history=payload.conversation_history,
                     stream=True
                 ):
-                    full_response += chunk
+                    # Clean the SSE format to cache clean raw text
+                    if chunk.startswith("data: ") and chunk != "data: [DONE]\n\n":
+                        try:
+                            import json
+                            json_str = chunk.replace("data: ", "").strip()
+                            data = json.loads(json_str)
+                            full_response += data.get("response", "")
+                        except Exception:
+                            pass
                     yield chunk
-                semantic_cache.set(cache_key, full_response)
+                
+                # Re-calculate the cache key using the post-RAG context
+                final_cache_key = f"{sanitized_message} || {sanitized_context}" if sanitized_context else sanitized_message
+                semantic_cache.set(final_cache_key, full_response)
             except Exception as e:
                 logger.error(f"[{correlation_id_var.get()}] Stream generation error: {e}")
                 yield "\n[Error: Inference stream failed]"
@@ -527,6 +583,26 @@ async def summarize(request: Request, payload: SummarizeRequest, identity: AuthI
 
     summary = await ai_service.generate_summary(sanitized_text)
     return {"summary": summary}
+
+
+@app.post("/api/simplify", response_model=SimplifyResponse)
+@app.post("/simplify", response_model=SimplifyResponse)
+async def simplify(request: Request, payload: SimplifyRequest, identity: AuthIdentity = Depends(validate_token_or_api_key)):
+    # Rate limiting using the authenticated identity
+    if not key_limiter.check(identity.get_rate_limit_key())["allowed"]:
+        raise HTTPException(status_code=429, detail="Rate limit exceeded")
+
+    # Sanitize input
+    sanitized_text = sanitize_text(payload.text)
+
+    # Early payload validation
+    validate_simplify_input(sanitized_text)
+
+    # Log the action
+    logger.info(f"[{correlation_id_var.get()}] Simplifying clause/text of length {len(sanitized_text)}")
+
+    simplified = await ai_service.simplify_clause(sanitized_text)
+    return SimplifyResponse(simplifiedText=simplified)
 
 
 @app.get("/health", response_model=HealthResponse)

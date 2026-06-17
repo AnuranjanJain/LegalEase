@@ -65,6 +65,20 @@ export interface ChatSessionData {
     name: string;
     text: string;
   };
+  /**
+   * Multi-document comparison context.
+   * Populated when the user launches a cross-document comparison session
+   * from the Document Vault. Each entry carries the document's display name
+   * and its extracted text so the AI can analyse all of them together.
+   *
+   * Mutually exclusive with `documentContext` — a session uses either a
+   * single-document context OR a multi-document comparison context, never both.
+   */
+  multiDocContext?: Array<{
+    id: string;
+    name: string;
+    text: string;
+  }>;
 }
 
 const STORAGE_KEYS = {

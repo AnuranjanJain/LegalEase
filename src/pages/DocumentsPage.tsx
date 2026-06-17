@@ -2,7 +2,7 @@ import { useState, useRef, useEffect, useMemo } from 'react';
 import { 
   UploadCloud, FileText, Trash2, Eye, Search, 
   Grid, List, CheckCircle, ArrowRight, RefreshCcw,
-  X, MessageSquare, Download, AlertCircle, ShieldCheck
+  X, MessageSquare, Download, AlertCircle, ShieldCheck, GitCompare
 } from 'lucide-react';
 import { StorageService, Document, ChatStorageService } from '../services/storage';
 import { useToast } from '../contexts/ToastContext';
@@ -14,6 +14,7 @@ import { ReadabilityScore } from '../components/ReadabilityScore';
 import { useRedaction } from '../contexts/RedactionContext';
 import { redact } from '../utils/redaction';
 import { RedactedText } from '../components/RedactedText';
+import { DocumentCompareSelector } from '../components/DocumentCompareSelector';
 
 export function DocumentsPage() {
   const [isDragging, setIsDragging] = useState(false);
@@ -27,6 +28,49 @@ export function DocumentsPage() {
   const { showToast } = useToast();
   const navigate = useNavigate();
   const { isRedactionEnabled, redactionStyle } = useRedaction();
+
+  // ---------------------------------------------------------------------------
+  // Multi-document comparison selection state.
+  // Only processed (status === 'processed') documents can be selected.
+  // ---------------------------------------------------------------------------
+  const [selectedDocIds, setSelectedDocIds] = useState<string[]>([]);
+
+  const handleToggleDocSelection = (id: string) => {
+    setSelectedDocIds(prev =>
+      prev.includes(id) ? prev.filter(d => d !== id) : [...prev, id]
+    );
+  };
+
+  const handleClearSelection = () => setSelectedDocIds([]);
+
+  /**
+   * Launch a multi-document comparison chat session.
+   * Creates a new ChatSession with `multiDocContext` populated from the
+   * selected documents' extracted text, then navigates to the chatbot.
+   */
+  const handleCompareDocuments = (ids: string[]) => {
+    const docs = ids
+      .map(id => StorageService.getDocument(id))
+      .filter((d): d is Document => d !== undefined && d.status === 'processed');
+
+    if (docs.length < 2) {
+      showToast('Select at least 2 analyzed documents to compare.', 'warning');
+      return;
+    }
+
+    const names = docs.map(d => d.name).join(', ');
+    const session = ChatStorageService.createSession(`Compare: ${names.substring(0, 60)}`);
+    session.multiDocContext = docs.map(d => ({
+      id: d.id,
+      name: d.name,
+      text: d.text || d.summary || '',
+    }));
+    ChatStorageService.saveSession(session);
+
+    showToast(`Launching comparison of ${docs.length} documents...`, 'info');
+    setSelectedDocIds([]);
+    navigate('/chatbot');
+  };
 
   // Derive the redacted version of the audit summary (never mutates original)
   const auditSummaryDisplay = useMemo(() => {
@@ -250,13 +294,28 @@ export function DocumentsPage() {
             </p>
           </div>
 
-          <button
-            onClick={() => fileInputRef.current?.click()}
-            className="inline-flex items-center px-5 py-3 text-sm font-semibold rounded-xl text-white bg-primary-600 hover:bg-primary-500 shadow-lg shadow-primary-500/20 hover:shadow-primary-500/35 hover:scale-[1.02] active:scale-95 transition-all duration-300"
-          >
-            <UploadCloud size={18} className="mr-2 animate-bounce" />
-            Upload Document
-          </button>
+          <div className="flex items-center gap-3">
+            {/* Compare shortcut — visible when 2+ processed docs are selected */}
+            {selectedDocIds.length >= 2 && (
+              <button
+                onClick={() => handleCompareDocuments(selectedDocIds)}
+                className="inline-flex items-center gap-2 px-4 py-2.5 text-sm font-semibold rounded-xl
+                           text-white bg-indigo-600 hover:bg-indigo-500 shadow-lg shadow-indigo-500/20
+                           hover:scale-[1.02] active:scale-95 transition-all duration-200"
+                aria-label={`Compare ${selectedDocIds.length} selected documents`}
+              >
+                <GitCompare size={16} />
+                Compare ({selectedDocIds.length})
+              </button>
+            )}
+            <button
+              onClick={() => fileInputRef.current?.click()}
+              className="inline-flex items-center px-5 py-3 text-sm font-semibold rounded-xl text-white bg-primary-600 hover:bg-primary-500 shadow-lg shadow-primary-500/20 hover:shadow-primary-500/35 hover:scale-[1.02] active:scale-95 transition-all duration-300"
+            >
+              <UploadCloud size={18} className="mr-2 animate-bounce" />
+              Upload Document
+            </button>
+          </div>
         </div>
 
         {/* --- UPLOAD AREA WITH GLASSMORPHISM AND NEUMORPHIC GLOW --- */}
@@ -368,17 +427,35 @@ export function DocumentsPage() {
                 return (
                   <div 
                     key={doc.id} 
-                    className="group bg-white dark:bg-gray-900 rounded-2xl border border-gray-200 dark:border-gray-800 shadow-sm hover:shadow-xl hover:-translate-y-1.5 transition-all duration-300 relative overflow-hidden flex flex-col justify-between"
+                    className={`group bg-white dark:bg-gray-900 rounded-2xl border shadow-sm hover:shadow-xl hover:-translate-y-1.5 transition-all duration-300 relative overflow-hidden flex flex-col justify-between ${
+                      selectedDocIds.includes(doc.id)
+                        ? 'border-primary-500 ring-2 ring-primary-500/30'
+                        : 'border-gray-200 dark:border-gray-800'
+                    }`}
                   >
                     {/* Glowing bar at top based on file type */}
                     <div className={`absolute top-0 left-0 w-full h-1 bg-gradient-to-r ${doc.type === 'pdf' ? 'from-red-500 to-rose-500' : doc.type === 'docx' ? 'from-blue-500 to-indigo-500' : 'from-purple-500 to-pink-500'} opacity-0 group-hover:opacity-100 transition-opacity`}></div>
 
                     <div className="p-6">
-                      {/* Header with Type badge and Status */}
+                      {/* Header with Type badge, checkbox, and Status */}
                       <div className="flex justify-between items-start mb-4">
-                        <span className={`text-[10px] font-extrabold uppercase tracking-widest px-2.5 py-0.5 rounded-full border ${typeInfo.color}`}>
-                          {doc.type}
-                        </span>
+                        <div className="flex items-center gap-2">
+                          {/* Multi-select checkbox — only for processed docs */}
+                          {doc.status === 'processed' && (
+                            <input
+                              type="checkbox"
+                              checked={selectedDocIds.includes(doc.id)}
+                              onChange={() => handleToggleDocSelection(doc.id)}
+                              onClick={e => e.stopPropagation()}
+                              className="h-4 w-4 rounded border-gray-300 dark:border-gray-600 text-primary-600
+                                         focus:ring-primary-500 focus:ring-offset-0 cursor-pointer"
+                              aria-label={`Select ${doc.name} for comparison`}
+                            />
+                          )}
+                          <span className={`text-[10px] font-extrabold uppercase tracking-widest px-2.5 py-0.5 rounded-full border ${typeInfo.color}`}>
+                            {doc.type}
+                          </span>
+                        </div>
                         
                         {doc.status === 'processing' ? (
                           <span className="inline-flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-full bg-amber-500/10 text-amber-500 border border-amber-500/20 animate-pulse">
@@ -468,6 +545,7 @@ export function DocumentsPage() {
                 <table className="min-w-full divide-y divide-gray-150 dark:divide-gray-800">
                   <thead className="bg-gray-50 dark:bg-gray-950/50">
                     <tr>
+                      <th className="px-4 py-4 w-10" aria-label="Select for comparison"></th>
                       <th className="px-6 py-4 text-left text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider">Document Name</th>
                       <th className="px-6 py-4 text-left text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider">Size</th>
                       <th className="px-6 py-4 text-left text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider">Date Uploaded</th>
@@ -480,7 +558,19 @@ export function DocumentsPage() {
                       const typeInfo = getDocTypeDetails(doc.type);
 
                       return (
-                        <tr key={doc.id} className="hover:bg-gray-50 dark:hover:bg-gray-950/40 transition-colors">
+                        <tr key={doc.id} className={`hover:bg-gray-50 dark:hover:bg-gray-950/40 transition-colors ${selectedDocIds.includes(doc.id) ? 'bg-primary-50/50 dark:bg-primary-900/10' : ''}`}>
+                          <td className="px-4 py-4">
+                            {doc.status === 'processed' && (
+                              <input
+                                type="checkbox"
+                                checked={selectedDocIds.includes(doc.id)}
+                                onChange={() => handleToggleDocSelection(doc.id)}
+                                className="h-4 w-4 rounded border-gray-300 dark:border-gray-600 text-primary-600
+                                           focus:ring-primary-500 focus:ring-offset-0 cursor-pointer"
+                                aria-label={`Select ${doc.name} for comparison`}
+                              />
+                            )}
+                          </td>
                           <td className="px-6 py-4 whitespace-nowrap">
                             <div className="flex items-center gap-3">
                               <div className={`p-2 rounded-lg bg-gray-100 dark:bg-gray-800 flex-shrink-0`}>
@@ -579,6 +669,15 @@ export function DocumentsPage() {
       <WhatsAppShareModal
         document={shareDoc}
         onClose={() => setShareDoc(null)}
+      />
+
+      {/* Multi-document comparison floating action bar */}
+      <DocumentCompareSelector
+        allDocuments={documents}
+        selectedIds={selectedDocIds}
+        onToggle={handleToggleDocSelection}
+        onClear={handleClearSelection}
+        onCompare={handleCompareDocuments}
       />
 
       {/* Cognitive Audit Brief Modal */}
