@@ -69,7 +69,7 @@ class ResendVerificationRequest(BaseModel):
 
 @router.post("/signup", status_code=status.HTTP_201_CREATED, response_model=TokenResponse)
 def signup(request: Request, user: UserCreate, db: Session = Depends(get_db)):
-    # Enforce rate limiting before processing
+    # Enforce rate limiting before database operations
     check_signup_rate_limit(request, user.email)
     
     # Normalize email so casing variations resolve to a single account

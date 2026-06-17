@@ -12,6 +12,7 @@ bcrypt
 python-jose[cryptography]
 email-validator
 redis
+reportlab
 # RAG and Semantic Cache dependencies
 langchain
 langchain-community

@@ -2,7 +2,7 @@ import { useState, useEffect, useRef } from 'react';
 import { useLocation, NavLink } from 'react-router-dom';
 import { 
   RefreshCcw, CheckCircle, Clock, Cpu, Sparkles, 
-  AlertTriangle, FileText, BookOpen, ShieldCheck
+  AlertTriangle, FileText, BookOpen, ShieldCheck, Download
 } from 'lucide-react';
 import { api } from '../services/api';
 import { StorageService } from '../services/storage';
@@ -53,6 +53,7 @@ export function ProcessingPage() {
   const [errorMessage, setErrorMessage] = useState('');
   const [finalSummary, setFinalSummary] = useState('');
   const [originalText, setOriginalText] = useState('');
+  const [isExporting, setIsExporting] = useState(false);
 
   // Apply PII redaction to the live preview (original summary kept in state)
   const redactedSummary = useRedactedText(finalSummary);
@@ -173,6 +174,45 @@ export function ProcessingPage() {
 
     executePipeline();
   }, [docId, file, showToast]);
+
+  const handleExportPDF = async () => {
+    if (!finalSummary) {
+      showToast('No summary content available to export.', 'warning');
+      return;
+    }
+
+    const summaryText = isRedactionEnabled ? redactedSummary : finalSummary;
+
+    setIsExporting(true);
+    showToast('Generating PDF summary...', 'info');
+
+    try {
+      const docName = file?.name || 'document';
+      const blob = await api.postBlob('/api/export/pdf', {
+        title: `AI Document Summary: ${docName}`,
+        summary: summaryText
+      });
+
+      const today = new Date().toISOString().split('T')[0];
+      const filename = `summary-${today}.pdf`;
+
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.setAttribute('download', filename);
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      URL.revokeObjectURL(url);
+
+      showToast('PDF summary exported successfully!', 'success');
+    } catch (err) {
+      console.error('Failed to export PDF summary:', err);
+      showToast(err instanceof Error ? err.message : 'Failed to export PDF summary.', 'error');
+    } finally {
+      setIsExporting(false);
+    }
+  };
 
   // Overall pipeline progress percentage calculation
   const getOverallProgress = () => {
@@ -535,12 +575,28 @@ export function ProcessingPage() {
                     <span>Retry Pipeline</span>
                   </button>
                 ) : (
-                  <NavLink 
-                    to="/documents" 
-                    className="px-5 py-2.5 text-xs font-bold text-gray-500 dark:text-gray-400 hover:text-gray-950 dark:hover:text-white flex items-center justify-center"
-                  >
-                    {isPipelineCompleted ? 'Back to Vault' : 'Cancel Audit'}
-                  </NavLink>
+                  <>
+                    {isPipelineCompleted && finalSummary && (
+                      <button
+                        onClick={handleExportPDF}
+                        disabled={isExporting}
+                        className="px-5 py-2.5 text-xs font-bold text-white bg-primary-650 hover:bg-primary-500 rounded-xl shadow-lg disabled:opacity-50 disabled:cursor-not-allowed transition-all flex items-center justify-center gap-1.5"
+                      >
+                        {isExporting ? (
+                          <RefreshCcw size={14} className="animate-spin" />
+                        ) : (
+                          <Download size={14} />
+                        )}
+                        <span>Export PDF</span>
+                      </button>
+                    )}
+                    <NavLink 
+                      to="/documents" 
+                      className="px-5 py-2.5 text-xs font-bold text-gray-500 dark:text-gray-400 hover:text-gray-950 dark:hover:text-white flex items-center justify-center"
+                    >
+                      {isPipelineCompleted ? 'Back to Vault' : 'Cancel Audit'}
+                    </NavLink>
+                  </>
                 )}
                 <NavLink 
                   to="/dashboard" 
