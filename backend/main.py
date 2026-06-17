@@ -5,7 +5,6 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, StreamingResponse
 from pydantic import BaseModel
 from datetime import datetime
-from io import BytesIO
 import os
 import logging
 import tempfile

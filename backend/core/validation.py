@@ -1,7 +1,6 @@
 import os
 import re
 import zipfile
-from io import BytesIO
 from typing import Optional
 from backend.core.exceptions import ValidationError
 from backend.core.jurisdictions import Jurisdictions

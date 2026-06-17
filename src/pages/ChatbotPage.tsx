@@ -9,8 +9,6 @@ import { redact } from '../utils/redaction';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import rehypeRaw from 'rehype-raw';
-// @ts-ignore
-import html2pdf from 'html2pdf.js';
 import { JURISDICTIONS } from '../config/jurisdictions';
 import { Globe, ChevronDown, Search, AlertTriangle } from 'lucide-react';
 
@@ -390,7 +388,7 @@ export function ChatbotPage() {
                         )
                       );
                     }
-                  } catch (e) {
+                  } catch {
                     // Ignore incomplete JSON chunks
                   }
                 }
@@ -754,11 +752,11 @@ export function ChatbotPage() {
                       remarkPlugins={[remarkGfm]} 
                       rehypePlugins={[rehypeRaw]}
                       components={{
-                        table: ({node, ...props}) => <table className="border-collapse table-auto w-full text-sm my-2 border border-gray-300 dark:border-gray-600 rounded-lg overflow-hidden" {...props} />,
-                        th: ({node, ...props}) => <th className="border border-gray-300 dark:border-gray-600 px-4 py-2 bg-gray-100 dark:bg-gray-800 text-left font-bold" {...props} />,
-                        td: ({node, ...props}) => <td className="border border-gray-300 dark:border-gray-600 px-4 py-2" {...props} />,
-                        blockquote: ({node, ...props}) => <blockquote className="border-l-4 border-gray-300 dark:border-gray-500 pl-4 italic text-gray-600 dark:text-gray-400 my-2" {...props} />,
-                        a: ({node, ...props}) => <a className="text-primary hover:underline" {...props} />
+                        table: ({node: _node, ...props}) => <table className="border-collapse table-auto w-full text-sm my-2 border border-gray-300 dark:border-gray-600 rounded-lg overflow-hidden" {...props} />,
+                        th: ({node: _node, ...props}) => <th className="border border-gray-300 dark:border-gray-600 px-4 py-2 bg-gray-100 dark:bg-gray-800 text-left font-bold" {...props} />,
+                        td: ({node: _node, ...props}) => <td className="border border-gray-300 dark:border-gray-600 px-4 py-2" {...props} />,
+                        blockquote: ({node: _node, ...props}) => <blockquote className="border-l-4 border-gray-300 dark:border-gray-500 pl-4 italic text-gray-600 dark:text-gray-400 my-2" {...props} />,
+                        a: ({node: _node, ...props}) => <a className="text-primary hover:underline" {...props} />
                       }}
                     >
                       {displayText}

@@ -376,7 +376,7 @@ class TestCompareEndpoint:
 
         received_history = {}
 
-        async def capturing_compare(message, documents, history=None):
+        async def capturing_compare(message, documents, history=None, **kwargs):
             received_history["h"] = history
             return "ok"
 

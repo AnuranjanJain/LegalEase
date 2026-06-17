@@ -6,13 +6,11 @@
   "scripts": {
     "dev": "vite",
     "build": "tsc && vite build",
-    "lint": "echo lint skipped",
-    "test": "echo tests passed",
+    "lint": "eslint . --ext ts,tsx",
+    "test": "vitest run",
     "preview": "vite preview"
   },
   "dependencies": {
-    "chart.js": "^4.5.1",
-    "chartjs": "^0.3.24",
     "html2pdf.js": "^0.14.0",
     "lucide-react": "^0.330.0",
     "react": "^18.2.0",
@@ -44,6 +42,9 @@
     "typescript": "^5.2.2",
     "vite": "^5.1.0",
     "vitest": "^4.1.9"
+  },
+  "overrides": {
+    "esbuild": "0.21.5"
   },
   "optionalDependencies": {
     "@rollup/rollup-linux-x64-gnu": "^4.62.0"

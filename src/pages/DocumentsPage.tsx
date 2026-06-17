@@ -144,7 +144,7 @@ export function DocumentsPage() {
       setDocuments(remaining);
       localStorage.setItem('le_documents', JSON.stringify(remaining));
       showToast(`"${name}" deleted successfully.`, 'info');
-    } catch (err) {
+    } catch {
       showToast('Failed to delete document.', 'error');
     }
   };
