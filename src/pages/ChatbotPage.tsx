@@ -11,6 +11,8 @@ import remarkGfm from 'remark-gfm';
 import rehypeRaw from 'rehype-raw';
 // @ts-ignore
 import html2pdf from 'html2pdf.js';
+import { JURISDICTIONS } from '../config/jurisdictions';
+import { Globe, ChevronDown, Search, AlertTriangle } from 'lucide-react';
 
 function makeGreeting(): ChatMessage {
   return {
@@ -43,6 +45,14 @@ export function ChatbotPage() {
   const [uploadProgress, setUploadProgress] = useState(0);
   const [showSessions, setShowSessions] = useState(false);
   const [isExporting, setIsExporting] = useState(false);
+
+  const [selectedJurisdiction, setSelectedJurisdiction] = useState<string>('General / Not Specified');
+  const [isDropdownOpen, setIsDropdownOpen] = useState(false);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [focusedOptionIndex, setFocusedOptionIndex] = useState(-1);
+  const dropdownRef = useRef<HTMLDivElement>(null);
+  const triggerRef = useRef<HTMLButtonElement>(null);
+  const searchInputRef = useRef<HTMLInputElement>(null);
 
   /**
    * Multi-document comparison context.
@@ -112,6 +122,7 @@ export function ChatbotPage() {
         setMessages(sessionData.messages.length > 0 ? sessionData.messages : [makeGreeting()]);
         setUploadedDoc(sessionData.documentContext ?? null);
         setMultiDocContext(sessionData.multiDocContext ?? null);
+        setSelectedJurisdiction(sessionData.jurisdiction ?? localStorage.getItem('le_selected_jurisdiction') ?? 'General / Not Specified');
         return;
       }
     }
@@ -120,9 +131,10 @@ export function ChatbotPage() {
     setActiveSessionId(newSession.id);
     setSessions(ChatStorageService.getSessions());
     setMessages([makeGreeting()]);
+    setSelectedJurisdiction(newSession.jurisdiction ?? localStorage.getItem('le_selected_jurisdiction') ?? 'General / Not Specified');
   }, []);
 
-  const persistSession = useCallback((msgs: ChatMessage[], docCtx: typeof uploadedDoc, sessionId: string | null, multiCtx: typeof multiDocContext) => {
+  const persistSession = useCallback((msgs: ChatMessage[], docCtx: typeof uploadedDoc, sessionId: string | null, multiCtx: typeof multiDocContext, jur: string) => {
     if (!sessionId) return;
     const firstUser = msgs.find(m => m.sender === 'user');
     const title = firstUser
@@ -132,6 +144,7 @@ export function ChatbotPage() {
       id: sessionId,
       title,
       messages: msgs,
+      jurisdiction: jur,
       documentContext: docCtx ?? undefined,
       multiDocContext: multiCtx ?? undefined,
     });
@@ -140,9 +153,92 @@ export function ChatbotPage() {
 
   useEffect(() => {
     if (activeSessionId) {
-      persistSession(messages, uploadedDoc, activeSessionId, multiDocContext);
+      persistSession(messages, uploadedDoc, activeSessionId, multiDocContext, selectedJurisdiction);
     }
-  }, [messages, uploadedDoc, multiDocContext, activeSessionId, persistSession]);
+  }, [messages, uploadedDoc, multiDocContext, activeSessionId, selectedJurisdiction, persistSession]);
+
+  // Toggle dropdown
+  const toggleDropdown = () => {
+    setIsDropdownOpen(prev => {
+      const next = !prev;
+      if (next) {
+        setSearchQuery('');
+        setFocusedOptionIndex(-1);
+      }
+      return next;
+    });
+  };
+
+  // Close dropdown on click outside
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
+        setIsDropdownOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
+
+  // Focus search input when dropdown opens
+  useEffect(() => {
+    if (isDropdownOpen) {
+      setTimeout(() => {
+        searchInputRef.current?.focus();
+      }, 50);
+    }
+  }, [isDropdownOpen]);
+
+  const handleSelectJurisdiction = (j: string) => {
+    setSelectedJurisdiction(j);
+    localStorage.setItem('le_selected_jurisdiction', j);
+    setIsDropdownOpen(false);
+    triggerRef.current?.focus();
+  };
+
+  const jurisdictionsList = Object.values(JURISDICTIONS);
+  const filteredJurisdictions = jurisdictionsList.filter(j =>
+    j.toLowerCase().includes(searchQuery.toLowerCase())
+  );
+
+  const handleKeyDown = (e: React.KeyboardEvent) => {
+    if (!isDropdownOpen) {
+      if (e.key === 'Enter' || e.key === ' ' || e.key === 'ArrowDown') {
+        e.preventDefault();
+        setIsDropdownOpen(true);
+      }
+      return;
+    }
+
+    switch (e.key) {
+      case 'ArrowDown':
+        e.preventDefault();
+        setFocusedOptionIndex(prev => 
+          prev < filteredJurisdictions.length - 1 ? prev + 1 : 0
+        );
+        break;
+      case 'ArrowUp':
+        e.preventDefault();
+        setFocusedOptionIndex(prev => 
+          prev > 0 ? prev - 1 : filteredJurisdictions.length - 1
+        );
+        break;
+      case 'Enter':
+        e.preventDefault();
+        if (focusedOptionIndex >= 0 && focusedOptionIndex < filteredJurisdictions.length) {
+          handleSelectJurisdiction(filteredJurisdictions[focusedOptionIndex]);
+        }
+        break;
+      case 'Escape':
+        e.preventDefault();
+        setIsDropdownOpen(false);
+        triggerRef.current?.focus();
+        break;
+      case 'Tab':
+        setIsDropdownOpen(false);
+        break;
+    }
+  };
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -154,6 +250,7 @@ export function ChatbotPage() {
     setMessages([makeGreeting()]);
     setUploadedDoc(null);
     setMultiDocContext(null);
+    setSelectedJurisdiction(newSession.jurisdiction ?? localStorage.getItem('le_selected_jurisdiction') ?? 'General / Not Specified');
     setSessions(ChatStorageService.getSessions());
     setShowSessions(false);
   };
@@ -166,6 +263,7 @@ export function ChatbotPage() {
     setMessages(sessionData.messages.length > 0 ? sessionData.messages : [makeGreeting()]);
     setUploadedDoc(sessionData.documentContext ?? null);
     setMultiDocContext(sessionData.multiDocContext ?? null);
+    setSelectedJurisdiction(sessionData.jurisdiction ?? localStorage.getItem('le_selected_jurisdiction') ?? 'General / Not Specified');
     setShowSessions(false);
   };
 
@@ -194,6 +292,7 @@ export function ChatbotPage() {
         id: activeSessionId,
         title: 'New Conversation',
         messages: [freshGreeting],
+        jurisdiction: selectedJurisdiction,
         documentContext: undefined,
         multiDocContext: undefined,
       });
@@ -244,6 +343,7 @@ export function ChatbotPage() {
             document_ids: multiDocContext.map(d => d.id),
             document_texts: multiDocContext.map(d => ({ id: d.id, name: d.name, text: d.text })),
             conversation_history: conversationHistory,
+            jurisdiction: selectedJurisdiction,
           }
         );
         setMessages(prev =>
@@ -257,7 +357,7 @@ export function ChatbotPage() {
         // Standard single-doc streaming path
         const response = await api.stream(
           '/chat',
-          { message: currentInput, context: uploadedDoc?.text },
+          { message: currentInput, context: uploadedDoc?.text, jurisdiction: selectedJurisdiction },
           conversationHistory
         );
 
@@ -482,6 +582,111 @@ export function ChatbotPage() {
           ))}
         </div>
       )}
+
+      {/* Sub-header with Jurisdiction Selector */}
+      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 px-6 py-4 bg-white/80 dark:bg-gray-800/80 backdrop-blur-md border-b border-gray-200 dark:border-gray-800 z-10 flex-shrink-0 animate-fade-in">
+        <div className="flex flex-col">
+          <h1 className="text-sm font-semibold text-gray-800 dark:text-gray-200 flex items-center gap-2">
+            <Globe size={16} className="text-primary" />
+            <span>Legal Chat Sandbox</span>
+          </h1>
+          <p className="text-[11px] text-gray-500 dark:text-gray-400 font-medium mt-0.5">
+            {multiDocContext && multiDocContext.length >= 2 
+              ? `Comparing ${multiDocContext.length} documents` 
+              : uploadedDoc 
+                ? `Analyzing: ${uploadedDoc.name}` 
+                : 'General conversation Mode'}
+          </p>
+        </div>
+        
+        <div className="flex flex-wrap items-center gap-3">
+          {/* Warning Badge */}
+          {selectedJurisdiction === 'General / Not Specified' && (
+            <div 
+              className="flex items-center gap-1.5 px-3 py-1 rounded-full text-[11px] font-medium bg-amber-50 dark:bg-amber-950/30 text-amber-700 dark:text-amber-300 border border-amber-200 dark:border-amber-900/50 animate-pulse shadow-sm"
+              role="alert"
+            >
+              <AlertTriangle size={14} className="flex-shrink-0 text-amber-500" />
+              <span>Responses may not reflect jurisdiction-specific legal requirements.</span>
+            </div>
+          )}
+
+          {/* Searchable Dropdown */}
+          <div className="relative" ref={dropdownRef}>
+            <label id="jurisdiction-label" className="sr-only">Choose Legal Jurisdiction</label>
+            <button
+              ref={triggerRef}
+              role="combobox"
+              onClick={toggleDropdown}
+              onKeyDown={handleKeyDown}
+              aria-haspopup="listbox"
+              aria-expanded={isDropdownOpen}
+              aria-labelledby="jurisdiction-label"
+              aria-controls="jurisdiction-menu"
+              className="flex items-center justify-between gap-2 px-3 py-1.5 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-sm font-medium text-gray-700 dark:text-gray-250 hover:bg-gray-50 dark:hover:bg-gray-600 transition-colors shadow-sm focus:outline-none focus:ring-2 focus:ring-primary min-w-[200px]"
+            >
+              <span className="truncate">{selectedJurisdiction}</span>
+              <ChevronDown size={16} className="text-gray-400" />
+            </button>
+
+            {isDropdownOpen && (
+              <div 
+                id="jurisdiction-menu"
+                role="listbox"
+                aria-labelledby="jurisdiction-label"
+                className="absolute right-0 mt-2 w-[240px] rounded-xl border border-gray-250 dark:border-gray-700 bg-white dark:bg-gray-800 shadow-xl z-30 overflow-hidden animate-fade-in"
+              >
+                {/* Search Box */}
+                <div className="flex items-center gap-2 p-2 border-b border-gray-100 dark:border-gray-750 bg-gray-50 dark:bg-gray-900">
+                  <Search size={14} className="text-gray-400 flex-shrink-0" />
+                  <input
+                    ref={searchInputRef}
+                    type="text"
+                    placeholder="Search jurisdiction..."
+                    value={searchQuery}
+                    onChange={(e) => {
+                      setSearchQuery(e.target.value);
+                      setFocusedOptionIndex(-1);
+                    }}
+                    onKeyDown={handleKeyDown}
+                    className="w-full bg-transparent border-none focus:outline-none focus:ring-0 text-xs text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-gray-500"
+                  />
+                </div>
+
+                {/* Options List */}
+                <div className="max-h-60 overflow-y-auto py-1">
+                  {filteredJurisdictions.length === 0 ? (
+                    <div className="px-3 py-2 text-xs text-gray-400 italic">No jurisdictions found</div>
+                  ) : (
+                    filteredJurisdictions.map((j, idx) => {
+                      const isSelected = j === selectedJurisdiction;
+                      const isFocused = idx === focusedOptionIndex;
+                      return (
+                        <div
+                          key={j}
+                          role="option"
+                          aria-selected={isSelected}
+                          onClick={() => handleSelectJurisdiction(j)}
+                          className={`flex items-center justify-between px-3 py-2 text-xs font-semibold cursor-pointer transition-colors ${
+                            isSelected 
+                              ? 'bg-primary/10 text-primary dark:bg-primary/20 dark:text-primary-400' 
+                              : isFocused 
+                                ? 'bg-gray-150 dark:bg-gray-700 text-gray-900 dark:text-white' 
+                                : 'text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-750'
+                          }`}
+                        >
+                          <span className="truncate">{j}</span>
+                          {isSelected && <span className="w-1.5 h-1.5 bg-primary rounded-full animate-fade-in" />}
+                        </div>
+                      );
+                    })
+                  )}
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
 
       {/* Message list - takes remaining space */}
       <div className="flex-grow overflow-y-auto px-4 sm:px-6 py-6 sm:py-8 space-y-4 sm:space-y-6 relative z-10 min-h-0">

@@ -29,7 +29,7 @@ from fastapi import APIRouter, Depends, HTTPException, Request, status
 from pydantic import BaseModel, Field, field_validator
 
 from backend.auth import validate_token_or_api_key, AuthIdentity
-from backend.core.validation import sanitize_text
+from backend.core.validation import sanitize_text, validate_jurisdiction
 from backend.services.comparison_service import comparison_service, MAX_DOCUMENTS
 from backend.services.ai_service import correlation_id_var
 from backend.utils.limiter import SimpleRateLimiter
@@ -92,6 +92,8 @@ class CompareRequest(BaseModel):
     document_texts: List[DocumentPayload] = Field(..., min_length=2)
     document_ids: Optional[List[str]] = None
     conversation_history: Optional[List[dict]] = None
+    jurisdiction: str = "General / Not Specified"
+
 
     @field_validator("document_texts")
     @classmethod
@@ -149,6 +151,16 @@ async def compare_chat(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Message must not be empty after sanitisation.",
         )
+    
+    # Validate jurisdiction
+    from backend.core.exceptions import ValidationError
+    try:
+        validate_jurisdiction(payload.jurisdiction)
+    except ValidationError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=str(exc),
+        )
 
     # Build the document list for the service layer, sanitising each text field
     documents = [
@@ -173,6 +185,7 @@ async def compare_chat(
             message=sanitized_message,
             documents=documents,
             history=payload.conversation_history,
+            jurisdiction=payload.jurisdiction,
         )
     except ValueError as exc:
         # Raised by comparison_service for invalid document count etc.

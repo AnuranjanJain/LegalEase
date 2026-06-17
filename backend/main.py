@@ -49,7 +49,7 @@ from backend.core.exceptions import (
 )
 from backend.core.validation import (
     validate_chat_input, validate_summarize_input, validate_simplify_input, sanitize_text, validate_mime_and_bytes,
-    validate_docx_archive_safety
+    validate_docx_archive_safety, validate_jurisdiction
 )
 from backend.services.ai_service import ai_service, correlation_id_var
 from backend.services.rag_service import rag_service
@@ -250,6 +250,7 @@ class ChatRequest(BaseModel):
     context: Optional[str] = None
     conversation_history: Optional[list[dict[str, str]]] = None
     stream: Optional[bool] = False
+    jurisdiction: str = "General / Not Specified"
 
 
 class SummarizeRequest(BaseModel):
@@ -359,6 +360,7 @@ async def chat(request: Request, payload: ChatRequest, identity: AuthIdentity = 
 
     # Early payload validation
     validate_chat_input(sanitized_message, sanitized_context)
+    validate_jurisdiction(payload.jurisdiction)
 
     cache_key = f"{sanitized_message} || {sanitized_context}" if sanitized_context else sanitized_message
     cached_response = semantic_cache.get(cache_key)
@@ -404,7 +406,8 @@ async def chat(request: Request, payload: ChatRequest, identity: AuthIdentity = 
                     message=sanitized_message,
                     context=sanitized_context,
                     history=payload.conversation_history,
-                    stream=True
+                    stream=True,
+                    jurisdiction=payload.jurisdiction
                 ):
                     # Clean the SSE format to cache clean raw text
                     if chunk.startswith("data: ") and chunk != "data: [DONE]\n\n":
@@ -430,7 +433,8 @@ async def chat(request: Request, payload: ChatRequest, identity: AuthIdentity = 
             message=sanitized_message,
             context=sanitized_context,
             history=payload.conversation_history,
-            stream=False
+            stream=False,
+            jurisdiction=payload.jurisdiction
         )
         response_text = ""
         async for chunk in response_gen:

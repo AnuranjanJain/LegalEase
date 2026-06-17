@@ -203,6 +203,7 @@ class ComparisonService:
         message: str,
         documents: List[Dict[str, str]],
         history: Optional[List[Dict[str, str]]] = None,
+        jurisdiction: str = "General / Not Specified",
     ) -> str:
         """
         Generate a structured cross-document comparison response.
@@ -216,6 +217,8 @@ class ComparisonService:
             Must contain at least 2 entries.
         history:
             Optional previous conversation turns.
+        jurisdiction:
+            Legal jurisdiction context-switching parameter.
 
         Returns
         -------
@@ -250,6 +253,7 @@ class ComparisonService:
             context=None,
             history=None,  # history already embedded in the prompt above
             stream=False,
+            jurisdiction=jurisdiction,
         ):
             response_text += chunk
 

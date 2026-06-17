@@ -4,6 +4,7 @@ import zipfile
 from io import BytesIO
 from typing import Optional
 from backend.core.exceptions import ValidationError
+from backend.core.jurisdictions import Jurisdictions
 
 # Configuration limits with fallback defaults
 MAX_CHAT_INPUT_CHARS = int(os.getenv("MAX_CHAT_INPUT_CHARS", "4000"))
@@ -183,4 +184,15 @@ def validate_export_pdf_input(title: str, summary: Optional[str] = None, chat_hi
                 
             if len(content) > MAX_EXPORT_CHAT_MSG_CHARS:
                 raise ValidationError(f"Chat message content at index {idx} exceeds the maximum allowed length of {MAX_EXPORT_CHAT_MSG_CHARS} characters")
+
+
+def validate_jurisdiction(jurisdiction: str):
+    """
+    Validate that the supplied jurisdiction is supported by the system.
+    """
+    if not jurisdiction or jurisdiction.strip() == "":
+        raise ValidationError("Jurisdiction cannot be empty")
+    
+    if jurisdiction not in Jurisdictions.ALL:
+        raise ValidationError(f"Unsupported jurisdiction: '{jurisdiction}'")
 
