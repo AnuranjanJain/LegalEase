@@ -18,7 +18,25 @@ export function ChatbotPage() {
   const [isTyping, setIsTyping] = useState(false);
   const [uploadedDoc, setUploadedDoc] = useState<{ name: string; text: string } | null>(null);
   const [isUploading, setIsUploading] = useState(false);
-  const [copiedId, setCopiedId] = useState<number | null>(null);
+  const [uploadProgress, setUploadProgress] = useState(0);
+  const [showSessions, setShowSessions] = useState(false);
+  const [isExporting, setIsExporting] = useState(false);
+
+  /**
+   * Multi-document comparison context.
+   * Populated when the user navigates here from a multi-doc comparison session
+   * created in DocumentsPage. When set, the chat sends `documentIds` to the
+   * comparison endpoint instead of `context` to the regular chat endpoint.
+   * Mutually exclusive with `uploadedDoc` for a given session.
+   */
+  const [multiDocContext, setMultiDocContext] = useState<Array<{ id: string; name: string; text: string }> | null>(null);
+  
+  // State to track which message ID was copied to show the checkmark temporarily
+  const [copiedId, setCopiedId] = useState<string | null>(null);
+
+  // Announcement text for the aria-live region. Updated whenever the
+  // redaction toggle changes so screen readers announce the state change.
+  const [redactionAnnouncement, setRedactionAnnouncement] = useState('');
 
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -63,6 +81,52 @@ export function ChatbotPage() {
       setMessages((prev: Message[]) => [...prev, errorMessage]);
     } finally {
       setIsTyping(false);
+    }
+  };
+
+  const handleExportPDF = async () => {
+    const chatMessages = messages
+      .filter(m => m.id !== 'default-greeting')
+      .map(m => ({
+        role: m.sender === 'user' ? 'user' : 'assistant',
+        content: m.text
+      }));
+
+    if (chatMessages.length === 0) {
+      showToast('No chat history available to export.', 'warning');
+      return;
+    }
+
+    setIsExporting(true);
+    showToast('Generating PDF chat transcript...', 'info');
+
+    try {
+      const activeSession = sessions.find(s => s.id === activeSessionId);
+      const title = activeSession?.title ? `Chat History: ${activeSession.title}` : 'AI Chat History';
+
+      const blob = await api.postBlob('/api/export/pdf', {
+        title,
+        chatHistory: chatMessages
+      });
+
+      const today = new Date().toISOString().split('T')[0];
+      const filename = `chat-history-${today}.pdf`;
+
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.setAttribute('download', filename);
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      URL.revokeObjectURL(url);
+
+      showToast('PDF chat transcript exported successfully!', 'success');
+    } catch (err) {
+      console.error('Failed to export chat transcript:', err);
+      showToast(err instanceof Error ? err.message : 'Failed to export PDF.', 'error');
+    } finally {
+      setIsExporting(false);
     }
   };
 
@@ -220,7 +284,20 @@ export function ChatbotPage() {
             {isUploading ? <RefreshCcw size={20} className="animate-spin" /> : <Paperclip size={20} />}
           </button>
 
-          <button className="p-2 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 transition-colors hidden sm:block" title="History">
+          <button
+            onClick={handleExportPDF}
+            disabled={isExporting}
+            className="p-2 text-gray-400 hover:text-primary dark:hover:text-primary disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+            title="Export to PDF"
+          >
+            {isExporting ? <RefreshCcw size={20} className="animate-spin" /> : <Download size={20} />}
+          </button>
+
+          <button
+            onClick={() => setShowSessions(prev => !prev)}
+            className={`p-2 transition-colors ${showSessions ? 'text-primary' : 'text-gray-400 hover:text-gray-600 dark:hover:text-gray-300'}`}
+            title="Conversation history"
+          >
             <History size={20} />
           </button>
           <div className="flex-1 relative">
