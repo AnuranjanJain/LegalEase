@@ -259,11 +259,12 @@ class AIService:
         prompt = (
             "Analyze the following legal text and extract up to 5 key clauses. "
             "For each clause, assign a riskLevel ('High', 'Medium', or 'Low') and a riskReason "
-            "explaining the risk assignment.\n\n"
+            "explaining the risk assignment. Additionally, assign a liability_score from 1 to 100 representing the severity.\n\n"
             "You MUST respond ONLY with a valid JSON array of objects, where each object has these exact keys:\n"
             "  - \"clause\": the exact text of the contract clause\n"
             "  - \"riskLevel\": the assigned risk level ('High', 'Medium', 'Low')\n"
-            "  - \"riskReason\": a brief explanation of why this risk level was assigned\n\n"
+            "  - \"riskReason\": a brief explanation of why this risk level was assigned\n"
+            "  - \"liability_score\": integer from 1 to 100\n\n"
             "Do not include any other commentary, markdown formatting (outside of valid JSON structure), "
             "or conversational filler. Output must be parsable as JSON.\n\n"
             f"Text to analyze:\n{text}"
@@ -281,17 +282,20 @@ class AIService:
                 {
                     "clause": "The company may terminate this agreement at any time without notice.",
                     "riskLevel": "High",
-                    "riskReason": "Unilateral termination rights may negatively impact the user."
+                    "riskReason": "Unilateral termination rights may negatively impact the user.",
+                    "liability_score": 85
                 },
                 {
                     "clause": "Subscriber shall indemnify and hold harmless Provider against any and all claims.",
                     "riskLevel": "Medium",
-                    "riskReason": "Broad indemnification clauses can lead to unexpected liabilities."
+                    "riskReason": "Broad indemnification clauses can lead to unexpected liabilities.",
+                    "liability_score": 60
                 },
                 {
                     "clause": "This Agreement shall be governed by the laws of the State of Delaware.",
                     "riskLevel": "Low",
-                    "riskReason": "Standard governing law clause, standard jurisdiction choice."
+                    "riskReason": "Standard governing law clause, standard jurisdiction choice.",
+                    "liability_score": 15
                 }
             ]
 
