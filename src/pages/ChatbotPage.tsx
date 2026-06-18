@@ -1,9 +1,10 @@
-import { Send, User, Bot, Paperclip, X, FileText, Sparkles, RefreshCcw, PlusCircle, Trash2, History, Copy, Check, ShieldCheck, Download, GitCompare, Layers } from 'lucide-react';
+import { Send, User, Bot, Paperclip, X, FileText, Sparkles, RefreshCcw, PlusCircle, Trash2, History, Copy, Check, ShieldCheck, Download, GitCompare, Layers, MessageSquare, Search } from 'lucide-react';
 import { api } from '../services/api';
 import { ChatStorageService, ChatMessage, ChatSessionMetadata } from '../services/storage';
 import { useRef, useState, useEffect, useCallback } from 'react';
 import { useToast } from '../contexts/ToastContext';
 import LegalMapping from '../components/LegalMapping';
+import { WebSearchSidebar } from '../components/WebSearchSidebar';
 import { useRedaction } from '../contexts/RedactionContext';
 import { redact } from '../utils/redaction';
 import ReactMarkdown from 'react-markdown';
@@ -42,6 +43,7 @@ export function ChatbotPage() {
   const [isUploading, setIsUploading] = useState(false);
   const [uploadProgress, setUploadProgress] = useState(0);
   const [showSessions, setShowSessions] = useState(false);
+  const [showWebSearch, setShowWebSearch] = useState(false);
   const [isExporting, setIsExporting] = useState(false);
 
   /**
@@ -483,110 +485,119 @@ export function ChatbotPage() {
         </div>
       )}
 
-      {/* Message list - takes remaining space */}
-      <div className="flex-grow overflow-y-auto px-4 sm:px-6 py-6 sm:py-8 space-y-4 sm:space-y-6 relative z-10 min-h-0">
-        {messages.map((msg: ChatMessage) => {
-          const isUser = msg.sender === 'user';
+      {/* Header bar */}
+      <header className="flex items-center justify-between px-4 py-3 bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 flex-shrink-0">
+        <h1 className="text-xl font-bold text-gray-900 dark:text-white flex items-center gap-2">
+          <MessageSquare size={24} className="text-primary-600 dark:text-primary-400" />
+          Legal Assistant
+        </h1>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={() => setShowWebSearch(!showWebSearch)}
+            className={`p-2 rounded-lg transition-colors ${showWebSearch ? 'bg-primary-100 text-primary-700 dark:bg-primary-900/30 dark:text-primary-400' : 'text-gray-500 hover:bg-gray-100 dark:text-gray-400 dark:hover:bg-gray-800'}`}
+            title="Toggle Web Search Context"
+          >
+            <Search size={20} />
+          </button>
+        </div>
+      </header>
 
-          // ---------------------------------------------------------------------------
-          // Redaction scope decision — user messages vs. bot messages:
-          //
-          // Bot messages (AI responses) are redacted when the toggle is ON because
-          // they may echo back PII that was present in the uploaded document context.
-          //
-          // User messages are intentionally NOT redacted in the display layer because:
-          //   1. The user authored the text themselves and already knows its content.
-          //   2. Redacting the user's own input would make their conversation history
-          //      unreadable and break the UX flow.
-          //   3. The toggle label says "mask sensitive data in AI responses", which
-          //      sets a clear expectation that only AI output is affected.
-          //
-          // If policy changes to redact user input too, replace the condition below
-          // with `isRedactionEnabled` (removing the `!isUser &&` guard).
-          // ---------------------------------------------------------------------------
-          const displayText =
-            !isUser && isRedactionEnabled
-              ? redact(msg.text, redactionStyle)
-              : msg.text;
+      {/* Main Content Area */}
+      <div className="flex-1 flex min-h-0 relative">
+        
+        {/* Web Search Sidebar (Slide-in) */}
+        <div className={`transition-all duration-300 overflow-hidden ${showWebSearch ? 'w-80' : 'w-0'}`}>
+          {showWebSearch && <WebSearchSidebar />}
+        </div>
 
-          return (
-            <div 
-              key={msg.id} 
-              className={`flex w-full ${isUser ? 'justify-end' : 'justify-start'} animate-slide-up`}
-            >
-              <div className={`flex items-start max-w-[85%] sm:max-w-[80%] gap-2 sm:gap-3 ${isUser ? 'flex-row-reverse' : 'flex-row'}`}>
-                
-                {/* Glowing Avatar Circles */}
-                <div className={`flex-shrink-0 h-8 w-8 sm:h-9 sm:w-9 rounded-lg sm:rounded-xl flex items-center justify-center shadow-md ${
-                  isUser 
-                    ? 'bg-gradient-to-tr from-primary to-indigo-600 text-white' 
-                    : 'bg-gradient-to-tr from-emerald-600 to-teal-500 text-white'
-                }`}>
-                  {isUser ? <User size={14} /> : <Bot size={14} />}
-                </div>
+        {/* Message list - takes remaining space */}
+        <div className="flex-grow overflow-y-auto px-4 sm:px-6 py-6 sm:py-8 space-y-4 sm:space-y-6 relative z-10 min-h-0">
+          {messages.map((msg: ChatMessage) => {
+            const isUser = msg.sender === 'user';
+            const displayText =
+              !isUser && isRedactionEnabled
+                ? redact(msg.text, redactionStyle)
+                : msg.text;
 
-                {/* Message Bubble Card */}
-                <div className={`p-3 sm:p-4 rounded-2xl shadow-sm text-left leading-relaxed relative group ${
-                  isUser 
-                    ? 'bg-primary text-white rounded-tr-none' 
-                    : 'bg-white/80 dark:bg-gray-900/60 backdrop-blur-md text-gray-900 dark:text-gray-150 rounded-tl-none border border-gray-150 dark:border-gray-800'
-                }`}>
+            return (
+              <div 
+                key={msg.id} 
+                className={`flex w-full ${isUser ? 'justify-end' : 'justify-start'} animate-slide-up`}
+              >
+                <div className={`flex items-start max-w-[85%] sm:max-w-[80%] gap-2 sm:gap-3 ${isUser ? 'flex-row-reverse' : 'flex-row'}`}>
                   
-                  {/* Dedicated Copy Button for AI/Bot responses */}
-                  {!isUser && (
-                    <button 
-                      onClick={() => handleCopy(displayText, msg.id)}
-                      className="absolute top-2 right-2 p-1 text-gray-400 hover:text-primary dark:hover:text-primary-400 transition-colors opacity-0 group-hover:opacity-100 focus:opacity-100"
-                      title="Copy to clipboard"
-                      aria-label="Copy response text"
-                    >
-                      {copiedId === msg.id ? <Check size={14} className="text-green-500" /> : <Copy size={14} />}
-                    </button>
-                  )}
-
-                  <div className="text-sm font-medium whitespace-pre-wrap pr-4 markdown-body">
-                    <ReactMarkdown 
-                      remarkPlugins={[remarkGfm]} 
-                      rehypePlugins={[rehypeRaw]}
-                      components={{
-                        table: ({node, ...props}) => <table className="border-collapse table-auto w-full text-sm my-2 border border-gray-300 dark:border-gray-600 rounded-lg overflow-hidden" {...props} />,
-                        th: ({node, ...props}) => <th className="border border-gray-300 dark:border-gray-600 px-4 py-2 bg-gray-100 dark:bg-gray-800 text-left font-bold" {...props} />,
-                        td: ({node, ...props}) => <td className="border border-gray-300 dark:border-gray-600 px-4 py-2" {...props} />,
-                        blockquote: ({node, ...props}) => <blockquote className="border-l-4 border-gray-300 dark:border-gray-500 pl-4 italic text-gray-600 dark:text-gray-400 my-2" {...props} />,
-                        a: ({node, ...props}) => <a className="text-primary hover:underline" {...props} />
-                      }}
-                    >
-                      {displayText}
-                    </ReactMarkdown>
+                  {/* Glowing Avatar Circles */}
+                  <div className={`flex-shrink-0 h-8 w-8 sm:h-9 sm:w-9 rounded-lg sm:rounded-xl flex items-center justify-center shadow-md ${
+                    isUser 
+                      ? 'bg-gradient-to-tr from-primary to-indigo-600 text-white' 
+                      : 'bg-gradient-to-tr from-emerald-600 to-teal-500 text-white'
+                  }`}>
+                    {isUser ? <User size={14} /> : <Bot size={14} />}
                   </div>
-                  <p className={`text-[9px] font-semibold mt-2 ${isUser ? 'text-blue-100 text-right' : 'text-gray-400 dark:text-gray-500'}`}>
-                    {msg.time}
-                  </p>
-                </div>
 
+                  {/* Message Bubble Card */}
+                  <div className={`p-3 sm:p-4 rounded-2xl shadow-sm text-left leading-relaxed relative group ${
+                    isUser 
+                      ? 'bg-primary text-white rounded-tr-none' 
+                      : 'bg-white/80 dark:bg-gray-900/60 backdrop-blur-md text-gray-900 dark:text-gray-150 rounded-tl-none border border-gray-150 dark:border-gray-800'
+                  }`}>
+                    
+                    {/* Dedicated Copy Button for AI/Bot responses */}
+                    {!isUser && (
+                      <button 
+                        onClick={() => handleCopy(displayText, msg.id)}
+                        className="absolute top-2 right-2 p-1 text-gray-400 hover:text-primary dark:hover:text-primary-400 transition-colors opacity-0 group-hover:opacity-100 focus:opacity-100"
+                        title="Copy to clipboard"
+                        aria-label="Copy response text"
+                      >
+                        {copiedId === msg.id ? <Check size={14} className="text-green-500" /> : <Copy size={14} />}
+                      </button>
+                    )}
+
+                    <div className="text-sm font-medium whitespace-pre-wrap pr-4 markdown-body">
+                      <ReactMarkdown 
+                        remarkPlugins={[remarkGfm]} 
+                        rehypePlugins={[rehypeRaw]}
+                        components={{
+                          table: ({node, ...props}) => <table className="border-collapse table-auto w-full text-sm my-2 border border-gray-300 dark:border-gray-600 rounded-lg overflow-hidden" {...props} />,
+                          th: ({node, ...props}) => <th className="border border-gray-300 dark:border-gray-600 px-4 py-2 bg-gray-100 dark:bg-gray-800 text-left font-bold" {...props} />,
+                          td: ({node, ...props}) => <td className="border border-gray-300 dark:border-gray-600 px-4 py-2" {...props} />,
+                          blockquote: ({node, ...props}) => <blockquote className="border-l-4 border-gray-300 dark:border-gray-500 pl-4 italic text-gray-600 dark:text-gray-400 my-2" {...props} />,
+                          a: ({node, ...props}) => <a className="text-primary hover:underline" {...props} />
+                        }}
+                      >
+                        {displayText}
+                      </ReactMarkdown>
+                    </div>
+                    <p className={`text-[9px] font-semibold mt-2 ${isUser ? 'text-blue-100 text-right' : 'text-gray-400 dark:text-gray-500'}`}>
+                      {msg.time}
+                    </p>
+                  </div>
+
+                </div>
+              </div>
+            );
+          })}
+
+          {/* Typing Loading Indicator */}
+          {isTyping && (
+            <div className="flex justify-start animate-pulse">
+              <div className="flex items-start max-w-[80%] gap-3">
+                <div className="flex-shrink-0 h-9 w-9 rounded-xl flex items-center justify-center bg-gradient-to-tr from-emerald-600 to-teal-500 text-white shadow-md">
+                  <Bot size={16} />
+                </div>
+                <div className="p-4 rounded-2xl bg-white/80 dark:bg-gray-900/60 backdrop-blur-md text-gray-800 dark:text-gray-200 rounded-tl-none border border-gray-150 dark:border-gray-800">
+                  <div className="flex gap-1.5 items-center py-1">
+                    <span className="w-2.5 h-2.5 bg-emerald-500 rounded-full animate-bounce"></span>
+                    <span className="w-2.5 h-2.5 bg-emerald-500 rounded-full animate-bounce delay-150"></span>
+                    <span className="w-2.5 h-2.5 bg-emerald-500 rounded-full animate-bounce delay-300"></span>
+                  </div>
+                </div>
               </div>
             </div>
-          );
-        })}
-
-        {/* Typing Loading Indicator */}
-        {isTyping && (
-          <div className="flex justify-start animate-pulse">
-            <div className="flex items-start max-w-[80%] gap-3">
-              <div className="flex-shrink-0 h-9 w-9 rounded-xl flex items-center justify-center bg-gradient-to-tr from-emerald-600 to-teal-500 text-white shadow-md">
-                <Bot size={16} />
-              </div>
-              <div className="p-4 rounded-2xl bg-white/80 dark:bg-gray-900/60 backdrop-blur-md text-gray-800 dark:text-gray-200 rounded-tl-none border border-gray-150 dark:border-gray-800">
-                <div className="flex gap-1.5 items-center py-1">
-                  <span className="w-2.5 h-2.5 bg-emerald-500 rounded-full animate-bounce"></span>
-                  <span className="w-2.5 h-2.5 bg-emerald-500 rounded-full animate-bounce delay-150"></span>
-                  <span className="w-2.5 h-2.5 bg-emerald-500 rounded-full animate-bounce delay-300"></span>
-                </div>
-              </div>
-            </div>
-          </div>
-        )}
-        <div ref={messagesEndRef} />
+          )}
+          <div ref={messagesEndRef} />
+        </div>
       </div>
 
       {/* Screen reader live region — announces both AI typing state and
