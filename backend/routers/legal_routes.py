@@ -4,6 +4,7 @@ from typing import List, Dict, Any
 
 from backend.services.legal_mapping import map_problem_to_sections
 from backend.services.ai_service import ai_service
+from backend.services.entity_extraction import extract_entities
 
 router = APIRouter(prefix="/legal", tags=["legal"])
 
@@ -56,6 +57,22 @@ async def analyze_clauses(request: ClauseAnalysisRequest):
     try:
         clauses = await ai_service.analyze_clauses(request.text)
         return {"clauses": clauses}
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=str(e),
+        )
+
+
+class EntityExtractionRequest(BaseModel):
+    text: str
+
+
+@router.post("/extract-entities")
+async def extract_document_entities(request: EntityExtractionRequest):
+    try:
+        graph_data = extract_entities(request.text)
+        return graph_data
     except Exception as e:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
