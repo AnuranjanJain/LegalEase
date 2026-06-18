@@ -557,7 +557,7 @@ export function ProfilePage() {
                 Reset
               </button>
               <button
-                onClick={handleSave}
+                onClick={handleSaveProfile}
                 disabled={isSaving}
                className="px-8 py-2.5 bg-primary text-white rounded-xl font-bold hover:shadow-lg hover:shadow-primary/30 hover:scale-105 hover:-translate-y-0.5 active:scale-95 transition-all duration-200 disabled:opacity-70 disabled:cursor-not-allowed disabled:hover:scale-100 disabled:hover:translate-y-0 flex items-center gap-2"
               >
