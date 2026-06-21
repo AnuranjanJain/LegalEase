@@ -200,3 +200,77 @@ async def compare_chat(
         )
 
     return CompareResponse(response=result)
+
+
+class ConflictsRequest(BaseModel):
+    primary_document: DocumentPayload
+    secondary_document: DocumentPayload
+    jurisdiction: str = "General / Not Specified"
+
+class ContradictionItem(BaseModel):
+    primary_clause: str
+    secondary_clause: str
+    explanation: str
+    severity: str
+
+class ConflictsResponse(BaseModel):
+    conflicts: List[ContradictionItem]
+
+@router.post(
+    "/conflicts",
+    response_model=ConflictsResponse,
+    summary="Cross-document contradiction detection",
+    description="Compares primary and secondary documents to detect contradictions or conflicting terms."
+)
+async def check_conflicts(
+    request: Request,
+    payload: ConflictsRequest,
+    identity: AuthIdentity = Depends(validate_token_or_api_key),
+) -> ConflictsResponse:
+    corr_id = correlation_id_var.get()
+
+    # Rate limiting (reuse comparison limiter)
+    if not _compare_limiter.check(identity.get_rate_limit_key())["allowed"]:
+        raise HTTPException(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            detail="Comparison rate limit exceeded. Please wait before retrying.",
+        )
+
+    # Validate jurisdiction
+    from backend.core.exceptions import ValidationError
+    try:
+        validate_jurisdiction(payload.jurisdiction)
+    except ValidationError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=str(exc),
+        )
+
+    # Construct primary & secondary payloads
+    primary_doc = {
+        "id": payload.primary_document.id,
+        "name": payload.primary_document.name,
+        "text": sanitize_text(payload.primary_document.text) if payload.primary_document.text else "",
+    }
+    secondary_doc = {
+        "id": payload.secondary_document.id,
+        "name": payload.secondary_document.name,
+        "text": sanitize_text(payload.secondary_document.text) if payload.secondary_document.text else "",
+    }
+
+    try:
+        conflicts = await comparison_service.detect_conflicts(
+            primary_doc=primary_doc,
+            secondary_doc=secondary_doc,
+            jurisdiction=payload.jurisdiction,
+        )
+        return ConflictsResponse(conflicts=conflicts)
+    except Exception as exc:
+        logger.error(
+            "[%s] Contradiction service error: %s", corr_id, exc, exc_info=True
+        )
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail="The AI contradiction service encountered an error. Please try again.",
+        )
+

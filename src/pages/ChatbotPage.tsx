@@ -61,6 +61,28 @@ export function ChatbotPage() {
    */
   const [multiDocContext, setMultiDocContext] = useState<Array<{ id: string; name: string; text: string }> | null>(null);
   
+  const [activeChatTab, setActiveChatTab] = useState<'chat' | 'conflicts'>('chat');
+  const [primaryDocId, setPrimaryDocId] = useState<string>('');
+  const [secondaryDocId, setSecondaryDocId] = useState<string>('');
+  const [conflicts, setConflicts] = useState<Array<{
+    primary_clause: string;
+    secondary_clause: string;
+    explanation: string;
+    severity: string;
+  }>>([]);
+  const [isCheckingConflicts, setIsCheckingConflicts] = useState(false);
+
+  useEffect(() => {
+    if (multiDocContext && multiDocContext.length >= 2) {
+      setPrimaryDocId(multiDocContext[0].id);
+      setSecondaryDocId(multiDocContext[1].id);
+      setConflicts([]);
+      setActiveChatTab('chat');
+    } else {
+      setActiveChatTab('chat');
+    }
+  }, [multiDocContext]);
+
   // State to track which message ID was copied to show the checkmark temporarily
   const [copiedId, setCopiedId] = useState<string | null>(null);
 
@@ -519,6 +541,47 @@ export function ChatbotPage() {
     }
   };
 
+  const handleCheckConflicts = async () => {
+    if (!multiDocContext) return;
+    const primaryDoc = multiDocContext.find(d => d.id === primaryDocId);
+    const secondaryDoc = multiDocContext.find(d => d.id === secondaryDocId);
+
+    if (!primaryDoc || !secondaryDoc) {
+      showToast('Select valid primary and secondary documents.', 'warning');
+      return;
+    }
+
+    if (primaryDocId === secondaryDocId) {
+      showToast('Primary and secondary documents must be different.', 'warning');
+      return;
+    }
+
+    setIsCheckingConflicts(true);
+    showToast('Analyzing documents for contradictions...', 'info');
+
+    try {
+      const data = await api.post<{ conflicts: typeof conflicts }>('/compare/conflicts', {
+        primary_document: {
+          id: primaryDoc.id,
+          name: primaryDoc.name,
+          text: primaryDoc.text
+        },
+        secondary_document: {
+          id: secondaryDoc.id,
+          name: secondaryDoc.name,
+          text: secondaryDoc.text
+        },
+        jurisdiction: selectedJurisdiction
+      });
+      setConflicts(data.conflicts || []);
+      showToast(`Conflict analysis complete. Found ${data.conflicts?.length || 0} conflicts.`, 'success');
+    } catch (err) {
+      console.error('Conflict detection failed:', err);
+      showToast(err instanceof Error ? err.message : 'Failed to analyze conflicts.', 'error');
+    } finally {
+      setIsCheckingConflicts(false);
+    }
+  };
 
   const handleSummarize = async () => {
     if (!uploadedDoc) return;
@@ -686,300 +749,445 @@ export function ChatbotPage() {
         </div>
       </div>
 
-      {/* Message list - takes remaining space */}
-      <div className="flex-grow overflow-y-auto px-4 sm:px-6 py-6 sm:py-8 space-y-4 sm:space-y-6 relative z-10 min-h-0">
-        {messages.map((msg: ChatMessage) => {
-          const isUser = msg.sender === 'user';
-
-          // ---------------------------------------------------------------------------
-          // Redaction scope decision — user messages vs. bot messages:
-          //
-          // Bot messages (AI responses) are redacted when the toggle is ON because
-          // they may echo back PII that was present in the uploaded document context.
-          //
-          // User messages are intentionally NOT redacted in the display layer because:
-          //   1. The user authored the text themselves and already knows its content.
-          //   2. Redacting the user's own input would make their conversation history
-          //      unreadable and break the UX flow.
-          //   3. The toggle label says "mask sensitive data in AI responses", which
-          //      sets a clear expectation that only AI output is affected.
-          //
-          // If policy changes to redact user input too, replace the condition below
-          // with `isRedactionEnabled` (removing the `!isUser &&` guard).
-          // ---------------------------------------------------------------------------
-          const displayText =
-            !isUser && isRedactionEnabled
-              ? redact(msg.text, redactionStyle)
-              : msg.text;
-
-          return (
-            <div 
-              key={msg.id} 
-              className={`flex w-full ${isUser ? 'justify-end' : 'justify-start'} animate-slide-up`}
-            >
-              <div className={`flex items-start max-w-[85%] sm:max-w-[80%] gap-2 sm:gap-3 ${isUser ? 'flex-row-reverse' : 'flex-row'}`}>
-                
-                {/* Glowing Avatar Circles */}
-                <div className={`flex-shrink-0 h-8 w-8 sm:h-9 sm:w-9 rounded-lg sm:rounded-xl flex items-center justify-center shadow-md ${
-                  isUser 
-                    ? 'bg-gradient-to-tr from-primary to-indigo-600 text-white' 
-                    : 'bg-gradient-to-tr from-emerald-600 to-teal-500 text-white'
-                }`}>
-                  {isUser ? <User size={14} /> : <Bot size={14} />}
-                </div>
-
-                {/* Message Bubble Card */}
-                <div className={`p-3 sm:p-4 rounded-2xl shadow-sm text-left leading-relaxed relative group ${
-                  isUser 
-                    ? 'bg-primary text-white rounded-tr-none' 
-                    : 'bg-white/80 dark:bg-gray-900/60 backdrop-blur-md text-gray-900 dark:text-gray-150 rounded-tl-none border border-gray-150 dark:border-gray-800'
-                }`}>
-                  
-                  {/* Dedicated Copy Button for AI/Bot responses */}
-                  {!isUser && (
-                    <button 
-                      onClick={() => handleCopy(displayText, msg.id)}
-                      className="absolute top-2 right-2 p-1 text-gray-400 hover:text-primary dark:hover:text-primary-400 transition-colors opacity-0 group-hover:opacity-100 focus:opacity-100"
-                      title="Copy to clipboard"
-                      aria-label="Copy response text"
-                    >
-                      {copiedId === msg.id ? <Check size={14} className="text-green-500" /> : <Copy size={14} />}
-                    </button>
-                  )}
-
-                  <div className="text-sm font-medium whitespace-pre-wrap pr-4 markdown-body">
-                    <ReactMarkdown 
-                      remarkPlugins={[remarkGfm]} 
-                      rehypePlugins={[rehypeRaw]}
-                      components={{
-                        table: ({node: _node, ...props}) => <table className="border-collapse table-auto w-full text-sm my-2 border border-gray-300 dark:border-gray-600 rounded-lg overflow-hidden" {...props} />,
-                        th: ({node: _node, ...props}) => <th className="border border-gray-300 dark:border-gray-600 px-4 py-2 bg-gray-100 dark:bg-gray-800 text-left font-bold" {...props} />,
-                        td: ({node: _node, ...props}) => <td className="border border-gray-300 dark:border-gray-600 px-4 py-2" {...props} />,
-                        blockquote: ({node: _node, ...props}) => <blockquote className="border-l-4 border-gray-300 dark:border-gray-500 pl-4 italic text-gray-600 dark:text-gray-400 my-2" {...props} />,
-                        a: ({node: _node, ...props}) => <a className="text-primary hover:underline" {...props} />
-                      }}
-                    >
-                      {displayText}
-                    </ReactMarkdown>
-                  </div>
-                  <p className={`text-[9px] font-semibold mt-2 ${isUser ? 'text-blue-100 text-right' : 'text-gray-400 dark:text-gray-500'}`}>
-                    {msg.time}
-                  </p>
-                </div>
-
-              </div>
-            </div>
-          );
-        })}
-
-        {/* Typing Loading Indicator */}
-        {isTyping && (
-          <div className="flex justify-start animate-pulse">
-            <div className="flex items-start max-w-[80%] gap-3">
-              <div className="flex-shrink-0 h-9 w-9 rounded-xl flex items-center justify-center bg-gradient-to-tr from-emerald-600 to-teal-500 text-white shadow-md">
-                <Bot size={16} />
-              </div>
-              <div className="p-4 rounded-2xl bg-white/80 dark:bg-gray-900/60 backdrop-blur-md text-gray-800 dark:text-gray-200 rounded-tl-none border border-gray-150 dark:border-gray-800">
-                <div className="flex gap-1.5 items-center py-1">
-                  <span className="w-2.5 h-2.5 bg-emerald-500 rounded-full animate-bounce"></span>
-                  <span className="w-2.5 h-2.5 bg-emerald-500 rounded-full animate-bounce delay-150"></span>
-                  <span className="w-2.5 h-2.5 bg-emerald-500 rounded-full animate-bounce delay-300"></span>
-                </div>
-              </div>
-            </div>
-          </div>
-        )}
-        <div ref={messagesEndRef} />
-      </div>
-
-      {/* Screen reader live region — announces both AI typing state and
-          PII redaction toggle changes (aria-atomic ensures the full message
-          is read rather than just the changed portion). */}
-      <div className="sr-only" aria-live="polite" aria-atomic="true">
-        {redactionAnnouncement || (isTyping ? 'LegalEase AI is writing an answer...' : '')}
-      </div>
-
-      <div className="p-3 sm:p-4 bg-white dark:bg-gray-800 border-t border-gray-200 dark:border-gray-800 flex-shrink-0">
-        {/* PII Redaction active indicator */}
-        {isRedactionEnabled && (
-          <div className="mb-2 flex items-center gap-1.5 text-[10px] font-semibold text-emerald-600 dark:text-emerald-400">
-            <ShieldCheck size={12} />
-            <span>PII Redaction active — sensitive data masked in AI responses</span>
-          </div>
-        )}
-        {isUploading && (
-          <div className="mb-3 px-3 py-2 rounded-lg bg-primary/5 border border-primary/20">
-            <div className="flex items-center justify-between mb-1">
-              <span className="text-xs font-semibold text-primary">Processing document...</span>
-              <span className="text-xs font-bold text-primary">{uploadProgress}%</span>
-            </div>
-            <div className="w-full h-1.5 bg-gray-200 dark:bg-gray-700 rounded-full overflow-hidden">
-              <div
-                className="h-full bg-gradient-to-r from-primary to-indigo-500 rounded-full transition-all duration-500"
-                style={{ width: `${uploadProgress || 10}%` }}
-              />
-            </div>
-          </div>
-        )}
-        {uploadedDoc && (
-          <div className="mb-3 flex items-center justify-between bg-primary/5 dark:bg-primary/10 p-2 rounded-lg border border-primary/20">
-            <div className="flex items-center gap-2 overflow-hidden">
-              <FileText size={16} className="text-primary flex-shrink-0" />
-              <span className="text-sm font-medium text-gray-700 dark:text-gray-300 truncate">{uploadedDoc.name}</span>
-            </div>
-            <div className="flex items-center gap-2">
-              <button
-                onClick={handleSummarize}
-                className="text-xs flex items-center gap-1 bg-primary/10 hover:bg-primary/20 text-primary px-2 py-1 rounded transition-colors"
-              >
-                <Sparkles size={12} />
-                Summarize
-              </button>
-              <button onClick={() => setUploadedDoc(null)} className="text-gray-400 hover:text-red-500 transition-colors">
-                <X size={16} />
-              </button>
-            </div>
-          </div>
-        )}
-
-        {/* Multi-document comparison context banner */}
-        {multiDocContext && multiDocContext.length >= 2 && (
-          <div className="mb-3 bg-indigo-500/5 dark:bg-indigo-500/10 border border-indigo-500/20 rounded-xl p-3">
-            <div className="flex items-center justify-between mb-2">
-              <div className="flex items-center gap-2">
-                <GitCompare size={14} className="text-indigo-500 flex-shrink-0" />
-                <span className="text-xs font-bold text-indigo-600 dark:text-indigo-400">
-                  Comparison Mode — {multiDocContext.length} documents
-                </span>
-              </div>
-              <button
-                onClick={() => setMultiDocContext(null)}
-                className="text-gray-400 hover:text-red-500 transition-colors p-0.5"
-                aria-label="Exit comparison mode"
-              >
-                <X size={14} />
-              </button>
-            </div>
-            <div className="flex flex-wrap gap-1.5">
-              {multiDocContext.map(doc => (
-                <span
-                  key={doc.id}
-                  className="inline-flex items-center gap-1 px-2 py-0.5 rounded-lg text-[11px] font-medium
-                             bg-indigo-100 dark:bg-indigo-900/30 text-indigo-700 dark:text-indigo-300
-                             border border-indigo-200 dark:border-indigo-700/50 max-w-[200px]"
-                >
-                  <Layers size={9} />
-                  <span className="truncate">{doc.name}</span>
-                </span>
-              ))}
-            </div>
-            <p className="text-[10px] text-indigo-500/70 dark:text-indigo-400/60 mt-2">
-              Ask questions like "Compare termination clauses" or "Find conflicting obligations"
-            </p>
-          </div>
-        )}
-
-        <LegalMapping description={input} onSelect={(s) => setInput(prev => (prev ? prev + '\n\n' + `${s.section} — ${s.title}: ${s.summary}` : `${s.section} — ${s.title}: ${s.summary}`))} />
-
-        <div className="flex items-center gap-2">
-          <input
-            type="file"
-            ref={fileInputRef}
-            onChange={handleFileUpload}
-            className="hidden"
-            accept=".pdf,.docx,.txt"
-          />
+      {/* Sub-header tabs for Multi-Document Mode */}
+      {multiDocContext && multiDocContext.length >= 2 && (
+        <div className="flex border-b border-gray-250 dark:border-gray-805 bg-white dark:bg-gray-800 px-6">
           <button
-            onClick={() => fileInputRef.current?.click()}
-            disabled={isUploading}
-            className="p-2 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 transition-colors"
-            title="Attach Document"
+            onClick={() => setActiveChatTab('chat')}
+            className={`py-3 px-4 text-xs font-bold border-b-2 transition-all ${
+              activeChatTab === 'chat'
+                ? 'border-primary text-primary'
+                : 'border-transparent text-gray-500 hover:text-gray-800 dark:hover:text-gray-200'
+            }`}
           >
-            {isUploading ? <RefreshCcw size={20} className="animate-spin" /> : <Paperclip size={20} />}
+            Chat Assistant
           </button>
-
           <button
-            onClick={handleExportPDF}
-            disabled={isExporting}
-            className="p-2 text-gray-400 hover:text-primary dark:hover:text-primary disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-            title="Export to PDF"
+            onClick={() => setActiveChatTab('conflicts')}
+            className={`py-3 px-4 text-xs font-bold border-b-2 transition-all ${
+              activeChatTab === 'conflicts'
+                ? 'border-primary text-primary'
+                : 'border-transparent text-gray-500 hover:text-gray-800 dark:hover:text-gray-200'
+            }`}
+            data-testid="conflict-checker-tab"
           >
-            {isExporting ? <RefreshCcw size={20} className="animate-spin" /> : <Download size={20} />}
-          </button>
-
-          <button
-            onClick={() => setShowSessions(prev => !prev)}
-            className={`p-2 transition-colors ${showSessions ? 'text-primary' : 'text-gray-400 hover:text-gray-600 dark:hover:text-gray-300'}`}
-            title="Conversation history"
-          >
-            <History size={20} />
-          </button>
-
-          <button
-            onClick={handleNewConversation}
-            className="p-2 text-gray-400 hover:text-primary dark:hover:text-primary transition-colors"
-            title="New conversation"
-          >
-            <PlusCircle size={20} />
-          </button>
-
-          <button
-            onClick={handleClearConversation}
-            className="p-2 text-gray-400 hover:text-red-500 transition-colors hidden sm:block"
-            title="Clear conversation"
-          >
-            <Trash2 size={20} />
-          </button>
-
-          <div className="flex-1 relative min-w-0">
-            {/* Dynamic Context Badge Indicator */}
-            {uploadedDoc && (
-              <span 
-                className="absolute right-3 top-2.5 bg-green-100 dark:bg-green-900/30 text-green-800 dark:text-green-300 text-[10px] font-semibold px-2 py-0.5 rounded-full flex items-center gap-1.5 border border-green-200 dark:border-green-800/50 animate-pulse z-10"
-                role="status"
-              >
-                <span className="w-1.5 h-1.5 bg-green-500 rounded-full"></span>
-                Active Document Context
-              </span>
-            )}
-
-            {/* Accessible Multi-line Text Area for Enter / Shift+Enter management WITH COUNTER LIMIT */}
-            <textarea
-              className="w-full pl-4 pr-16 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent bg-gray-50 dark:bg-gray-700 text-gray-900 dark:text-white placeholder-gray-500 dark:placeholder-gray-400 resize-none max-h-32 min-h-[40px] block align-bottom leading-normal"
-              placeholder={multiDocContext ? "Compare clauses, find conflicts, ask about all documents..." : uploadedDoc ? "Ask about this document..." : "Ask a legal question..."}
-              rows={1}
-              maxLength={MAX_INPUT_CHARS}
-              value={input}
-              onChange={(e) => setInput(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === 'Enter' && !e.shiftKey && !isTyping) {
-                  e.preventDefault();
-                  handleSend();
-                }
-              }}
-            />
-
-            {/* Dynamic Character Counter */}
-            <div 
-              className={`absolute bottom-2 right-3 text-[10px] font-medium transition-colors duration-300 pointer-events-none ${
-                input.length >= MAX_INPUT_CHARS ? 'text-red-500 animate-pulse' :
-                input.length >= MAX_INPUT_CHARS * 0.9 ? 'text-orange-500' :
-                'text-gray-400 dark:text-gray-500'
-              }`}
-            >
-              {input.length} / {MAX_INPUT_CHARS}
-            </div>
-          </div>
-          
-          <button
-            onClick={handleSend}
-            disabled={!input.trim() || isTyping || input.length > MAX_INPUT_CHARS}
-            className="bg-primary text-white p-2 rounded-lg hover:bg-primary/90 disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex-shrink-0"
-          >
-            <Send size={20} />
+            Conflict Checker
           </button>
         </div>
-      </div>
+      )}
+
+      {activeChatTab === 'conflicts' && multiDocContext && multiDocContext.length >= 2 ? (
+        <div className="flex-grow flex flex-col overflow-hidden bg-gray-50 dark:bg-gray-900">
+          {/* Document selection selectors */}
+          <div className="p-4 bg-white dark:bg-gray-850 border-b border-gray-200 dark:border-gray-705 flex flex-wrap items-center gap-4">
+            <div className="flex items-center gap-2">
+              <span className="text-xs font-bold text-gray-700 dark:text-gray-300">Primary Document:</span>
+              <select
+                value={primaryDocId}
+                onChange={(e) => setPrimaryDocId(e.target.value)}
+                className="text-xs p-1.5 rounded border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-800 dark:text-gray-200 focus:ring-1 focus:ring-primary focus:outline-none"
+              >
+                {multiDocContext?.map(d => (
+                  <option key={d.id} value={d.id}>{d.name}</option>
+                ))}
+              </select>
+            </div>
+
+            <div className="flex items-center gap-2">
+              <span className="text-xs font-bold text-gray-700 dark:text-gray-300">Secondary Document:</span>
+              <select
+                value={secondaryDocId}
+                onChange={(e) => setSecondaryDocId(e.target.value)}
+                className="text-xs p-1.5 rounded border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-800 dark:text-gray-200 focus:ring-1 focus:ring-primary focus:outline-none"
+              >
+                {multiDocContext?.map(d => (
+                  <option key={d.id} value={d.id}>{d.name}</option>
+                ))}
+              </select>
+            </div>
+
+            <button
+              onClick={handleCheckConflicts}
+              disabled={isCheckingConflicts || primaryDocId === secondaryDocId}
+              className="px-4 py-2 text-xs font-bold text-white bg-primary hover:bg-primary/95 rounded-xl shadow-lg disabled:opacity-50 disabled:cursor-not-allowed transition-all"
+            >
+              {isCheckingConflicts ? 'Analyzing...' : 'Run Conflict Check'}
+            </button>
+          </div>
+
+          {/* Results display */}
+          <div className="flex-1 overflow-y-auto p-6 space-y-4">
+            {isCheckingConflicts ? (
+              <div className="flex flex-col items-center justify-center h-64 space-y-3">
+                <RefreshCcw size={32} className="animate-spin text-primary" />
+                <p className="text-sm font-semibold text-gray-500">LegalEase AI is checking for contradictions...</p>
+              </div>
+            ) : conflicts.length === 0 ? (
+              <div className="flex flex-col items-center justify-center h-64 text-center space-y-2">
+                <ShieldCheck size={48} className="text-emerald-500" />
+                <h3 className="text-sm font-bold text-gray-800 dark:text-white">No Conflicts Detected</h3>
+                <p className="text-xs text-gray-500 dark:text-gray-400 max-w-sm">
+                  Run the conflict checker above to scan the primary and secondary documents for potential violations or contradictions.
+                </p>
+              </div>
+            ) : (
+              <div className="space-y-4 text-left">
+                <h3 className="text-xs font-extrabold uppercase tracking-wider text-gray-500">
+                  Detected Contradictions ({conflicts.length})
+                </h3>
+                <div className="grid gap-4">
+                  {conflicts.map((conflict, idx) => {
+                    const sev = conflict.severity.toLowerCase();
+                    const borderClass = sev === 'high' ? 'border-red-500/30 bg-red-500/5' : sev === 'medium' ? 'border-amber-500/30 bg-amber-500/5' : 'border-emerald-500/30 bg-emerald-500/5';
+                    const badgeClass = sev === 'high' ? 'bg-red-500/10 text-red-650 dark:text-red-400 border-red-500/20' : sev === 'medium' ? 'bg-amber-500/10 text-amber-600 dark:text-amber-400 border-amber-500/20' : 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/20';
+
+                    return (
+                      <div key={idx} className={`p-4 rounded-2xl border text-xs flex flex-col space-y-3 ${borderClass}`} data-testid="conflict-card">
+                        {/* Header: Severity & Explanation */}
+                        <div className="flex items-start justify-between gap-3">
+                          <div>
+                            <span className={`px-2.5 py-0.5 rounded-full text-[9px] font-extrabold uppercase border tracking-wider ${badgeClass}`}>
+                              {conflict.severity} Severity
+                            </span>
+                            <h4 className="text-sm font-bold text-gray-900 dark:text-white mt-2">
+                              {conflict.explanation}
+                            </h4>
+                          </div>
+                        </div>
+
+                        {/* Split Columns */}
+                        <div className="grid md:grid-cols-2 gap-4 pt-2 border-t border-gray-150 dark:border-gray-800">
+                          {/* Column 1: Primary Document Clause */}
+                          <div className="space-y-1">
+                            <span className="text-[10px] font-extrabold uppercase text-gray-400 dark:text-gray-500">
+                              Primary Document Constraint
+                            </span>
+                            <blockquote className="pl-3 border-l-2 border-gray-300 dark:border-gray-700 italic text-gray-650 dark:text-gray-400 font-mono leading-relaxed bg-gray-50/50 dark:bg-gray-900/40 p-2 rounded">
+                              "{conflict.primary_clause}"
+                            </blockquote>
+                          </div>
+
+                          {/* Column 2: Secondary Document Clause */}
+                          <div className="space-y-1">
+                            <span className="text-[10px] font-extrabold uppercase text-gray-400 dark:text-gray-500">
+                              Secondary Document Violation
+                            </span>
+                            <blockquote className="pl-3 border-l-2 border-primary/30 dark:border-primary/50 italic text-gray-650 dark:text-gray-400 font-mono leading-relaxed bg-primary/5 p-2 rounded">
+                              "{conflict.secondary_clause}"
+                            </blockquote>
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+      ) : (
+        <>
+          {/* Message list - takes remaining space */}
+          <div className="flex-grow overflow-y-auto px-4 sm:px-6 py-6 sm:py-8 space-y-4 sm:space-y-6 relative z-10 min-h-0">
+            {messages.map((msg: ChatMessage) => {
+              const isUser = msg.sender === 'user';
+
+              // ---------------------------------------------------------------------------
+              // Redaction scope decision — user messages vs. bot messages:
+              //
+              // Bot messages (AI responses) are redacted when the toggle is ON because
+              // they may echo back PII that was present in the uploaded document context.
+              //
+              // User messages are intentionally NOT redacted in the display layer because:
+              //   1. The user authored the text themselves and already knows its content.
+              //   2. Redacting the user's own input would make their conversation history
+              //      unreadable and break the UX flow.
+              //   3. The toggle label says "mask sensitive data in AI responses", which
+              //      sets a clear expectation that only AI output is affected.
+              //
+              // If policy changes to redact user input too, replace the condition below
+              // with `isRedactionEnabled` (removing the `!isUser &&` guard).
+              // ---------------------------------------------------------------------------
+              const displayText =
+                isRedactionEnabled && !isUser ? redact(msg.text, redactionStyle) : msg.text;
+
+              return (
+                <div
+                  key={msg.id}
+                  className={`flex ${isUser ? 'justify-end' : 'justify-start'} animate-fade-in`}
+                >
+                  <div className={`flex items-start max-w-[80%] gap-3 ${isUser ? 'flex-row-reverse' : ''}`}>
+                    {/* Avatar */}
+                    <div
+                      className={`flex-shrink-0 h-9 w-9 rounded-xl flex items-center justify-center shadow-md ${
+                        isUser
+                          ? 'bg-gradient-to-tr from-primary-600 to-indigo-650 text-white'
+                          : 'bg-gradient-to-tr from-emerald-600 to-teal-500 text-white'
+                      }`}
+                    >
+                      {isUser ? <User size={16} /> : <Bot size={16} />}
+                    </div>
+
+                    {/* Chat Bubble Wrapper */}
+                    <div className="relative group/bubble max-w-full">
+                      {/* Copy Action Tool Button (Overlayed on Bubble Hover) */}
+                      <button
+                        onClick={() => handleCopy(displayText, msg.id)}
+                        className={`absolute top-2.5 z-10 p-1.5 rounded-lg bg-white/90 dark:bg-gray-800/90 border border-gray-200 dark:border-gray-700 shadow-sm opacity-0 group-hover/bubble:opacity-100 transition-opacity duration-200 hover:text-primary dark:hover:text-primary ${
+                          isUser ? 'right-full mr-2' : 'left-full ml-2'
+                        }`}
+                        title="Copy message content"
+                        aria-label="Copy message text"
+                      >
+                        {copiedId === msg.id ? (
+                          <Check size={13} className="text-emerald-500" />
+                        ) : (
+                          <Copy size={13} />
+                        )}
+                      </button>
+
+                      {/* Actual Bubble */}
+                      <div
+                        className={`p-4 rounded-2xl text-left border relative ${
+                          isUser
+                            ? 'bg-primary text-white rounded-tr-none border-transparent shadow-lg shadow-primary-500/10'
+                            : 'bg-white/80 dark:bg-gray-900/60 backdrop-blur-md text-gray-800 dark:text-gray-200 rounded-tl-none border-gray-150 dark:border-gray-800 shadow-sm'
+                        }`}
+                      >
+                        <div className="text-sm font-medium whitespace-pre-wrap pr-4 markdown-body">
+                          <ReactMarkdown 
+                            remarkPlugins={[remarkGfm]} 
+                            rehypePlugins={[rehypeRaw]}
+                            components={{
+                              table: ({node: _node, ...props}) => <table className="border-collapse table-auto w-full text-sm my-2 border border-gray-300 dark:border-gray-600 rounded-lg overflow-hidden" {...props} />,
+                              th: ({node: _node, ...props}) => <th className="border border-gray-300 dark:border-gray-600 px-4 py-2 bg-gray-100 dark:bg-gray-800 text-left font-bold" {...props} />,
+                              td: ({node: _node, ...props}) => <td className="border border-gray-300 dark:border-gray-600 px-4 py-2" {...props} />,
+                              blockquote: ({node: _node, ...props}) => <blockquote className="border-l-4 border-gray-300 dark:border-gray-500 pl-4 italic text-gray-650 dark:text-gray-400 my-2" {...props} />,
+                              a: ({node: _node, ...props}) => <a className="text-primary hover:underline" {...props} />
+                            }}
+                          >
+                            {displayText}
+                          </ReactMarkdown>
+                        </div>
+                        <p className={`text-[9px] font-semibold mt-2 ${isUser ? 'text-blue-100 text-right' : 'text-gray-400 dark:text-gray-500'}`}>
+                          {msg.time}
+                        </p>
+                      </div>
+
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
+
+            {/* Typing Loading Indicator */}
+            {isTyping && (
+              <div className="flex justify-start animate-pulse">
+                <div className="flex items-start max-w-[80%] gap-3">
+                  <div className="flex-shrink-0 h-9 w-9 rounded-xl flex items-center justify-center bg-gradient-to-tr from-emerald-600 to-teal-500 text-white shadow-md">
+                    <Bot size={16} />
+                  </div>
+                  <div className="p-4 rounded-2xl bg-white/80 dark:bg-gray-900/60 backdrop-blur-md text-gray-850 dark:text-gray-205 rounded-tl-none border border-gray-150 dark:border-gray-800">
+                    <div className="flex gap-1.5 items-center py-1">
+                      <span className="w-2.5 h-2.5 bg-emerald-500 rounded-full animate-bounce"></span>
+                      <span className="w-2.5 h-2.5 bg-emerald-500 rounded-full animate-bounce delay-150"></span>
+                      <span className="w-2.5 h-2.5 bg-emerald-500 rounded-full animate-bounce delay-300"></span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
+            <div ref={messagesEndRef} />
+          </div>
+
+          {/* Screen reader live region — announces both AI typing state and
+              PII redaction toggle changes (aria-atomic ensures the full message
+              is read rather than just the changed portion). */}
+          <div className="sr-only" aria-live="polite" aria-atomic="true">
+            {redactionAnnouncement || (isTyping ? 'LegalEase AI is writing an answer...' : '')}
+          </div>
+
+          <div className="p-3 sm:p-4 bg-white dark:bg-gray-800 border-t border-gray-200 dark:border-gray-800 flex-shrink-0">
+            {/* PII Redaction active indicator */}
+            {isRedactionEnabled && (
+              <div className="mb-2 flex items-center gap-1.5 text-[10px] font-semibold text-emerald-600 dark:text-emerald-400">
+                <ShieldCheck size={12} />
+                <span>PII Redaction active — sensitive data masked in AI responses</span>
+              </div>
+            )}
+            {isUploading && (
+              <div className="mb-3 px-3 py-2 rounded-lg bg-primary/5 border border-primary/20">
+                <div className="flex items-center justify-between mb-1">
+                  <span className="text-xs font-semibold text-primary">Processing document...</span>
+                  <span className="text-xs font-bold text-primary">{uploadProgress}%</span>
+                </div>
+                <div className="w-full h-1.5 bg-gray-200 dark:bg-gray-700 rounded-full overflow-hidden">
+                  <div
+                    className="h-full bg-gradient-to-r from-primary to-indigo-500 rounded-full transition-all duration-500"
+                    style={{ width: `${uploadProgress || 10}%` }}
+                  />
+                </div>
+              </div>
+            )}
+            {uploadedDoc && (
+              <div className="mb-3 flex items-center justify-between bg-primary/5 dark:bg-primary/10 p-2 rounded-lg border border-primary/20">
+                <div className="flex items-center gap-2 overflow-hidden">
+                  <FileText size={16} className="text-primary flex-shrink-0" />
+                  <span className="text-sm font-medium text-gray-700 dark:text-gray-300 truncate">{uploadedDoc.name}</span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={handleSummarize}
+                    className="text-xs flex items-center gap-1 bg-primary/10 hover:bg-primary/20 text-primary px-2 py-1 rounded transition-colors"
+                  >
+                    <Sparkles size={12} />
+                    Summarize
+                  </button>
+                  <button onClick={() => setUploadedDoc(null)} className="text-gray-400 hover:text-red-500 transition-colors">
+                    <X size={16} />
+                  </button>
+                </div>
+              </div>
+            )}
+            {multiDocContext && multiDocContext.length >= 2 && (
+              <div className="mb-3 bg-indigo-500/5 dark:bg-indigo-500/10 border border-indigo-500/20 rounded-xl p-3">
+                <div className="flex items-center justify-between mb-2">
+                  <div className="flex items-center gap-2">
+                    <GitCompare size={14} className="text-indigo-500 flex-shrink-0" />
+                    <span className="text-xs font-bold text-indigo-600 dark:text-indigo-400">
+                      Comparison Mode — {multiDocContext.length} documents
+                    </span>
+                  </div>
+                  <button
+                    onClick={() => setMultiDocContext(null)}
+                    className="text-gray-400 hover:text-red-500 transition-colors p-0.5"
+                    aria-label="Exit comparison mode"
+                  >
+                    <X size={14} />
+                  </button>
+                </div>
+                <div className="flex flex-wrap gap-1.5">
+                  {multiDocContext.map(doc => (
+                    <span
+                      key={doc.id}
+                      className="inline-flex items-center gap-1 px-2 py-0.5 rounded-lg text-[11px] font-medium
+                                 bg-indigo-100 dark:bg-indigo-900/30 text-indigo-700 dark:text-indigo-300
+                                 border border-indigo-200 dark:border-indigo-700/50 max-w-[200px]"
+                    >
+                      <Layers size={9} />
+                      <span className="truncate">{doc.name}</span>
+                    </span>
+                  ))}
+                </div>
+                <p className="text-[10px] text-indigo-500/70 dark:text-indigo-400/60 mt-2">
+                  Ask questions like "Compare termination clauses" or "Find conflicting obligations"
+                </p>
+              </div>
+            )}
+
+            <LegalMapping description={input} onSelect={(s) => setInput(prev => (prev ? prev + '\n\n' + `${s.section} — ${s.title}: ${s.summary}` : `${s.section} — ${s.title}: ${s.summary}`))} />
+
+            <div className="flex items-center gap-2">
+              <input
+                type="file"
+                ref={fileInputRef}
+                onChange={handleFileUpload}
+                className="hidden"
+                accept=".pdf,.docx,.txt"
+              />
+              <button
+                onClick={() => fileInputRef.current?.click()}
+                disabled={isUploading}
+                className="p-2 text-gray-400 hover:text-gray-600 dark:hover:text-gray-305 transition-colors"
+                title="Attach Document"
+              >
+                {isUploading ? <RefreshCcw size={20} className="animate-spin" /> : <Paperclip size={20} />}
+              </button>
+
+              <button
+                onClick={handleExportPDF}
+                disabled={isExporting}
+                className="p-2 text-gray-400 hover:text-primary dark:hover:text-primary disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                title="Export to PDF"
+              >
+                {isExporting ? <RefreshCcw size={20} className="animate-spin" /> : <Download size={20} />}
+              </button>
+
+              <button
+                onClick={() => setShowSessions(prev => !prev)}
+                className={`p-2 transition-colors ${showSessions ? 'text-primary' : 'text-gray-400 hover:text-gray-600 dark:hover:text-gray-305'}`}
+                title="Conversation history"
+              >
+                <History size={20} />
+              </button>
+
+              <button
+                onClick={handleNewConversation}
+                className="p-2 text-gray-400 hover:text-primary dark:hover:text-primary transition-colors"
+                title="New conversation"
+              >
+                <PlusCircle size={20} />
+              </button>
+
+              <button
+                onClick={handleClearConversation}
+                className="p-2 text-gray-400 hover:text-red-500 transition-colors hidden sm:block"
+                title="Clear conversation"
+              >
+                <Trash2 size={20} />
+              </button>
+
+              <div className="flex-1 relative min-w-0">
+                {/* Dynamic Context Badge Indicator */}
+                {uploadedDoc && (
+                  <span 
+                    className="absolute right-3 top-2.5 bg-green-100 dark:bg-green-900/30 text-green-800 dark:text-green-300 text-[10px] font-semibold px-2 py-0.5 rounded-full flex items-center gap-1.5 border border-green-200 dark:border-green-800/50 animate-pulse z-10"
+                    role="status"
+                  >
+                    <span className="w-1.5 h-1.5 bg-green-500 rounded-full"></span>
+                    Active Document Context
+                  </span>
+                )}
+
+                {/* Accessible Multi-line Text Area for Enter / Shift+Enter management WITH COUNTER LIMIT */}
+                <textarea
+                  className="w-full pl-4 pr-16 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent bg-gray-50 dark:bg-gray-700 text-gray-900 dark:text-white placeholder-gray-500 dark:placeholder-gray-400 resize-none max-h-32 min-h-[40px] block align-bottom leading-normal"
+                  placeholder={multiDocContext ? "Compare clauses, find conflicts, ask about all documents..." : uploadedDoc ? "Ask about this document..." : "Ask a legal question..."}
+                  rows={1}
+                  maxLength={MAX_INPUT_CHARS}
+                  value={input}
+                  onChange={(e) => setInput(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' && !e.shiftKey && !isTyping) {
+                      e.preventDefault();
+                      handleSend();
+                    }
+                  }}
+                />
+
+                {/* Dynamic Character Counter */}
+                <div 
+                  className={`absolute bottom-2 right-3 text-[10px] font-medium transition-colors duration-300 pointer-events-none ${
+                    input.length >= MAX_INPUT_CHARS ? 'text-red-500 animate-pulse' :
+                    input.length >= MAX_INPUT_CHARS * 0.9 ? 'text-orange-500' :
+                    'text-gray-400 dark:text-gray-500'
+                  }`}
+                >
+                  {input.length} / {MAX_INPUT_CHARS}
+                </div>
+              </div>
+              
+              <button
+                onClick={handleSend}
+                disabled={!input.trim() || isTyping || input.length > MAX_INPUT_CHARS}
+                className="bg-primary text-white p-2 rounded-lg hover:bg-primary/90 disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex-shrink-0"
+              >
+                <Send size={20} />
+              </button>
+            </div>
+          </div>
+        </>
+      )}
     </div>
   );
 }

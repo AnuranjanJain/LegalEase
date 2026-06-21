@@ -449,3 +449,16 @@ class TestCompareEndpoint:
             resp = client.post("/compare/chat", json=payload)
 
         assert resp.status_code == 200
+
+    def test_conflicts_endpoint_success(self, client):
+        payload = {
+            "primary_document": {"id": "doc_nda", "name": "NDA.pdf", "text": "NDA text"},
+            "secondary_document": {"id": "doc_emp", "name": "Employment.docx", "text": "Employment text"}
+        }
+        resp = client.post("/compare/conflicts", json=payload)
+        assert resp.status_code == 200
+        data = resp.json()
+        assert "conflicts" in data
+        assert len(data["conflicts"]) == 2
+        assert data["conflicts"][0]["severity"] in ["High", "Medium", "Low"]
+
