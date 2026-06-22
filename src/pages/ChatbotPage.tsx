@@ -36,7 +36,7 @@ type Citation = { text: string; source: string; chunk_index: number };
 
 export function ChatbotPage() {
   const [messages, setMessages] = useState<ChatMessage[]>([makeGreeting()]);
-  const [messageCitations, setMessageCitations] = useState<Record<string, Citation[]>>({});
+  const [messageCitations] = useState<Record<string, Citation[]>>({});
   const [openCitationId, setOpenCitationId] = useState<string | null>(null);
   const [activeSessionId, setActiveSessionId] = useState<string | null>(null);
   const [sessions, setSessions] = useState<ChatSessionMetadata[]>([]);
