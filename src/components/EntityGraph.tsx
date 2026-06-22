@@ -17,7 +17,7 @@ export function EntityGraph({ documentText }: EntityGraphProps) {
       if (!documentText) return;
       setIsLoading(true);
       try {
-        const response = await api.post('/api/legal/extract-entities', { text: documentText }) as { nodes: any[]; links: any[] };
+        const response = await api.post('/legal/extract-entities', { text: documentText }) as { nodes: any[]; links: any[] };
         setGraphData(response);
       } catch (error) {
         console.error('Failed to extract entities for graph', error);
