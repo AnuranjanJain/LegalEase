@@ -341,6 +341,7 @@ async def chat(request: Request, payload: ChatRequest, identity: AuthIdentity = 
     # Sanitize inputs
     sanitized_message = sanitize_text(payload.message)
     sanitized_context = sanitize_text(payload.context) if payload.context else None
+    citations = []
 
     # Handle RAG context retrieval for non-streaming requests early.
     # Streaming requests handle RAG inside the generator to avoid blocking initial response.
@@ -351,7 +352,7 @@ async def chat(request: Request, payload: ChatRequest, identity: AuthIdentity = 
         try:
             if doc_hash not in rag_service.indexed_docs:
                 await rag_service.add_document(sanitized_context, doc_hash)
-            sanitized_context = await rag_service.get_context(sanitized_message, doc_hash)
+            sanitized_context, citations = await rag_service.get_context(sanitized_message, doc_hash)
         except Exception as e:
             logger.warning(f"RAG retrieval failed: {e}. Falling back to non-RAG heuristic.")
             # Fall back gracefully to a non-RAG heuristic (truncating context)
@@ -384,7 +385,7 @@ async def chat(request: Request, payload: ChatRequest, identity: AuthIdentity = 
     # Streaming or standard block handling
     if payload.stream:
         async def stream_generator():
-            nonlocal sanitized_context
+            nonlocal sanitized_context, citations
             full_response = ""
             try:
                 # Perform RAG retrieval inside the stream generator asynchronously to prevent blocking the initial response
@@ -395,7 +396,7 @@ async def chat(request: Request, payload: ChatRequest, identity: AuthIdentity = 
                     try:
                         if doc_hash not in rag_service.indexed_docs:
                             await rag_service.add_document(sanitized_context, doc_hash)
-                        sanitized_context = await rag_service.get_context(sanitized_message, doc_hash)
+                        sanitized_context, citations = await rag_service.get_context(sanitized_message, doc_hash)
                     except Exception as e:
                         logger.warning(f"RAG retrieval failed inside stream generator: {e}. Falling back to non-RAG heuristic.")
                         if len(sanitized_context) > 5000:
