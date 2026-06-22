@@ -1,4 +1,4 @@
-import { Send, User, Bot, Paperclip, X, FileText, Sparkles, RefreshCcw, PlusCircle, Trash2, History, Copy, Check, ShieldCheck, Download, GitCompare, Layers } from 'lucide-react';
+import { Send, User, Bot, Paperclip, X, FileText, Sparkles, RefreshCcw, PlusCircle, Trash2, History, Copy, Check, ShieldCheck, Download, GitCompare, Layers, BookOpen, ChevronDown } from 'lucide-react';
 import { api } from '../services/api';
 import { ChatStorageService, ChatMessage, ChatSessionMetadata } from '../services/storage';
 import { useRef, useState, useEffect, useCallback } from 'react';
@@ -252,7 +252,7 @@ export function ChatbotPage() {
         );
         setMessages(prev =>
           prev.map(msg =>
-            msg.id === botMessageId
+            msg.id === botId
               ? { ...msg, text: data.response || "I couldn't generate a comparison for those documents." }
               : msg
           )
@@ -288,7 +288,7 @@ export function ChatbotPage() {
                     if (data.response) {
                       setMessages(prev =>
                         prev.map(msg =>
-                          msg.id === botMessageId
+                          msg.id === botId
                             ? { ...msg, text: msg.text + data.response }
                             : msg
                         )
