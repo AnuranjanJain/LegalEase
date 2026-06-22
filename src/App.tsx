@@ -15,7 +15,7 @@ import { SecurityPage } from './pages/SecurityPage';
 import { StorageService } from './services/storage';
 import { NotFoundPage } from "./pages/NotFoundPage";
 import { ScrollToTop } from './components/ScrollToTop';
-import { AuthProvider } from './contexts/AuthContext';
+
 import { ProtectedRoute } from './components/ProtectedRoute';
 import { LoginPage } from './pages/Login';
 import { SignupPage } from './pages/Signup';
