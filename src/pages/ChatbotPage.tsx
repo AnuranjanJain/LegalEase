@@ -1,4 +1,4 @@
-import { Send, User, Bot, Paperclip, X, FileText, Sparkles, RefreshCcw, PlusCircle, Trash2, History, Copy, Check, ShieldCheck, Pencil, ChevronLeft, ChevronRight, Download } from 'lucide-react';
+import { Send, User, Bot, Paperclip, X, FileText, Sparkles, RefreshCcw, PlusCircle, Trash2, History, Copy, Check, ShieldCheck, Download, GitCompare, Layers, Pencil, ChevronLeft, ChevronRight } from 'lucide-react';
 import { api } from '../services/api';
 import { ChatStorageService, ChatMessage, ChatSessionMetadata } from '../services/storage';
 import { useRef, useState, useEffect, useCallback } from 'react';
@@ -6,7 +6,6 @@ import { useToast } from '../contexts/ToastContext';
 import LegalMapping from '../components/LegalMapping';
 import { useRedaction } from '../contexts/RedactionContext';
 import { redact } from '../utils/redaction';
-import { RedactedText } from '../components/RedactedText';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import rehypeRaw from 'rehype-raw';
@@ -43,14 +42,24 @@ export function ChatbotPage() {
   const [isUploading, setIsUploading] = useState(false);
   const [uploadProgress, setUploadProgress] = useState(0);
   const [showSessions, setShowSessions] = useState(false);
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editText, setEditText] = useState('');
+  const [messageBranches, setMessageBranches] = useState<Record<string, Array<{ userText: string, botText: string }>>>({});
+  const [branchIdx, setBranchIdx] = useState<Record<string, number>>({});
+
+  const [isExporting, setIsExporting] = useState(false);
+
+  /**
+   * Multi-document comparison context.
+   * Populated when the user navigates here from a multi-doc comparison session
+   * created in DocumentsPage. When set, the chat sends `documentIds` to the
+   * comparison endpoint instead of `context` to the regular chat endpoint.
+   * Mutually exclusive with `uploadedDoc` for a given session.
+   */
+  const [multiDocContext, setMultiDocContext] = useState<Array<{ id: string; name: string; text: string }> | null>(null);
   
   // State to track which message ID was copied to show the checkmark temporarily
   const [copiedId, setCopiedId] = useState<string | null>(null);
-  const [editingId, setEditingId] = useState<string | null>(null);
-  const [editText, setEditText] = useState('');
-  // messageBranches[userMsgId] = array of {userText, botText} pairs; branchIdx tracks active branch
-  const [messageBranches, setMessageBranches] = useState<Record<string, Array<{userText:string;botText:string}>>>({});
-  const [branchIdx, setBranchIdx] = useState<Record<string, number>>({});
 
   // Announcement text for the aria-live region. Updated whenever the
   // redaction toggle changes so screen readers announce the state change.
@@ -107,6 +116,7 @@ export function ChatbotPage() {
         setActiveSessionId(savedId);
         setMessages(sessionData.messages.length > 0 ? sessionData.messages : [makeGreeting()]);
         setUploadedDoc(sessionData.documentContext ?? null);
+        setMultiDocContext(sessionData.multiDocContext ?? null);
         return;
       }
     }
@@ -117,7 +127,7 @@ export function ChatbotPage() {
     setMessages([makeGreeting()]);
   }, []);
 
-  const persistSession = useCallback((msgs: ChatMessage[], docCtx: typeof uploadedDoc, sessionId: string | null) => {
+  const persistSession = useCallback((msgs: ChatMessage[], docCtx: typeof uploadedDoc, sessionId: string | null, multiCtx: typeof multiDocContext) => {
     if (!sessionId) return;
     const firstUser = msgs.find(m => m.sender === 'user');
     const title = firstUser
@@ -128,15 +138,16 @@ export function ChatbotPage() {
       title,
       messages: msgs,
       documentContext: docCtx ?? undefined,
+      multiDocContext: multiCtx ?? undefined,
     });
     setSessions(ChatStorageService.getSessions());
   }, []);
 
   useEffect(() => {
     if (activeSessionId) {
-      persistSession(messages, uploadedDoc, activeSessionId);
+      persistSession(messages, uploadedDoc, activeSessionId, multiDocContext);
     }
-  }, [messages, uploadedDoc, activeSessionId, persistSession]);
+  }, [messages, uploadedDoc, multiDocContext, activeSessionId, persistSession]);
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -147,6 +158,7 @@ export function ChatbotPage() {
     setActiveSessionId(newSession.id);
     setMessages([makeGreeting()]);
     setUploadedDoc(null);
+    setMultiDocContext(null);
     setSessions(ChatStorageService.getSessions());
     setShowSessions(false);
   };
@@ -158,6 +170,7 @@ export function ChatbotPage() {
     setActiveSessionId(id);
     setMessages(sessionData.messages.length > 0 ? sessionData.messages : [makeGreeting()]);
     setUploadedDoc(sessionData.documentContext ?? null);
+    setMultiDocContext(sessionData.multiDocContext ?? null);
     setShowSessions(false);
   };
 
@@ -179,6 +192,7 @@ export function ChatbotPage() {
     const freshGreeting = makeGreeting();
     setMessages([freshGreeting]);
     setUploadedDoc(null);
+    setMultiDocContext(null);
 
     if (activeSessionId) {
       ChatStorageService.saveSession({
@@ -186,6 +200,7 @@ export function ChatbotPage() {
         title: 'New Conversation',
         messages: [freshGreeting],
         documentContext: undefined,
+        multiDocContext: undefined,
       });
       setSessions(ChatStorageService.getSessions());
     }
@@ -219,45 +234,70 @@ export function ChatbotPage() {
         timestamp: new Date().toISOString(),
       };
       setMessages(prev => [...prev, botMessage]);
-      setIsTyping(false); // Hide the bouncing dots immediately since we will stream text
+      setIsTyping(false);
 
-      const response = await api.stream(
-        '/chat',
-        { message: currentInput, context: uploadedDoc?.text },
-        conversationHistory
-      );
+      // ---------------------------------------------------------------------------
+      // Route selection:
+      //   - Multi-doc comparison session → POST /compare/chat (structured response)
+      //   - Single-doc or no-doc session  → POST /chat (streaming)
+      // ---------------------------------------------------------------------------
+      if (multiDocContext && multiDocContext.length >= 2) {
+        const data = await api.post<{ response: string }>(
+          '/compare/chat',
+          {
+            message: currentInput,
+            document_ids: multiDocContext.map(d => d.id),
+            document_texts: multiDocContext.map(d => ({ id: d.id, name: d.name, text: d.text })),
+            conversation_history: conversationHistory,
+          }
+        );
+        setMessages(prev =>
+          prev.map(msg =>
+            msg.id === botMessageId
+              ? { ...msg, text: data.response || "I couldn't generate a comparison for those documents." }
+              : msg
+          )
+        );
+      } else {
+        // Standard single-doc streaming path
+        const response = await api.stream(
+          '/chat',
+          { message: currentInput, context: uploadedDoc?.text },
+          conversationHistory
+        );
 
-      const reader = response.body?.getReader();
-      const decoder = new TextDecoder('utf-8');
+        const reader = response.body?.getReader();
+        const decoder = new TextDecoder('utf-8');
 
-      if (reader) {
-        let done = false;
-        while (!done) {
-          const { value, done: readerDone } = await reader.read();
-          done = readerDone;
-          if (value) {
-            const chunk = decoder.decode(value, { stream: true });
-            const lines = chunk.split('\n');
-            for (const line of lines) {
-              if (line.startsWith('data: ')) {
-                const dataStr = line.slice(6);
-                if (dataStr === '[DONE]') {
-                  done = true;
-                  break;
-                }
-                try {
-                  const data = JSON.parse(dataStr);
-                  if (data.response) {
-                    setMessages(prev => 
-                      prev.map(msg => 
-                        msg.id === botMessageId 
-                          ? { ...msg, text: msg.text + data.response } 
-                          : msg
-                      )
-                    );
+        if (reader) {
+          let done = false;
+          while (!done) {
+            const { value, done: readerDone } = await reader.read();
+            done = readerDone;
+            if (value) {
+              const chunk = decoder.decode(value, { stream: true });
+              const lines = chunk.split('\n');
+              for (const line of lines) {
+                if (line.startsWith('data: ')) {
+                  const dataStr = line.slice(6);
+                  if (dataStr === '[DONE]') {
+                    done = true;
+                    break;
                   }
-                } catch (e) {
-                  // Ignore incomplete JSON chunks or parse errors, they'll resolve in the next chunk
+                  try {
+                    const data = JSON.parse(dataStr);
+                    if (data.response) {
+                      setMessages(prev =>
+                        prev.map(msg =>
+                          msg.id === botMessageId
+                            ? { ...msg, text: msg.text + data.response }
+                            : msg
+                        )
+                      );
+                    }
+                  } catch (e) {
+                    // Ignore incomplete JSON chunks
+                  }
                 }
               }
             }
@@ -282,31 +322,40 @@ export function ChatbotPage() {
     }
   };
 
+  
   const handleEditSubmit = async (msgId: string) => {
-    if (!editText.trim()) return;
-    // Find index of edited message
+    if (!editText.trim()) {
+      setEditingId(null);
+      return;
+    }
     const idx = messages.findIndex(m => m.id === msgId);
     if (idx === -1) return;
-    // History = everything before the edited message
-    const historyBefore = buildConversationHistory(messages.slice(0, idx));
+
     setIsTyping(true);
     try {
-      const data = await api.post<{ edited_content: string; response: string }>(
+      const historyUntilEdit = buildConversationHistory(messages.slice(0, idx));
+      const res = await api.put<{ message_id: string; edited_content: string; response: string }>(
         `/chat/messages/${msgId}`,
-        { new_content: editText, context: uploadedDoc?.text, conversation_history: historyBefore }
+        {
+          new_content: editText,
+          conversation_history: historyUntilEdit,
+          context: uploadedDoc?.text
+        }
       );
-      const newUserMsg: ChatMessage = { ...messages[idx], text: data.edited_content };
+
+      const newUserMsg = { ...messages[idx], text: res.edited_content };
+      const newBotMsgId = crypto.randomUUID();
       const newBotMsg: ChatMessage = {
-        id: crypto.randomUUID(), text: data.response, sender: 'bot',
+        id: newBotMsgId,
+        text: res.response,
+        sender: 'bot',
         time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-        timestamp: new Date().toISOString(),
+        timestamp: new Date().toISOString()
       };
-      // Store branch
-      const currentUser = messages[idx].text;
-      const currentBot = messages[idx + 1]?.text ?? '';
+
       setMessageBranches(prev => ({
         ...prev,
-        [msgId]: [...(prev[msgId] ?? [{ userText: currentUser, botText: currentBot }]), { userText: data.edited_content, botText: data.response }]
+        [msgId]: [...(prev[msgId] || [{ userText: messages[idx].text, botText: messages[idx + 1]?.text || '' }]), { userText: res.edited_content, botText: res.response }]
       }));
       setBranchIdx(prev => ({ ...prev, [msgId]: (messageBranches[msgId]?.length ?? 1) }));
       // Replace edited msg + its following bot msg
@@ -335,23 +384,50 @@ export function ChatbotPage() {
     setMessages(prev => [...prev.slice(0, msgIdx), updatedUser, updatedBot, ...prev.slice(msgIdx + 2)]);
   };
 
-  const handleExportPDF = () => {
-    const element = document.getElementById('chat-history-container');
-    if (!element) return;
-    showToast('Generating PDF...', 'info');
-    const opt: any = {
-      margin:       [10, 10, 10, 10],
-      filename:     'LegalEase_Chat_Export.pdf',
-      image:        { type: 'jpeg', quality: 0.98 },
-      html2canvas:  { scale: 2, useCORS: true },
-      jsPDF:        { unit: 'mm', format: 'a4', orientation: 'portrait' }
-    };
-    html2pdf().set(opt).from(element).save().then(() => {
-      showToast('Export successful!', 'success');
-    }).catch((err: any) => {
-      console.error('PDF export error:', err);
-      showToast('Failed to export PDF.', 'error');
-    });
+  const handleExportPDF = async () => {
+    const chatMessages = messages
+      .filter(m => m.id !== 'default-greeting')
+      .map(m => ({
+        role: m.sender === 'user' ? 'user' : 'assistant',
+        content: m.text
+      }));
+
+    if (chatMessages.length === 0) {
+      showToast('No chat history available to export.', 'warning');
+      return;
+    }
+
+    setIsExporting(true);
+    showToast('Generating PDF chat transcript...', 'info');
+
+    try {
+      const activeSession = sessions.find(s => s.id === activeSessionId);
+      const title = activeSession?.title ? `Chat History: ${activeSession.title}` : 'AI Chat History';
+
+      const blob = await api.postBlob('/api/export/pdf', {
+        title,
+        chatHistory: chatMessages
+      });
+
+      const today = new Date().toISOString().split('T')[0];
+      const filename = `chat-history-${today}.pdf`;
+
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.setAttribute('download', filename);
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      URL.revokeObjectURL(url);
+
+      showToast('PDF chat transcript exported successfully!', 'success');
+    } catch (err) {
+      console.error('Failed to export chat transcript:', err);
+      showToast(err instanceof Error ? err.message : 'Failed to export PDF.', 'error');
+    } finally {
+      setIsExporting(false);
+    }
   };
 
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -522,10 +598,10 @@ export function ChatbotPage() {
                     ? 'bg-primary text-white rounded-tr-none' 
                     : 'bg-white/80 dark:bg-gray-900/60 backdrop-blur-md text-gray-900 dark:text-gray-150 rounded-tl-none border border-gray-150 dark:border-gray-800'
                 }`}>
-
+                  
                   {/* Dedicated Copy Button for AI/Bot responses */}
                   {!isUser && (
-                    <button
+                    <button 
                       onClick={() => handleCopy(displayText, msg.id)}
                       className="absolute top-2 right-2 p-1 text-gray-400 hover:text-primary dark:hover:text-primary-400 transition-colors opacity-0 group-hover:opacity-100 focus:opacity-100"
                       title="Copy to clipboard"
@@ -571,15 +647,14 @@ export function ChatbotPage() {
                           th: ({node, ...props}) => <th className="border border-gray-300 dark:border-gray-600 px-4 py-2 bg-gray-100 dark:bg-gray-800 text-left font-bold" {...props} />,
                           td: ({node, ...props}) => <td className="border border-gray-300 dark:border-gray-600 px-4 py-2" {...props} />,
                           blockquote: ({node, ...props}) => <blockquote className="border-l-4 border-gray-300 dark:border-gray-500 pl-4 italic text-gray-600 dark:text-gray-400 my-2" {...props} />,
-                          a: ({node, ...props}) => <a className="text-primary hover:underline" {...props} />,
-                          p: ({node, children, ...props}) => <p {...props}><RedactedText text={children as any} /></p>
+                          a: ({node, ...props}) => <a className="text-primary hover:underline" {...props} />
                         }}
                       >
                         {displayText}
                       </ReactMarkdown>
                     </div>
                   )}
-
+                  
                   <div className="flex items-center justify-between mt-2">
                     <p className={`text-[9px] font-semibold ${isUser ? 'text-blue-100' : 'text-gray-400 dark:text-gray-500'}`}>
                       {msg.time}
@@ -599,7 +674,9 @@ export function ChatbotPage() {
                       </div>
                     )}
                   </div>
+
                 </div>
+
               </div>
             </div>
           );
@@ -675,6 +752,43 @@ export function ChatbotPage() {
           </div>
         )}
 
+        {/* Multi-document comparison context banner */}
+        {multiDocContext && multiDocContext.length >= 2 && (
+          <div className="mb-3 bg-indigo-500/5 dark:bg-indigo-500/10 border border-indigo-500/20 rounded-xl p-3">
+            <div className="flex items-center justify-between mb-2">
+              <div className="flex items-center gap-2">
+                <GitCompare size={14} className="text-indigo-500 flex-shrink-0" />
+                <span className="text-xs font-bold text-indigo-600 dark:text-indigo-400">
+                  Comparison Mode — {multiDocContext.length} documents
+                </span>
+              </div>
+              <button
+                onClick={() => setMultiDocContext(null)}
+                className="text-gray-400 hover:text-red-500 transition-colors p-0.5"
+                aria-label="Exit comparison mode"
+              >
+                <X size={14} />
+              </button>
+            </div>
+            <div className="flex flex-wrap gap-1.5">
+              {multiDocContext.map(doc => (
+                <span
+                  key={doc.id}
+                  className="inline-flex items-center gap-1 px-2 py-0.5 rounded-lg text-[11px] font-medium
+                             bg-indigo-100 dark:bg-indigo-900/30 text-indigo-700 dark:text-indigo-300
+                             border border-indigo-200 dark:border-indigo-700/50 max-w-[200px]"
+                >
+                  <Layers size={9} />
+                  <span className="truncate">{doc.name}</span>
+                </span>
+              ))}
+            </div>
+            <p className="text-[10px] text-indigo-500/70 dark:text-indigo-400/60 mt-2">
+              Ask questions like "Compare termination clauses" or "Find conflicting obligations"
+            </p>
+          </div>
+        )}
+
         <LegalMapping description={input} onSelect={(s) => setInput(prev => (prev ? prev + '\n\n' + `${s.section} — ${s.title}: ${s.summary}` : `${s.section} — ${s.title}: ${s.summary}`))} />
 
         <div className="flex items-center gap-2">
@@ -696,10 +810,11 @@ export function ChatbotPage() {
 
           <button
             onClick={handleExportPDF}
-            className="p-2 text-gray-400 hover:text-primary dark:hover:text-primary transition-colors"
+            disabled={isExporting}
+            className="p-2 text-gray-400 hover:text-primary dark:hover:text-primary disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
             title="Export to PDF"
           >
-            <Download size={20} />
+            {isExporting ? <RefreshCcw size={20} className="animate-spin" /> : <Download size={20} />}
           </button>
 
           <button
@@ -741,7 +856,7 @@ export function ChatbotPage() {
             {/* Accessible Multi-line Text Area for Enter / Shift+Enter management WITH COUNTER LIMIT */}
             <textarea
               className="w-full pl-4 pr-16 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent bg-gray-50 dark:bg-gray-700 text-gray-900 dark:text-white placeholder-gray-500 dark:placeholder-gray-400 resize-none max-h-32 min-h-[40px] block align-bottom leading-normal"
-              placeholder={uploadedDoc ? "Ask about this document..." : "Ask a legal question..."}
+              placeholder={multiDocContext ? "Compare clauses, find conflicts, ask about all documents..." : uploadedDoc ? "Ask about this document..." : "Ask a legal question..."}
               rows={1}
               maxLength={MAX_INPUT_CHARS}
               value={input}

@@ -8,6 +8,7 @@ from backend.core.exceptions import ValidationError
 # Configuration limits with fallback defaults
 MAX_CHAT_INPUT_CHARS = int(os.getenv("MAX_CHAT_INPUT_CHARS", "4000"))
 MAX_SUMMARIZE_INPUT_CHARS = int(os.getenv("MAX_SUMMARIZE_INPUT_CHARS", "20000"))
+MAX_SIMPLIFY_INPUT_CHARS = int(os.getenv("MAX_SIMPLIFY_INPUT_CHARS", "10000"))
 MAX_CONTEXT_INPUT_CHARS = int(os.getenv("MAX_CONTEXT_INPUT_CHARS", "10000"))
 MAX_DOCX_ARCHIVE_ENTRIES = int(os.getenv("MAX_DOCX_ARCHIVE_ENTRIES", "200"))
 MAX_DOCX_ARCHIVE_UNCOMPRESSED_BYTES = int(os.getenv("MAX_DOCX_ARCHIVE_UNCOMPRESSED_BYTES", str(10 * 1024 * 1024)))
@@ -41,6 +42,18 @@ def validate_summarize_input(text: str):
         
     if len(text) > MAX_SUMMARIZE_INPUT_CHARS:
         raise ValidationError(f"Text to summarize exceeds the maximum allowed length of {MAX_SUMMARIZE_INPUT_CHARS} characters")
+
+
+def validate_simplify_input(text: str):
+    """
+    Validate the text to simplify.
+    Rejects early if character counts exceed safe limits.
+    """
+    if not text or not text.strip():
+        raise ValidationError("Text to simplify cannot be empty or only whitespace")
+        
+    if len(text) > MAX_SIMPLIFY_INPUT_CHARS:
+        raise ValidationError(f"Text to simplify exceeds the maximum allowed length of {MAX_SIMPLIFY_INPUT_CHARS} characters")
 
 
 def sanitize_text(text: str) -> str:
@@ -124,3 +137,50 @@ def validate_docx_archive_safety(file_path: str):
                 raise ValidationError("DOCX archive compression ratio is suspiciously high")
     except zipfile.BadZipFile:
         raise ValidationError("File content signature does not match DOCX structure (ZIP archive)")
+
+
+MAX_EXPORT_TITLE_CHARS = 200
+MAX_EXPORT_SUMMARY_CHARS = 100000
+MAX_EXPORT_CHAT_MESSAGES = 500
+MAX_EXPORT_CHAT_MSG_CHARS = 20000
+
+
+def validate_export_pdf_input(title: str, summary: Optional[str] = None, chat_history: Optional[list] = None):
+    """
+    Validate the PDF export request payload.
+    Ensures safe character limits and correct structured formatting.
+    """
+    if not title or not title.strip():
+        raise ValidationError("Report title cannot be empty")
+        
+    if len(title) > MAX_EXPORT_TITLE_CHARS:
+        raise ValidationError(f"Report title exceeds the maximum allowed length of {MAX_EXPORT_TITLE_CHARS} characters")
+        
+    has_summary = bool(summary and summary.strip())
+    has_chat = bool(chat_history and len(chat_history) > 0)
+    
+    if not has_summary and not has_chat:
+        raise ValidationError("Both summary and chat history cannot be empty")
+        
+    if has_summary and len(summary) > MAX_EXPORT_SUMMARY_CHARS:
+        raise ValidationError(f"Summary text exceeds the maximum allowed length of {MAX_EXPORT_SUMMARY_CHARS} characters")
+        
+    if has_chat:
+        if len(chat_history) > MAX_EXPORT_CHAT_MESSAGES:
+            raise ValidationError(f"Chat history exceeds the maximum allowed count of {MAX_EXPORT_CHAT_MESSAGES} messages")
+            
+        for idx, item in enumerate(chat_history):
+            if not isinstance(item, dict):
+                raise ValidationError(f"Chat message at index {idx} must be a dictionary")
+            role = item.get("role")
+            content = item.get("content")
+            
+            if role not in ("user", "assistant", "bot"):
+                raise ValidationError(f"Chat message role at index {idx} must be 'user', 'assistant', or 'bot'")
+                
+            if not content or not content.strip():
+                raise ValidationError(f"Chat message content at index {idx} cannot be empty")
+                
+            if len(content) > MAX_EXPORT_CHAT_MSG_CHARS:
+                raise ValidationError(f"Chat message content at index {idx} exceeds the maximum allowed length of {MAX_EXPORT_CHAT_MSG_CHARS} characters")
+
