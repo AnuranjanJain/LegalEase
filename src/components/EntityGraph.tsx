@@ -3,7 +3,7 @@ import ForceGraph2D from 'react-force-graph-2d';
 import { api } from '../services/api';
 
 interface EntityGraphProps {
-  documentText: string;
+  documentText?: string;
 }
 
 export function EntityGraph({ documentText }: EntityGraphProps) {
@@ -17,7 +17,7 @@ export function EntityGraph({ documentText }: EntityGraphProps) {
       if (!documentText) return;
       setIsLoading(true);
       try {
-        const response = await api.post('/api/legal/extract-entities', { text: documentText });
+        const response = await api.post('/api/legal/extract-entities', { text: documentText }) as { nodes: any[]; links: any[] };
         setGraphData(response);
       } catch (error) {
         console.error('Failed to extract entities for graph', error);

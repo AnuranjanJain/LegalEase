@@ -782,7 +782,7 @@ export function DocumentsPage() {
               />
 
               <ClauseAnalysisSection clauses={selectedAuditDoc.clauses} />
-              <EntityGraph documentText={selectedAuditDoc.content} />
+              <EntityGraph documentText={selectedAuditDoc.text} />
 
             </div>
 

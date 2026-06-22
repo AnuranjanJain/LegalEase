@@ -13,10 +13,12 @@
   "dependencies": {
     "chart.js": "^4.5.1",
     "chartjs": "^0.3.24",
+    "force-graph": "^1.51.4",
     "html2pdf.js": "^0.14.0",
     "lucide-react": "^0.330.0",
     "react": "^18.2.0",
     "react-dom": "^18.2.0",
+    "react-force-graph-2d": "^1.29.1",
     "react-markdown": "^10.1.0",
     "react-router-dom": "^6.30.4",
     "recharts": "^3.8.1",
