@@ -26,4 +26,5 @@ pytest
 pytest-asyncio
 httpx<0.27.0
 pytest-cov
-pytest-mock
+pytest-mocklanggraph  
+langchain-core  
