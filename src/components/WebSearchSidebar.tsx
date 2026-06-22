@@ -21,7 +21,7 @@ export function WebSearchSidebar() {
     setIsLoading(true);
     setHasSearched(true);
     try {
-      const response = await api.post('/api/legal/web-search', { query, max_results: 5 });
+      const response = await api.post('/api/legal/web-search', { query, max_results: 5 }) as { results: WebSearchResult[] };
       setResults(response.results || []);
     } catch (error) {
       console.error('Web search failed', error);
