@@ -1,4 +1,4 @@
-import { Send, User, Bot, Paperclip, X, FileText, Sparkles, RefreshCcw, PlusCircle, Trash2, History, Copy, Check, ShieldCheck, Download, GitCompare, Layers } from 'lucide-react';
+import { Send, User, Bot, Paperclip, X, FileText, Sparkles, RefreshCcw, PlusCircle, Trash2, History, Copy, Check, ShieldCheck, Download, GitCompare, Layers, Pencil, ChevronLeft, ChevronRight } from 'lucide-react';
 import { api } from '../services/api';
 import { ChatStorageService, ChatMessage, ChatSessionMetadata } from '../services/storage';
 import { useRef, useState, useEffect, useCallback } from 'react';
@@ -42,6 +42,11 @@ export function ChatbotPage() {
   const [isUploading, setIsUploading] = useState(false);
   const [uploadProgress, setUploadProgress] = useState(0);
   const [showSessions, setShowSessions] = useState(false);
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editText, setEditText] = useState('');
+  const [messageBranches, setMessageBranches] = useState<Record<string, Array<{ userText: string, botText: string }>>>({});
+  const [branchIdx, setBranchIdx] = useState<Record<string, number>>({});
+
   const [isExporting, setIsExporting] = useState(false);
 
   /**
@@ -317,6 +322,68 @@ export function ChatbotPage() {
     }
   };
 
+  
+  const handleEditSubmit = async (msgId: string) => {
+    if (!editText.trim()) {
+      setEditingId(null);
+      return;
+    }
+    const idx = messages.findIndex(m => m.id === msgId);
+    if (idx === -1) return;
+
+    setIsTyping(true);
+    try {
+      const historyUntilEdit = buildConversationHistory(messages.slice(0, idx));
+      const res = await api.put<{ message_id: string; edited_content: string; response: string }>(
+        `/chat/messages/${msgId}`,
+        {
+          new_content: editText,
+          conversation_history: historyUntilEdit,
+          context: uploadedDoc?.text
+        }
+      );
+
+      const newUserMsg = { ...messages[idx], text: res.edited_content };
+      const newBotMsgId = crypto.randomUUID();
+      const newBotMsg: ChatMessage = {
+        id: newBotMsgId,
+        text: res.response,
+        sender: 'bot',
+        time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+        timestamp: new Date().toISOString()
+      };
+
+      setMessageBranches(prev => ({
+        ...prev,
+        [msgId]: [...(prev[msgId] || [{ userText: messages[idx].text, botText: messages[idx + 1]?.text || '' }]), { userText: res.edited_content, botText: res.response }]
+      }));
+      setBranchIdx(prev => ({ ...prev, [msgId]: (messageBranches[msgId]?.length ?? 1) }));
+      // Replace edited msg + its following bot msg
+      const updated = [...messages.slice(0, idx), newUserMsg, newBotMsg, ...messages.slice(idx + 2)];
+      setMessages(updated);
+    } catch (err) {
+      showToast('Failed to edit message.', 'error');
+    } finally {
+      setIsTyping(false);
+      setEditingId(null);
+      setEditText('');
+    }
+  };
+
+  const handleBranchNav = (msgId: string, dir: 1 | -1) => {
+    const branches = messageBranches[msgId];
+    if (!branches) return;
+    const currentIdx = branchIdx[msgId] ?? 0;
+    const newIdx = Math.max(0, Math.min(branches.length - 1, currentIdx + dir));
+    setBranchIdx(prev => ({ ...prev, [msgId]: newIdx }));
+    const branch = branches[newIdx];
+    const msgIdx = messages.findIndex(m => m.id === msgId);
+    if (msgIdx === -1) return;
+    const updatedUser: ChatMessage = { ...messages[msgIdx], text: branch.userText };
+    const updatedBot: ChatMessage = { ...messages[msgIdx + 1], text: branch.botText };
+    setMessages(prev => [...prev.slice(0, msgIdx), updatedUser, updatedBot, ...prev.slice(msgIdx + 2)]);
+  };
+
   const handleExportPDF = async () => {
     const chatMessages = messages
       .filter(m => m.id !== 'default-greeting')
@@ -544,24 +611,70 @@ export function ChatbotPage() {
                     </button>
                   )}
 
-                  <div className="text-sm font-medium whitespace-pre-wrap pr-4 markdown-body">
-                    <ReactMarkdown 
-                      remarkPlugins={[remarkGfm]} 
-                      rehypePlugins={[rehypeRaw]}
-                      components={{
-                        table: ({node, ...props}) => <table className="border-collapse table-auto w-full text-sm my-2 border border-gray-300 dark:border-gray-600 rounded-lg overflow-hidden" {...props} />,
-                        th: ({node, ...props}) => <th className="border border-gray-300 dark:border-gray-600 px-4 py-2 bg-gray-100 dark:bg-gray-800 text-left font-bold" {...props} />,
-                        td: ({node, ...props}) => <td className="border border-gray-300 dark:border-gray-600 px-4 py-2" {...props} />,
-                        blockquote: ({node, ...props}) => <blockquote className="border-l-4 border-gray-300 dark:border-gray-500 pl-4 italic text-gray-600 dark:text-gray-400 my-2" {...props} />,
-                        a: ({node, ...props}) => <a className="text-primary hover:underline" {...props} />
-                      }}
+                  {/* Edit button for user messages */}
+                  {isUser && editingId !== msg.id && (
+                    <button
+                      onClick={() => { setEditingId(msg.id); setEditText(msg.text); }}
+                      className="absolute top-2 left-2 p-1 text-blue-200 hover:text-white transition-colors opacity-0 group-hover:opacity-100"
+                      title="Edit message"
                     >
-                      {displayText}
-                    </ReactMarkdown>
+                      <Pencil size={13} />
+                    </button>
+                  )}
+
+                  {/* Inline edit textarea */}
+                  {isUser && editingId === msg.id ? (
+                    <div className="space-y-2">
+                      <textarea
+                        className="w-full p-2 rounded-lg text-sm text-gray-900 bg-white/90 border border-white/60 resize-none focus:outline-none"
+                        rows={3}
+                        value={editText}
+                        onChange={e => setEditText(e.target.value)}
+                        autoFocus
+                      />
+                      <div className="flex gap-2 justify-end">
+                        <button onClick={() => setEditingId(null)} className="text-xs text-blue-200 hover:text-white">Cancel</button>
+                        <button onClick={() => handleEditSubmit(msg.id)} className="text-xs bg-white/20 hover:bg-white/30 text-white px-3 py-1 rounded-lg font-semibold">Send</button>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="text-sm font-medium whitespace-pre-wrap pr-4 markdown-body">
+                      <ReactMarkdown 
+                        remarkPlugins={[remarkGfm]} 
+                        rehypePlugins={[rehypeRaw]}
+                        components={{
+                          table: ({node, ...props}) => <table className="border-collapse table-auto w-full text-sm my-2 border border-gray-300 dark:border-gray-600 rounded-lg overflow-hidden" {...props} />,
+                          th: ({node, ...props}) => <th className="border border-gray-300 dark:border-gray-600 px-4 py-2 bg-gray-100 dark:bg-gray-800 text-left font-bold" {...props} />,
+                          td: ({node, ...props}) => <td className="border border-gray-300 dark:border-gray-600 px-4 py-2" {...props} />,
+                          blockquote: ({node, ...props}) => <blockquote className="border-l-4 border-gray-300 dark:border-gray-500 pl-4 italic text-gray-600 dark:text-gray-400 my-2" {...props} />,
+                          a: ({node, ...props}) => <a className="text-primary hover:underline" {...props} />
+                        }}
+                      >
+                        {displayText}
+                      </ReactMarkdown>
+                    </div>
+                  )}
+                  
+                  <div className="flex items-center justify-between mt-2">
+                    <p className={`text-[9px] font-semibold ${isUser ? 'text-blue-100' : 'text-gray-400 dark:text-gray-500'}`}>
+                      {msg.time}
+                    </p>
+                    {/* Branch navigator shown on user messages that have been edited */}
+                    {isUser && messageBranches[msg.id] && messageBranches[msg.id].length > 1 && (
+                      <div className="flex items-center gap-1">
+                        <button onClick={() => handleBranchNav(msg.id, -1)} disabled={(branchIdx[msg.id] ?? 0) === 0} className="text-blue-200 disabled:opacity-30 hover:text-white">
+                          <ChevronLeft size={12} />
+                        </button>
+                        <span className="text-[9px] text-blue-200 font-bold">
+                          {(branchIdx[msg.id] ?? 0) + 1} / {messageBranches[msg.id].length}
+                        </span>
+                        <button onClick={() => handleBranchNav(msg.id, 1)} disabled={(branchIdx[msg.id] ?? 0) >= messageBranches[msg.id].length - 1} className="text-blue-200 disabled:opacity-30 hover:text-white">
+                          <ChevronRight size={12} />
+                        </button>
+                      </div>
+                    )}
                   </div>
-                  <p className={`text-[9px] font-semibold mt-2 ${isUser ? 'text-blue-100 text-right' : 'text-gray-400 dark:text-gray-500'}`}>
-                    {msg.time}
-                  </p>
+
                 </div>
 
               </div>

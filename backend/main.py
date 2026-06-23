@@ -252,6 +252,13 @@ class ChatRequest(BaseModel):
     stream: Optional[bool] = False
 
 
+class EditMessageRequest(BaseModel):
+    """Request body for the message-edit/branching endpoint (#366)."""
+    new_content: str
+    conversation_history: Optional[list[dict[str, str]]] = None
+    context: Optional[str] = None
+
+
 class SummarizeRequest(BaseModel):
     text: str
 
@@ -553,6 +560,41 @@ async def _process_document_background(
                 os.unlink(temp_path)
             except OSError:
                 pass
+
+
+@app.put("/chat/messages/{message_id}")
+async def edit_message(
+    message_id: str,
+    payload: EditMessageRequest,
+    request: Request,
+    identity: AuthIdentity = Depends(validate_token_or_api_key),
+):
+    """Edit a previous user message and regenerate the AI response (#366).
+
+    The frontend passes the edited text plus the conversation history up to
+    (but not including) the message being edited.  The backend re-runs the AI
+    and returns a fresh assistant response, leaving branching bookkeeping to
+    the client-side storage layer.
+    """
+    sanitized_message = sanitize_text(payload.new_content)
+    sanitized_context = sanitize_text(payload.context) if payload.context else None
+    validate_chat_input(sanitized_message, sanitized_context)
+
+    response_gen = ai_service.generate_chat_response(
+        message=sanitized_message,
+        context=sanitized_context,
+        history=payload.conversation_history,
+        stream=False,
+    )
+    response_text = ""
+    async for chunk in response_gen:
+        response_text += chunk
+
+    return {
+        "message_id": message_id,
+        "edited_content": sanitized_message,
+        "response": response_text,
+    }
 
 
 @app.get("/upload/status/{task_id}")
