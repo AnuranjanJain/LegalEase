@@ -7,6 +7,7 @@ import { ErrorBoundary } from './components/ErrorBoundary.tsx'
 import { ToastProvider } from './contexts/ToastContext.tsx'
 import { NotificationProvider } from './contexts/NotificationContext.tsx'
 import { RedactionProvider } from './contexts/RedactionContext.tsx'
+import { AuthProvider } from './contexts/AuthContext.tsx'
 
 // Global error handlers for uncaught exceptions and unhandled promise rejections
 window.addEventListener('error', (event) => {
@@ -20,13 +21,15 @@ window.addEventListener('unhandledrejection', (event) => {
 ReactDOM.createRoot(document.getElementById('root')!).render(
   <React.StrictMode>
     <ErrorBoundary>
-      <NotificationProvider>
-        <ToastProvider>
-          <RedactionProvider>
-            <App />
-          </RedactionProvider>
-        </ToastProvider>
-      </NotificationProvider>
+      <AuthProvider>
+        <NotificationProvider>
+          <ToastProvider>
+            <RedactionProvider>
+              <App />
+            </RedactionProvider>
+          </ToastProvider>
+        </NotificationProvider>
+      </AuthProvider>
     </ErrorBoundary>
   </React.StrictMode>,
 )
