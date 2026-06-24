@@ -28,3 +28,4 @@ httpx<0.27.0
 pytest-cov
 pytest-mock
 duckduckgo-search
+rank-bm25
