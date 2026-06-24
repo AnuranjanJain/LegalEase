@@ -40,7 +40,15 @@ class ChatMessage(Base):
     content = Column(Text, nullable=False)
     created_at = Column(DateTime, default=datetime.utcnow)
 
+    # Conversation branching support (#366):
+    # parent_id points to the message this one was generated in response to,
+    # enabling a tree structure rather than a flat list.
+    parent_id = Column(Integer, ForeignKey("chat_messages.id"), nullable=True, index=True)
+    # branch_index tracks which regeneration/edit variant this message represents (0-based).
+    branch_index = Column(Integer, nullable=False, default=0)
+
     session = relationship("ChatSession", back_populates="messages")
+    children = relationship("ChatMessage", backref=__import__('sqlalchemy.orm', fromlist=['backref']).backref("parent", remote_side=[id]))
 
 
 class DocumentRecord(Base):
