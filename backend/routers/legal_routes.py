@@ -5,6 +5,7 @@ from typing import List, Dict, Any
 from backend.services.legal_mapping import map_problem_to_sections
 from backend.services.ai_service import ai_service
 from backend.services.entity_extraction import extract_entities
+from backend.services.hybrid_search import get_hybrid_results
 
 router = APIRouter(prefix="/legal", tags=["legal"])
 
@@ -40,6 +41,12 @@ class ClauseAnalysisResponse(BaseModel):
     clauses: List[ClauseAnalysisItem]
 
 
+class HybridSearchRequest(BaseModel):
+    query: str
+    documents: List[str]
+    top_k: int = 3
+
+
 @router.post("/map", response_model=MappingResponse)
 async def map_problem(request: ProblemRequest):
     try:
@@ -73,6 +80,17 @@ async def extract_document_entities(request: EntityExtractionRequest):
     try:
         graph_data = extract_entities(request.text)
         return graph_data
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=str(e),
+        )
+
+@router.post("/hybrid-search")
+async def perform_hybrid_search(request: HybridSearchRequest):
+    try:
+        results = get_hybrid_results(request.query, request.documents, request.top_k)
+        return {"results": results}
     except Exception as e:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
