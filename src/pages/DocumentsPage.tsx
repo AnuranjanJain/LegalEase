@@ -7,6 +7,7 @@ import {
 import { StorageService, Document, ChatStorageService } from '../services/storage';
 import { useToast } from '../contexts/ToastContext';
 import { useNavigate } from 'react-router-dom';
+import { api } from '../services/api';
 import { ShareButton } from '../components/ShareButton';
 import { WhatsAppShareModal } from '../components/WhatsAppShareModal';
 import { ClauseAnalysisSection } from '../components/ClauseAnalysisSection';
@@ -24,6 +25,7 @@ export function DocumentsPage() {
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
   const [shareDoc, setShareDoc] = useState<Document | null>(null);
   const [selectedAuditDoc, setSelectedAuditDoc] = useState<Document | null>(null);
+  const [isExporting, setIsExporting] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const { showToast } = useToast();
   const navigate = useNavigate();
@@ -270,6 +272,47 @@ export function DocumentsPage() {
     link.click();
     document.body.removeChild(link);
     showToast('AI Summary report downloaded successfully!', 'success');
+  };
+
+  const handleExportPDF = async (doc: Document) => {
+    const rawSummary = doc.summary || getMockSummary(doc);
+    if (!rawSummary) {
+      showToast('No summary content available to export.', 'warning');
+      return;
+    }
+
+    const summaryText = isRedactionEnabled
+      ? redact(rawSummary, redactionStyle)
+      : rawSummary;
+
+    setIsExporting(true);
+    showToast('Generating PDF summary...', 'info');
+
+    try {
+      const blob = await api.postBlob('/api/export/pdf', {
+        title: `AI Document Summary: ${doc.name}`,
+        summary: summaryText
+      });
+
+      const today = new Date().toISOString().split('T')[0];
+      const filename = `summary-${today}.pdf`;
+
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.setAttribute('download', filename);
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      URL.revokeObjectURL(url);
+
+      showToast('PDF summary exported successfully!', 'success');
+    } catch (err) {
+      console.error('Failed to export PDF summary:', err);
+      showToast(err instanceof Error ? err.message : 'Failed to export PDF summary.', 'error');
+    } finally {
+      setIsExporting(false);
+    }
   };
 
   return (
@@ -750,6 +793,18 @@ export function DocumentsPage() {
                 >
                   <MessageSquare size={14} />
                   <span>Chat with AI Assistant</span>
+                </button>
+                <button
+                  onClick={() => handleExportPDF(selectedAuditDoc)}
+                  disabled={isExporting}
+                  className="flex-grow sm:flex-none inline-flex items-center justify-center gap-2 px-4 py-2.5 text-xs font-bold text-white bg-primary-600 hover:bg-primary-500 rounded-xl shadow-lg disabled:opacity-50 disabled:cursor-not-allowed transition-all"
+                >
+                  {isExporting ? (
+                    <RefreshCcw size={14} className="animate-spin" />
+                  ) : (
+                    <Download size={14} />
+                  )}
+                  <span>Export PDF</span>
                 </button>
                 <button
                   onClick={() => handleDownloadSummary(selectedAuditDoc)}

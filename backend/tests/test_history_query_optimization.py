@@ -6,19 +6,34 @@ and validates the optimization.
 """
 import pytest
 import time
-from sqlalchemy.orm import Session
-from sqlalchemy import event
+from sqlalchemy import create_engine, event
+from sqlalchemy.orm import Session, sessionmaker
 from sqlalchemy.engine import Engine
 
-from backend.database import Base, engine, SessionLocal
+from backend.database import Base
 from backend import models
+
+
+# ---------------------------------------------------------------------------
+# Use a dedicated in-memory SQLite engine for this test module so that no
+# other test's file-based database (test_legalease.db) can leave behind a
+# stale schema.  Each test gets a fully fresh database with the schema
+# derived from the current models.py, avoiding the
+# "NOT NULL constraint failed: chat_messages.branch_index" failure that
+# occurred when tests shared the file-based engine.
+# ---------------------------------------------------------------------------
+_TEST_ENGINE = create_engine(
+    "sqlite:///:memory:",
+    connect_args={"check_same_thread": False},
+)
+_TestSessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=_TEST_ENGINE)
 
 
 # Track query count for profiling
 query_count = 0
 
 
-@event.listens_for(Engine, "before_cursor_execute")
+@event.listens_for(_TEST_ENGINE, "before_cursor_execute")
 def before_cursor_execute(conn, cursor, statement, parameters, context, executemany):
     global query_count
     query_count += 1
@@ -35,14 +50,14 @@ def reset_query_count():
 
 @pytest.fixture
 def db_session():
-    """Create a fresh database session for each test."""
-    Base.metadata.create_all(bind=engine)
-    db = SessionLocal()
+    """Create a fresh in-memory database session for each test."""
+    Base.metadata.create_all(bind=_TEST_ENGINE)
+    db = _TestSessionLocal()
     try:
         yield db
     finally:
         db.close()
-        Base.metadata.drop_all(bind=engine)
+        Base.metadata.drop_all(bind=_TEST_ENGINE)
 
 
 @pytest.fixture

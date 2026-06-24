@@ -196,6 +196,13 @@ LEGAL EASE
 - **Processing History**: Past document processing records
 - **Status Management**: Cancel, retry, and download options
 
+### 📄 PDF Export Feature
+- **API Endpoint**: `POST /api/export/pdf`
+- **Interactive Button Integration**: Add "Export PDF" button to pages showcasing AI summaries (document details modal in vault, pipeline completion screen) and chatbot conversation transcripts.
+- **Loading & State Handling**: Disables buttons and shows a visual spinner during PDF generation.
+- **Secure Architecture**: Enforces token-based API authentication and server-side text sanitization.
+- **Professional Formatting**: Employs backend `reportlab` layout structure containing dynamic header metadata, running dividers, structured user vs AI dialogue tags, and A4 automatic page numbers ("Page X of Y").
+
 ### 📊 Readability Score Analyzer (`ReadabilityScore.tsx`)
 - **Dual Comparison**: Computes and contrasts readability metrics for the original legal text vs. the AI summary
 - **Linguistic Scores**: Displays Flesch Reading Ease, Flesch-Kincaid Grade Level, and Difficulty Classifications
