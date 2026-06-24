@@ -1,4 +1,4 @@
-import { Send, User, Bot, Paperclip, X, FileText, Sparkles, RefreshCcw, PlusCircle, Trash2, History, Copy, Check, ShieldCheck, Download, GitCompare, Layers, MessageSquare, Search } from 'lucide-react';
+import { Send, User, Bot, Paperclip, X, FileText, Sparkles, RefreshCcw, PlusCircle, Trash2, History, Copy, Check, ShieldCheck, Download, GitCompare, Layers, MessageSquare, Search, Pencil, ChevronLeft, ChevronRight, BookOpen, ChevronDown } from 'lucide-react';
 import { api } from '../services/api';
 import { ChatStorageService, ChatMessage, ChatSessionMetadata } from '../services/storage';
 import { useRef, useState, useEffect, useCallback } from 'react';
@@ -41,6 +41,7 @@ export function ChatbotPage() {
   const [openCitationId, setOpenCitationId] = useState<string | null>(null);
   const [activeSessionId, setActiveSessionId] = useState<string | null>(null);
   const [sessions, setSessions] = useState<ChatSessionMetadata[]>([]);
+  const [showWebSearch, setShowWebSearch] = useState(false);
   const [input, setInput] = useState('');
   const [isTyping, setIsTyping] = useState(false);
   const [uploadedDoc, setUploadedDoc] = useState<{ name: string; text: string } | null>(null);
@@ -604,109 +605,6 @@ export function ChatbotPage() {
                   }`}>
                     {isUser ? <User size={14} /> : <Bot size={14} />}
                   </div>
-                  {/* Dedicated Copy Button for AI/Bot responses */}
-                  {!isUser && (
-                    <button 
-                      onClick={() => handleCopy(displayText, msg.id)}
-                      className="absolute top-2 right-2 p-1 text-gray-400 hover:text-primary dark:hover:text-primary-400 transition-colors opacity-0 group-hover:opacity-100 focus:opacity-100"
-                      title="Copy to clipboard"
-                      aria-label="Copy response text"
-                    >
-                      {copiedId === msg.id ? <Check size={14} className="text-green-500" /> : <Copy size={14} />}
-                    </button>
-                  )}
-
-                  {/* Edit button for user messages */}
-                  {isUser && editingId !== msg.id && (
-                    <button
-                      onClick={() => { setEditingId(msg.id); setEditText(msg.text); }}
-                      className="absolute top-2 left-2 p-1 text-blue-200 hover:text-white transition-colors opacity-0 group-hover:opacity-100"
-                      title="Edit message"
-                    >
-                      <Pencil size={13} />
-                    </button>
-                  )}
-
-                  {/* Inline edit textarea */}
-                  {isUser && editingId === msg.id ? (
-                    <div className="space-y-2">
-                      <textarea
-                        className="w-full p-2 rounded-lg text-sm text-gray-900 bg-white/90 border border-white/60 resize-none focus:outline-none"
-                        rows={3}
-                        value={editText}
-                        onChange={e => setEditText(e.target.value)}
-                        autoFocus
-                      />
-                      <div className="flex gap-2 justify-end">
-                        <button onClick={() => setEditingId(null)} className="text-xs text-blue-200 hover:text-white">Cancel</button>
-                        <button onClick={() => handleEditSubmit(msg.id)} className="text-xs bg-white/20 hover:bg-white/30 text-white px-3 py-1 rounded-lg font-semibold">Send</button>
-                      </div>
-                    </div>
-                  ) : (
-                    <div className="text-sm font-medium whitespace-pre-wrap pr-4 markdown-body">
-                      <ReactMarkdown 
-                        remarkPlugins={[remarkGfm]} 
-                        rehypePlugins={[rehypeRaw]}
-                        components={{
-                          table: ({node, ...props}) => <table className="border-collapse table-auto w-full text-sm my-2 border border-gray-300 dark:border-gray-600 rounded-lg overflow-hidden" {...props} />,
-                          th: ({node, ...props}) => <th className="border border-gray-300 dark:border-gray-600 px-4 py-2 bg-gray-100 dark:bg-gray-800 text-left font-bold" {...props} />,
-                          td: ({node, ...props}) => <td className="border border-gray-300 dark:border-gray-600 px-4 py-2" {...props} />,
-                          blockquote: ({node, ...props}) => <blockquote className="border-l-4 border-gray-300 dark:border-gray-500 pl-4 italic text-gray-600 dark:text-gray-400 my-2" {...props} />,
-                          a: ({node, ...props}) => <a className="text-primary hover:underline" {...props} />
-                        }}
-                      >
-                        {displayText}
-                      </ReactMarkdown>
-                    </div>
-                  )}
-                  
-                  <div className="flex items-center justify-between mt-2">
-                    <p className={`text-[9px] font-semibold ${isUser ? 'text-blue-100' : 'text-gray-400 dark:text-gray-500'}`}>
-                      {msg.time}
-                    </p>
-                    {/* Branch navigator shown on user messages that have been edited */}
-                    {isUser && messageBranches[msg.id] && messageBranches[msg.id].length > 1 && (
-                      <div className="flex items-center gap-1">
-                        <button onClick={() => handleBranchNav(msg.id, -1)} disabled={(branchIdx[msg.id] ?? 0) === 0} className="text-blue-200 disabled:opacity-30 hover:text-white">
-                          <ChevronLeft size={12} />
-                        </button>
-                        <span className="text-[9px] text-blue-200 font-bold">
-                          {(branchIdx[msg.id] ?? 0) + 1} / {messageBranches[msg.id].length}
-                        </span>
-                        <button onClick={() => handleBranchNav(msg.id, 1)} disabled={(branchIdx[msg.id] ?? 0) >= messageBranches[msg.id].length - 1} className="text-blue-200 disabled:opacity-30 hover:text-white">
-                          <ChevronRight size={12} />
-                        </button>
-                      </div>
-                    )}
-                  </div>
-                  {/* Citation panel for bot messages */}
-                  {!isUser && messageCitations[msg.id] && messageCitations[msg.id].length > 0 && (
-                    <div className="mt-3 border-t border-gray-200 dark:border-gray-700 pt-2">
-                      <button
-                        onClick={() => setOpenCitationId(openCitationId === msg.id ? null : msg.id)}
-                        className="flex items-center gap-1.5 text-[10px] font-bold text-primary hover:text-primary/80 transition-colors"
-                      >
-                        <BookOpen size={11} />
-                        {messageCitations[msg.id].length} Source{messageCitations[msg.id].length > 1 ? 's' : ''}
-                        <ChevronDown size={11} className={`transition-transform ${openCitationId === msg.id ? 'rotate-180' : ''}`} />
-                      </button>
-                      {openCitationId === msg.id && (
-                        <div className="mt-2 space-y-2">
-                          {messageCitations[msg.id].map((c, idx) => (
-                            <div key={idx} className="p-2 rounded-lg bg-gray-100 dark:bg-gray-800 border border-gray-200 dark:border-gray-700">
-                              <p className="text-[9px] font-bold text-primary mb-1 flex items-center gap-1">
-                                <span className="inline-flex items-center justify-center w-4 h-4 rounded-full bg-primary text-white text-[8px] font-black">{idx + 1}</span>
-                                {c.source} — chunk {c.chunk_index + 1}
-                              </p>
-                              <p className="text-[10px] text-gray-600 dark:text-gray-400 leading-relaxed line-clamp-3">{c.text}</p>
-                            </div>
-                          ))}
-                        </div>
-                      )}
-                    </div>
-                  )}
-                </div>
-
                   {/* Message Bubble Card */}
                   <div className={`p-3 sm:p-4 rounded-2xl shadow-sm text-left leading-relaxed relative group ${
                     isUser 
@@ -726,24 +624,95 @@ export function ChatbotPage() {
                       </button>
                     )}
 
-                    <div className="text-sm font-medium whitespace-pre-wrap pr-4 markdown-body">
-                      <ReactMarkdown 
-                        remarkPlugins={[remarkGfm]} 
-                        rehypePlugins={[rehypeRaw]}
-                        components={{
-                          table: ({node, ...props}) => <table className="border-collapse table-auto w-full text-sm my-2 border border-gray-300 dark:border-gray-600 rounded-lg overflow-hidden" {...props} />,
-                          th: ({node, ...props}) => <th className="border border-gray-300 dark:border-gray-600 px-4 py-2 bg-gray-100 dark:bg-gray-800 text-left font-bold" {...props} />,
-                          td: ({node, ...props}) => <td className="border border-gray-300 dark:border-gray-600 px-4 py-2" {...props} />,
-                          blockquote: ({node, ...props}) => <blockquote className="border-l-4 border-gray-300 dark:border-gray-500 pl-4 italic text-gray-600 dark:text-gray-400 my-2" {...props} />,
-                          a: ({node, ...props}) => <a className="text-primary hover:underline" {...props} />
-                        }}
+                    {/* Edit button for user messages */}
+                    {isUser && editingId !== msg.id && (
+                      <button
+                        onClick={() => { setEditingId(msg.id); setEditText(msg.text); }}
+                        className="absolute top-2 left-2 p-1 text-blue-200 hover:text-white transition-colors opacity-0 group-hover:opacity-100"
+                        title="Edit message"
                       >
-                        {displayText}
-                      </ReactMarkdown>
+                        <Pencil size={13} />
+                      </button>
+                    )}
+
+                    {/* Inline edit textarea */}
+                    {isUser && editingId === msg.id ? (
+                      <div className="space-y-2">
+                        <textarea
+                          className="w-full p-2 rounded-lg text-sm text-gray-900 bg-white/90 border border-white/60 resize-none focus:outline-none"
+                          rows={3}
+                          value={editText}
+                          onChange={e => setEditText(e.target.value)}
+                          autoFocus
+                        />
+                        <div className="flex gap-2 justify-end">
+                          <button onClick={() => setEditingId(null)} className="text-xs text-blue-200 hover:text-white">Cancel</button>
+                          <button onClick={() => handleEditSubmit(msg.id)} className="text-xs bg-white/20 hover:bg-white/30 text-white px-3 py-1 rounded-lg font-semibold">Send</button>
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="text-sm font-medium whitespace-pre-wrap pr-4 markdown-body">
+                        <ReactMarkdown 
+                          remarkPlugins={[remarkGfm]} 
+                          rehypePlugins={[rehypeRaw]}
+                          components={{
+                            table: ({node, ...props}) => <table className="border-collapse table-auto w-full text-sm my-2 border border-gray-300 dark:border-gray-600 rounded-lg overflow-hidden" {...props} />,
+                            th: ({node, ...props}) => <th className="border border-gray-300 dark:border-gray-600 px-4 py-2 bg-gray-100 dark:bg-gray-800 text-left font-bold" {...props} />,
+                            td: ({node, ...props}) => <td className="border border-gray-300 dark:border-gray-600 px-4 py-2" {...props} />,
+                            blockquote: ({node, ...props}) => <blockquote className="border-l-4 border-gray-300 dark:border-gray-500 pl-4 italic text-gray-600 dark:text-gray-400 my-2" {...props} />,
+                            a: ({node, ...props}) => <a className="text-primary hover:underline" {...props} />
+                          }}
+                        >
+                          {displayText}
+                        </ReactMarkdown>
+                      </div>
+                    )}
+                    
+                    <div className="flex items-center justify-between mt-2">
+                      <p className={`text-[9px] font-semibold ${isUser ? 'text-blue-100' : 'text-gray-400 dark:text-gray-500'}`}>
+                        {msg.time}
+                      </p>
+                      {/* Branch navigator shown on user messages that have been edited */}
+                      {isUser && messageBranches[msg.id] && messageBranches[msg.id].length > 1 && (
+                        <div className="flex items-center gap-1">
+                          <button onClick={() => handleBranchNav(msg.id, -1)} disabled={(branchIdx[msg.id] ?? 0) === 0} className="text-blue-200 disabled:opacity-30 hover:text-white">
+                            <ChevronLeft size={12} />
+                          </button>
+                          <span className="text-[9px] text-blue-200 font-bold">
+                            {(branchIdx[msg.id] ?? 0) + 1} / {messageBranches[msg.id].length}
+                          </span>
+                          <button onClick={() => handleBranchNav(msg.id, 1)} disabled={(branchIdx[msg.id] ?? 0) >= messageBranches[msg.id].length - 1} className="text-blue-200 disabled:opacity-30 hover:text-white">
+                            <ChevronRight size={12} />
+                          </button>
+                        </div>
+                      )}
                     </div>
-                    <p className={`text-[9px] font-semibold mt-2 ${isUser ? 'text-blue-100 text-right' : 'text-gray-400 dark:text-gray-500'}`}>
-                      {msg.time}
-                    </p>
+                    {/* Citation panel for bot messages */}
+                    {!isUser && messageCitations[msg.id] && messageCitations[msg.id].length > 0 && (
+                      <div className="mt-3 border-t border-gray-200 dark:border-gray-700 pt-2">
+                        <button
+                          onClick={() => setOpenCitationId(openCitationId === msg.id ? null : msg.id)}
+                          className="flex items-center gap-1.5 text-[10px] font-bold text-primary hover:text-primary/80 transition-colors"
+                        >
+                          <BookOpen size={11} />
+                          {messageCitations[msg.id].length} Source{messageCitations[msg.id].length > 1 ? 's' : ''}
+                          <ChevronDown size={11} className={`transition-transform ${openCitationId === msg.id ? 'rotate-180' : ''}`} />
+                        </button>
+                        {openCitationId === msg.id && (
+                          <div className="mt-2 space-y-2">
+                            {messageCitations[msg.id].map((c, idx) => (
+                              <div key={idx} className="p-2 rounded-lg bg-gray-100 dark:bg-gray-800 border border-gray-200 dark:border-gray-700">
+                                <p className="text-[9px] font-bold text-primary mb-1 flex items-center gap-1">
+                                  <span className="inline-flex items-center justify-center w-4 h-4 rounded-full bg-primary text-white text-[8px] font-black">{idx + 1}</span>
+                                  {c.source} — chunk {c.chunk_index + 1}
+                                </p>
+                                <p className="text-[10px] text-gray-600 dark:text-gray-400 leading-relaxed line-clamp-3">{c.text}</p>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    )}
                   </div>
 
                 </div>
