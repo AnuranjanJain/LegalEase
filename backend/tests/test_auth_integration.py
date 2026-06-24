@@ -116,8 +116,8 @@ def test_api_key_authentication_flow_valid_key():
         
         assert identity.type == "api_key"
         assert identity.user is None
-        # Verify the key is hashed
-        expected_hash = hashlib.sha256("valid-api-key".encode()).hexdigest()[:16]
+        # Verify the key is hashed with full SHA-256 for collision resistance
+        expected_hash = hashlib.sha256("valid-api-key".encode()).hexdigest()
         assert identity.identifier == expected_hash
 
 
@@ -151,7 +151,7 @@ def test_api_key_authentication_flow_dev_mode():
         
         assert identity.type == "api_key"
         assert identity.user is None
-        expected_hash = hashlib.sha256("dev-token".encode()).hexdigest()[:16]
+        expected_hash = hashlib.sha256("dev-token".encode()).hexdigest()
         assert identity.identifier == expected_hash
 
 

@@ -29,3 +29,4 @@ pytest-cov
 pytest-mock
 langgraph
 langchain-core  
+rank-bm25
