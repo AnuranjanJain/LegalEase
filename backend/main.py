@@ -22,6 +22,7 @@ from backend.routers import history_routes
 from backend.routers.notifications import router as notifications_router
 from backend.routers.compare_routes import router as compare_router
 from backend.routers import export_routes
+
 from backend.auth import validate_token_or_api_key, AuthIdentity
 from backend.utils.limiter import SimpleRateLimiter
 from backend.utils.cleanup import start_token_cleanup_task
@@ -208,6 +209,7 @@ app.add_middleware(
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
+    expose_headers=["X-Citations"],
 )
 logger.info(f"Allowed frontend origins: {ALLOWED_ORIGINS}")
 
@@ -250,6 +252,13 @@ class ChatRequest(BaseModel):
     context: Optional[str] = None
     conversation_history: Optional[list[dict[str, str]]] = None
     stream: Optional[bool] = False
+
+
+class EditMessageRequest(BaseModel):
+    """Request body for the message-edit/branching endpoint (#366)."""
+    new_content: str
+    conversation_history: Optional[list[dict[str, str]]] = None
+    context: Optional[str] = None
 
 
 class SummarizeRequest(BaseModel):
@@ -340,6 +349,7 @@ async def chat(request: Request, payload: ChatRequest, identity: AuthIdentity = 
     # Sanitize inputs
     sanitized_message = sanitize_text(payload.message)
     sanitized_context = sanitize_text(payload.context) if payload.context else None
+    citations = []
 
     # Handle RAG context retrieval for non-streaming requests early.
     # Streaming requests handle RAG inside the generator to avoid blocking initial response.
@@ -350,7 +360,7 @@ async def chat(request: Request, payload: ChatRequest, identity: AuthIdentity = 
         try:
             if doc_hash not in rag_service.indexed_docs:
                 await rag_service.add_document(sanitized_context, doc_hash)
-            sanitized_context = await rag_service.get_context(sanitized_message, doc_hash)
+            sanitized_context, citations = await rag_service.get_context(sanitized_message, doc_hash)
         except Exception as e:
             logger.warning(f"RAG retrieval failed: {e}. Falling back to non-RAG heuristic.")
             # Fall back gracefully to a non-RAG heuristic (truncating context)
@@ -383,7 +393,7 @@ async def chat(request: Request, payload: ChatRequest, identity: AuthIdentity = 
     # Streaming or standard block handling
     if payload.stream:
         async def stream_generator():
-            nonlocal sanitized_context
+            nonlocal sanitized_context, citations
             full_response = ""
             try:
                 # Perform RAG retrieval inside the stream generator asynchronously to prevent blocking the initial response
@@ -394,7 +404,7 @@ async def chat(request: Request, payload: ChatRequest, identity: AuthIdentity = 
                     try:
                         if doc_hash not in rag_service.indexed_docs:
                             await rag_service.add_document(sanitized_context, doc_hash)
-                        sanitized_context = await rag_service.get_context(sanitized_message, doc_hash)
+                        sanitized_context, citations = await rag_service.get_context(sanitized_message, doc_hash)
                     except Exception as e:
                         logger.warning(f"RAG retrieval failed inside stream generator: {e}. Falling back to non-RAG heuristic.")
                         if len(sanitized_context) > 5000:
@@ -424,7 +434,11 @@ async def chat(request: Request, payload: ChatRequest, identity: AuthIdentity = 
                 logger.error(f"[{correlation_id_var.get()}] Stream generation error: {e}")
                 yield "\n[Error: Inference stream failed]"
 
-        return StreamingResponse(stream_generator(), media_type="text/event-stream")
+        headers = {}
+        if citations:
+            import json, base64
+            headers["X-Citations"] = base64.b64encode(json.dumps(citations).encode()).decode()
+        return StreamingResponse(stream_generator(), media_type="text/event-stream", headers=headers)
     else:
         response_gen = ai_service.generate_chat_response(
             message=sanitized_message,
@@ -436,7 +450,7 @@ async def chat(request: Request, payload: ChatRequest, identity: AuthIdentity = 
         async for chunk in response_gen:
             response_text += chunk
         semantic_cache.set(cache_key, response_text)
-        return {"response": response_text}
+        return {"response": response_text, "citations": citations}
 
 
 @app.post("/upload", status_code=202)
@@ -553,6 +567,41 @@ async def _process_document_background(
                 os.unlink(temp_path)
             except OSError:
                 pass
+
+
+@app.put("/chat/messages/{message_id}")
+async def edit_message(
+    message_id: str,
+    payload: EditMessageRequest,
+    request: Request,
+    identity: AuthIdentity = Depends(validate_token_or_api_key),
+):
+    """Edit a previous user message and regenerate the AI response (#366).
+
+    The frontend passes the edited text plus the conversation history up to
+    (but not including) the message being edited.  The backend re-runs the AI
+    and returns a fresh assistant response, leaving branching bookkeeping to
+    the client-side storage layer.
+    """
+    sanitized_message = sanitize_text(payload.new_content)
+    sanitized_context = sanitize_text(payload.context) if payload.context else None
+    validate_chat_input(sanitized_message, sanitized_context)
+
+    response_gen = ai_service.generate_chat_response(
+        message=sanitized_message,
+        context=sanitized_context,
+        history=payload.conversation_history,
+        stream=False,
+    )
+    response_text = ""
+    async for chunk in response_gen:
+        response_text += chunk
+
+    return {
+        "message_id": message_id,
+        "edited_content": sanitized_message,
+        "response": response_text,
+    }
 
 
 @app.get("/upload/status/{task_id}")

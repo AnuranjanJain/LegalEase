@@ -2,11 +2,20 @@ import re
 from datetime import datetime
 from io import BytesIO
 from typing import List, Optional
-from reportlab.lib.pagesizes import A4
-from reportlab.lib import colors
-from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, PageBreak, Table, TableStyle
-from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
-from reportlab.pdfgen import canvas
+try:
+    from reportlab.lib.pagesizes import A4
+    from reportlab.lib import colors
+    from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, PageBreak, Table, TableStyle
+    from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
+    from reportlab.pdfgen import canvas
+except Exception:  # pragma: no cover
+    A4 = None  # type: ignore
+    colors = None  # type: ignore
+    SimpleDocTemplate = None  # type: ignore
+    Paragraph = Spacer = PageBreak = Table = TableStyle = None  # type: ignore
+    getSampleStyleSheet = ParagraphStyle = None  # type: ignore
+    canvas = None  # type: ignore
+
 
 class NumberedCanvas(canvas.Canvas):
     """
