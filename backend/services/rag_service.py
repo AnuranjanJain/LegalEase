@@ -1,22 +1,18 @@
 import logging
+from typing import List, Dict, Any, Tuple
+
+from langchain_postgres.vectorstores import PGVector
+from langchain_community.vectorstores import Chroma
+from langchain_huggingface import HuggingFaceEmbeddings
+from langchain_text_splitters import RecursiveCharacterTextSplitter
+import os
 import threading
 from typing import List
 from fastapi.concurrency import run_in_threadpool
 
-from backend.config import get_settings
-
 logger = logging.getLogger(__name__)
 
-# Import at module level (main thread) to avoid Windows DLL loading crashes in background threads
-try:
-    from langchain_postgres.vectorstores import PGVector
-    from langchain_community.vectorstores import Chroma
-    from langchain_huggingface import HuggingFaceEmbeddings
-    from langchain_text_splitters import RecursiveCharacterTextSplitter
-    RAG_DEPS_AVAILABLE = True
-except Exception as e:
-    logger.warning(f"Could not pre-import RAG dependencies (expected in stub/limited environments): {e}")
-    RAG_DEPS_AVAILABLE = False
+RAG_DEPS_AVAILABLE = True
 
 class RAGService:
     def __init__(self):
@@ -49,9 +45,8 @@ class RAGService:
                 
                 self.embeddings = HuggingFaceEmbeddings(model_name="all-MiniLM-L6-v2")
                 
-                # Read database URL from centralized settings
-                settings = get_settings()
-                _database_url = settings.database.database_url or ""
+                # Read database URL from environment
+                _database_url = os.getenv("DATABASE_URL", "")
                 
                 # Use PGVector if connected to Postgres, otherwise fallback to local Chroma
                 if _database_url.startswith("postgres"):
@@ -91,7 +86,7 @@ class RAGService:
                 self.text_splitter = None
                 # Do not set self.is_initialized = True to allow retries on subsequent requests
 
-    async def add_document(self, text: str, doc_id: str):
+    async def add_document(self, text: str, doc_id: str, file_name: str = "Document"):
         """
         Asynchronously add document text to the vector store.
         Offloads chunking and embedding operations to a worker thread.
@@ -99,9 +94,9 @@ class RAGService:
         if doc_id in self.indexed_docs:
             return
         
-        await run_in_threadpool(self._add_document_sync, text, doc_id)
+        await run_in_threadpool(self._add_document_sync, text, doc_id, file_name)
 
-    def _add_document_sync(self, text: str, doc_id: str):
+    def _add_document_sync(self, text: str, doc_id: str, file_name: str = "Document"):
         if not self.is_initialized:
             self._lazy_init()
 
@@ -111,7 +106,7 @@ class RAGService:
 
         try:
             chunks = self.text_splitter.split_text(text)
-            metadatas = [{"doc_id": doc_id} for _ in chunks]
+            metadatas = [{"doc_id": doc_id, "source": file_name, "chunk_index": i} for i, _ in enumerate(chunks)]
             self.vector_store.add_texts(texts=chunks, metadatas=metadatas)
             self.indexed_docs.add(doc_id)
             logger.info(f"Indexed {len(chunks)} chunks for doc {doc_id}")
@@ -119,31 +114,38 @@ class RAGService:
             logger.error(f"Failed to add document {doc_id} to vector store: {e}", exc_info=True)
             raise e
 
-    async def get_context(self, query: str, doc_id: str, top_k: int = 5) -> str:
+    async def get_context(self, query: str, doc_id: str, top_k: int = 5) -> Tuple[str, List[Dict[str, Any]]]:
         """
         Asynchronously perform similarity search and retrieve matching document excerpts.
         Offloads querying and embedding operations to a worker thread.
         """
         return await run_in_threadpool(self._get_context_sync, query, doc_id, top_k)
 
-    def _get_context_sync(self, query: str, doc_id: str, top_k: int = 5) -> str:
+    def _get_context_sync(self, query: str, doc_id: str, top_k: int = 5) -> Tuple[str, List[Dict[str, Any]]]:
         if not self.is_initialized:
             self._lazy_init()
 
         if not self.vector_store:
             logger.warning("RAG vector store unavailable. Returning empty context.")
-            return ""
+            return "", []
 
         try:
             results = self.vector_store.similarity_search(query, k=top_k, filter={"doc_id": doc_id})
             if not results:
-                return ""
+                return "", []
                 
             context_parts = []
+            citations = []
             for i, doc in enumerate(results):
-                context_parts.append(f"--- Document Excerpt {i+1} ---\n{doc.page_content}\n")
+                context_parts.append(f"--- Document Excerpt [{i+1}] ---\n{doc.page_content}\n")
+                meta = doc.metadata or {}
+                citations.append({
+                    "text": doc.page_content[:200] + "...",
+                    "source": meta.get("source", "Document"),
+                    "chunk_index": meta.get("chunk_index", i)
+                })
                 
-            return "\n".join(context_parts)
+            return "\n".join(context_parts), citations
         except Exception as e:
             logger.error(f"Failed to query context for document {doc_id}: {e}", exc_info=True)
             raise e

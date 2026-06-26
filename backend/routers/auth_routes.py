@@ -62,7 +62,10 @@ class ResendVerificationRequest(BaseModel):
 
 
 @router.post("/signup", status_code=status.HTTP_201_CREATED, response_model=TokenResponse)
-def signup(user: UserCreate, db: Session = Depends(get_db)):
+def signup(request: Request, user: UserCreate, db: Session = Depends(get_db)):
+    # Enforce rate limiting before database operations
+    check_signup_rate_limit(request, user.email)
+    
     # Normalize email so casing variations resolve to a single account
     normalized_email = user.email.strip().lower()
     try:
@@ -104,6 +107,10 @@ def signup(user: UserCreate, db: Session = Depends(get_db)):
 
 @router.post("/login", response_model=TokenResponse)
 def login(request: Request, user: UserLogin, db: Session = Depends(get_db)):
+    # Enforce rate limiting before authentication processing
+    check_login_rate_limit(request, user.email)
+    check_failed_login_lockout(request, user.email)
+    
     # Normalize email to match accounts case-insensitively
     normalized_email = user.email.strip().lower()
     try:
@@ -168,7 +175,7 @@ def change_password(
 
 
 @router.post("/resend-verification")
-def resend_verification(payload: ResendVerificationRequest, db: Session = Depends(get_db)):
+def resend_verification(request: Request, payload: ResendVerificationRequest, db: Session = Depends(get_db)):
     """Resend a verification email to the user.
     
     This endpoint checks if the user exists and simulates sending a verification email.
@@ -177,6 +184,9 @@ def resend_verification(payload: ResendVerificationRequest, db: Session = Depend
     Security note: Returns consistent success response regardless of user existence to prevent
     user enumeration attacks. This is a common security best practice for authentication endpoints.
     """
+    # Enforce rate limiting before processing
+    check_verification_rate_limit(request, payload.email)
+    
     email_lower = payload.email.lower()
     
     # Test mode: controlled failure simulation for development/testing only

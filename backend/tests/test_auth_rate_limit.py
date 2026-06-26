@@ -277,3 +277,108 @@ def test_signup_and_verification_limits_independent(mock_request):
     
     # But verification should still work (different limiter)
     check_verification_rate_limit(mock_request, "test@example.com")
+
+
+@pytest.mark.integration
+def test_login_endpoint_rate_limit_enforcement():
+    """Test that login endpoint enforces rate limiting at the HTTP level."""
+    from fastapi.testclient import TestClient
+    from backend.main import app
+    from backend.middleware.auth_rate_limit import login_ip_limiter, login_email_limiter
+    
+    # Reset limiters
+    login_ip_limiter._storage.clear()
+    login_email_limiter._storage.clear()
+    
+    client = TestClient(app)
+    
+    # Make 5 successful login attempts (should be allowed)
+    for i in range(5):
+        response = client.post("/auth/login", json={
+            "email": "test@example.com",
+            "password": "wrongpassword"
+        })
+        # Should fail authentication but not be rate limited yet
+        assert response.status_code in [401, 429]
+    
+    # 6th attempt should be rate limited
+    response = client.post("/auth/login", json={
+        "email": "test@example.com",
+        "password": "wrongpassword"
+    })
+    assert response.status_code == 429
+    assert "Too many login attempts" in response.json()["detail"]
+    
+    # Clean up
+    login_ip_limiter._storage.clear()
+    login_email_limiter._storage.clear()
+
+
+@pytest.mark.integration
+def test_signup_endpoint_rate_limit_enforcement():
+    """Test that signup endpoint enforces rate limiting at the HTTP level."""
+    from fastapi.testclient import TestClient
+    from backend.main import app
+    from backend.middleware.auth_rate_limit import signup_ip_limiter, signup_email_limiter
+    
+    # Reset limiters
+    signup_ip_limiter._storage.clear()
+    signup_email_limiter._storage.clear()
+    
+    client = TestClient(app)
+    
+    # Make 3 signup attempts (should be allowed, will fail due to duplicate email but not rate limited)
+    for i in range(3):
+        response = client.post("/auth/signup", json={
+            "email": f"test{i}@example.com",
+            "password": "password123"
+        })
+        # Should not be rate limited
+        assert response.status_code in [201, 409, 429]
+    
+    # 4th attempt should be rate limited
+    response = client.post("/auth/signup", json={
+        "email": "test4@example.com",
+        "password": "password123"
+    })
+    assert response.status_code == 429
+    assert "Too many signup attempts" in response.json()["detail"]
+    
+    # Clean up
+    signup_ip_limiter._storage.clear()
+    signup_email_limiter._storage.clear()
+
+
+@pytest.mark.integration
+def test_verification_endpoint_rate_limit_enforcement():
+    """Test that verification endpoint enforces rate limiting at the HTTP level."""
+    from fastapi.testclient import TestClient
+    from backend.main import app
+    from backend.middleware.auth_rate_limit import verification_ip_limiter, verification_email_limiter
+    
+    # Reset limiters
+    verification_ip_limiter._storage.clear()
+    verification_email_limiter._storage.clear()
+    
+    client = TestClient(app)
+    
+    # Make 3 verification requests (should be allowed)
+    for i in range(3):
+        response = client.post("/auth/resend-verification", json={
+            "email": "test@example.com"
+        })
+        # Should not be rate limited
+        assert response.status_code in [200, 429]
+    
+    # 4th attempt should be rate limited
+    response = client.post("/auth/resend-verification", json={
+        "email": "test@example.com"
+    })
+    assert response.status_code == 429
+    assert "Too many verification requests" in response.json()["detail"]
+    
+    # Clean up
+    verification_ip_limiter._storage.clear()
+    verification_email_limiter._storage.clear()
+
+
