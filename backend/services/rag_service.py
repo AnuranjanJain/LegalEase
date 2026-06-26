@@ -1,10 +1,16 @@
 import logging
 from typing import List, Dict, Any, Tuple
 
-from langchain_postgres.vectorstores import PGVector
-from langchain_community.vectorstores import Chroma
-from langchain_huggingface import HuggingFaceEmbeddings
-from langchain_text_splitters import RecursiveCharacterTextSplitter
+try:
+    from langchain_postgres.vectorstores import PGVector
+    from langchain_community.vectorstores import Chroma
+    from langchain_huggingface import HuggingFaceEmbeddings
+    from langchain_text_splitters import RecursiveCharacterTextSplitter
+except Exception:  # pragma: no cover
+    PGVector = None
+    Chroma = None
+    HuggingFaceEmbeddings = None
+    RecursiveCharacterTextSplitter = None
 import os
 import threading
 from typing import List
@@ -40,6 +46,8 @@ class RAGService:
             try:
                 if not RAG_DEPS_AVAILABLE:
                     raise RuntimeError("RAG dependencies are not available on this system due to import/DLL load errors.")
+                if any(dep is None for dep in (Chroma, HuggingFaceEmbeddings, RecursiveCharacterTextSplitter)):
+                    raise RuntimeError("RAG dependencies are not available on this system.")
 
                 logger.info("Lazily initializing RAG Service components...")
                 
@@ -50,6 +58,8 @@ class RAGService:
                 
                 # Use PGVector if connected to Postgres, otherwise fallback to local Chroma
                 if _database_url.startswith("postgres"):
+                    if PGVector is None:
+                        raise RuntimeError("langchain_postgres is not available.")
                     # Normalise for psycopg
                     if _database_url.startswith("postgres://"):
                         _database_url = _database_url.replace("postgres://", "postgresql+psycopg://", 1)
