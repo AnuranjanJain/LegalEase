@@ -111,7 +111,14 @@ def test_api_key_authentication_flow_valid_key():
     request = Mock()
     request.headers = {"x-api-key": "valid-api-key"}
     
-    with patch.dict(os.environ, {"API_KEYS": "valid-api-key", "ALLOW_DEV": "false"}):
+    with patch.dict(os.environ, {"API_KEYS": "valid-api-key", "ALLOW_DEV": "false", "JWT_SECRET_KEY": "testing-secret-key-1234567890-abcdef"}):
+        # Reset settings to pick up new environment variables
+        import backend.config
+        backend.config._settings = None
+        # Reload auth module to pick up new settings
+        from importlib import reload
+        import backend.auth
+        reload(backend.auth)
         identity = _validate_api_key_token(request)
         
         assert identity.type == "api_key"
@@ -129,7 +136,10 @@ def test_api_key_authentication_flow_invalid_key():
     request = Mock()
     request.headers = {"x-api-key": "invalid-api-key"}
     
-    with patch.dict(os.environ, {"API_KEYS": "valid-api-key", "ALLOW_DEV": "false"}):
+    with patch.dict(os.environ, {"API_KEYS": "valid-api-key", "ALLOW_DEV": "false", "JWT_SECRET_KEY": "testing-secret-key-1234567890-abcdef"}):
+        # Reset settings to pick up new environment variables
+        import backend.config
+        backend.config._settings = None
         with pytest.raises(HTTPException) as exc_info:
             _validate_api_key_token(request)
         
@@ -146,7 +156,14 @@ def test_api_key_authentication_flow_dev_mode():
     request = Mock()
     request.headers = {"x-api-key": "dev-token"}
     
-    with patch.dict(os.environ, {"API_KEYS": "", "DEV_API_KEY": "dev-token", "ALLOW_DEV": "true"}):
+    with patch.dict(os.environ, {"API_KEYS": "", "DEV_API_KEY": "dev-token", "ALLOW_DEV": "true", "JWT_SECRET_KEY": "testing-secret-key-1234567890-abcdef"}):
+        # Reset settings to pick up new environment variables
+        import backend.config
+        backend.config._settings = None
+        # Reload auth module to pick up new settings
+        from importlib import reload
+        import backend.auth
+        reload(backend.auth)
         identity = _validate_api_key_token(request)
         
         assert identity.type == "api_key"
@@ -191,7 +208,14 @@ def test_unified_auth_api_key_mode():
     
     mock_db = Mock()
     
-    with patch.dict(os.environ, {"API_KEYS": "valid-api-key", "ALLOW_DEV": "false"}):
+    with patch.dict(os.environ, {"API_KEYS": "valid-api-key", "ALLOW_DEV": "false", "JWT_SECRET_KEY": "testing-secret-key-1234567890-abcdef"}):
+        # Reset settings to pick up new environment variables
+        import backend.config
+        backend.config._settings = None
+        # Reload auth module to pick up new settings
+        from importlib import reload
+        import backend.auth
+        reload(backend.auth)
         identity = validate_token_or_api_key(request, mock_db)
         
         assert identity.type == "api_key"
@@ -246,7 +270,10 @@ def test_jwt_token_in_x_api_key_header_rejected():
     mock_db = Mock()
     
     # This should attempt API key validation, not JWT validation
-    with patch.dict(os.environ, {"API_KEYS": "", "ALLOW_DEV": "false"}):
+    with patch.dict(os.environ, {"API_KEYS": "", "ALLOW_DEV": "false", "JWT_SECRET_KEY": "testing-secret-key-1234567890-abcdef"}):
+        # Reset settings to pick up new environment variables
+        import backend.config
+        backend.config._settings = None
         with pytest.raises(HTTPException) as exc_info:
             validate_token_or_api_key(request, mock_db)
         

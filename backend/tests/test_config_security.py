@@ -55,27 +55,27 @@ class TestSecretValidation:
 
     def test_api_keys_can_be_empty(self):
         """Test that API_KEYS can be empty (no static keys)."""
-        config = SecurityConfig(api_keys="")
+        config = SecurityConfig(jwt_secret_key="test_secret", api_keys="")
         assert config.api_keys == ""
 
     def test_api_keys_multiple_keys(self):
         """Test that multiple API keys can be configured."""
-        config = SecurityConfig(api_keys="key1,key2,key3")
+        config = SecurityConfig(jwt_secret_key="test_secret", api_keys="key1,key2,key3")
         assert config.api_keys == "key1,key2,key3"
 
     def test_dev_api_key_has_default(self):
         """Test that DEV_API_KEY has a secure default."""
-        config = SecurityConfig()
+        config = SecurityConfig(jwt_secret_key="test_secret")
         assert config.dev_api_key == "dev-token"
 
     def test_allow_dev_default_false(self):
         """Test that ALLOW_DEV defaults to False for security."""
-        config = SecurityConfig()
+        config = SecurityConfig(jwt_secret_key="test_secret")
         assert config.allow_dev is False
 
     def test_allow_dev_can_be_enabled(self):
         """Test that ALLOW_DEV can be explicitly enabled."""
-        config = SecurityConfig(allow_dev=True)
+        config = SecurityConfig(jwt_secret_key="test_secret", allow_dev=True)
         assert config.allow_dev is True
 
 
@@ -212,7 +212,7 @@ class TestSettingsSecurityIntegration:
         
         with pytest.raises(ValidationError) as exc_info:
             Settings()
-        assert "JWT_SECRET_KEY" in str(exc_info.value)
+        assert "jwt_secret_key" in str(exc_info.value).lower()
 
     def test_settings_with_valid_jwt_secret(self):
         """Test that Settings works with valid JWT_SECRET_KEY."""
@@ -229,21 +229,17 @@ class TestSettingsSecurityIntegration:
 
     def test_settings_production_with_test_mode_rejected(self):
         """Test that Settings rejects production with test mode."""
-        os.environ["JWT_SECRET_KEY"] = "test_secret_key_12345678"
-        os.environ["ENVIRONMENT"] = "production"
-        os.environ["TEST_MODE"] = "true"
         import backend.config
         backend.config._settings = None
         
-        try:
-            with pytest.raises(ValidationError) as exc_info:
-                Settings()
-            assert "TEST_MODE cannot be enabled in production" in str(exc_info.value)
-        finally:
-            os.environ.pop("JWT_SECRET_KEY", None)
-            os.environ.pop("ENVIRONMENT", None)
-            os.environ.pop("TEST_MODE", None)
-            backend.config._settings = None
+        with pytest.raises(ValidationError) as exc_info:
+            Settings(
+                security={"jwt_secret_key": "test_secret_key_12345678"},
+                environment={"environment": "production", "test_mode": True},
+                _env_file=None
+            )
+        assert "TEST_MODE cannot be enabled in production" in str(exc_info.value)
+        backend.config._settings = None
 
 
 class TestSecretExposurePrevention:
@@ -271,12 +267,12 @@ class TestEnvironmentIsolation:
 
     def test_development_allows_dev_mode(self):
         """Test that development environment allows dev mode."""
-        config = SecurityConfig(allow_dev=True)
+        config = SecurityConfig(jwt_secret_key="test_secret", allow_dev=True)
         assert config.allow_dev is True
 
     def test_production_can_disable_dev_mode(self):
         """Test that production environment can disable dev mode."""
-        config = SecurityConfig(allow_dev=False)
+        config = SecurityConfig(jwt_secret_key="test_secret", allow_dev=False)
         assert config.allow_dev is False
 
     def test_environment_affects_test_mode_validation(self):
@@ -295,41 +291,35 @@ class TestConfigurationHardening:
 
     def test_production_defaults_are_secure(self):
         """Test that production defaults are secure."""
-        os.environ["JWT_SECRET_KEY"] = "test_secret_key_12345678"
-        os.environ["ENVIRONMENT"] = "production"
         import backend.config
         backend.config._settings = None
         
-        try:
-            settings = Settings()
-            # Check secure defaults
-            assert settings.environment.environment == "production"
-            assert settings.environment.test_mode is False
-            assert settings.security.allow_dev is False
-            assert settings.ai.stub_mode is False
-            assert settings.ai.health_debug is False
-        finally:
-            os.environ.pop("JWT_SECRET_KEY", None)
-            os.environ.pop("ENVIRONMENT", None)
-            backend.config._settings = None
+        settings = Settings(
+            security={"jwt_secret_key": "test_secret_key_12345678"},
+            environment={"environment": "production"},
+            _env_file=None
+        )
+        # Check secure defaults
+        assert settings.environment.environment == "production"
+        assert settings.environment.test_mode is False
+        assert settings.security.allow_dev is False
+        assert settings.ai.stub_mode is False
+        assert settings.ai.health_debug is False
+        backend.config._settings = None
 
     def test_cannot_override_production_security_defaults_unsafely(self):
         """Test that certain security defaults cannot be overridden unsafely in production."""
-        os.environ["JWT_SECRET_KEY"] = "test_secret_key_12345678"
-        os.environ["ENVIRONMENT"] = "production"
-        # Try to enable test mode in production - should fail
-        os.environ["TEST_MODE"] = "true"
         import backend.config
         backend.config._settings = None
         
-        try:
-            with pytest.raises(ValidationError):
-                Settings()
-        finally:
-            os.environ.pop("JWT_SECRET_KEY", None)
-            os.environ.pop("ENVIRONMENT", None)
-            os.environ.pop("TEST_MODE", None)
-            backend.config._settings = None
+        # Try to enable test mode in production - should fail
+        with pytest.raises(ValidationError):
+            Settings(
+                security={"jwt_secret_key": "test_secret_key_12345678"},
+                environment={"environment": "production", "test_mode": True},
+                _env_file=None
+            )
+        backend.config._settings = None
 
 
 class TestSecretRotationSupport:
@@ -344,14 +334,14 @@ class TestSecretRotationSupport:
 
     def test_api_keys_can_be_rotated(self):
         """Test that API_KEYS can be rotated."""
-        config1 = SecurityConfig(api_keys="key1,key2")
-        config2 = SecurityConfig(api_keys="key3,key4")
+        config1 = SecurityConfig(jwt_secret_key="test_secret", api_keys="key1,key2")
+        config2 = SecurityConfig(jwt_secret_key="test_secret", api_keys="key3,key4")
         assert config1.api_keys == "key1,key2"
         assert config2.api_keys == "key3,key4"
 
     def test_dev_api_key_can_be_changed(self):
         """Test that DEV_API_KEY can be changed."""
-        config1 = SecurityConfig(dev_api_key="dev-key-1")
-        config2 = SecurityConfig(dev_api_key="dev-key-2")
+        config1 = SecurityConfig(jwt_secret_key="test_secret", dev_api_key="dev-key-1")
+        config2 = SecurityConfig(jwt_secret_key="test_secret", dev_api_key="dev-key-2")
         assert config1.dev_api_key == "dev-key-1"
         assert config2.dev_api_key == "dev-key-2"

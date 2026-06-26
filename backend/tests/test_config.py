@@ -76,7 +76,7 @@ class TestSecurityConfig:
 
     def test_api_keys_default_empty(self):
         """Test that API_KEYS defaults to empty string."""
-        config = SecurityConfig()
+        config = SecurityConfig(jwt_secret_key="test_secret")
         assert config.api_keys == ""
 
     def test_allow_dev_default_false(self):
@@ -88,7 +88,7 @@ class TestSecurityConfig:
 
     def test_dev_api_key_default(self):
         """Test that DEV_API_KEY has default value."""
-        config = SecurityConfig()
+        config = SecurityConfig(jwt_secret_key="test_secret")
         assert config.dev_api_key == "dev-token"
 
 

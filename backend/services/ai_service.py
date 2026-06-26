@@ -540,6 +540,10 @@ class AIService:
             }
             return {"status": status, "details": details}
 
+        # Always include details for stub mode to support tests
+        if self.stub_mode:
+            return {"status": status, "details": {"stub_mode": True}}
+
         return {"status": status}
 
 

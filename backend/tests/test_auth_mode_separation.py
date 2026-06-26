@@ -72,9 +72,21 @@ def invalid_jwt_token():
 def valid_api_key():
     """Set up a valid API key for testing."""
     os.environ["API_KEYS"] = "test-api-key-12345"
+    os.environ["JWT_SECRET_KEY"] = "testing-secret-key-1234567890-abcdef"
+    # Reset settings to pick up new environment variables
+    import backend.config
+    backend.config._settings = None
+    # Reload auth module to pick up new settings
+    from importlib import reload
+    import backend.auth
+    reload(backend.auth)
     yield "test-api-key-12345"
     if "API_KEYS" in os.environ:
         del os.environ["API_KEYS"]
+    if "JWT_SECRET_KEY" in os.environ:
+        del os.environ["JWT_SECRET_KEY"]
+    # Reset settings after test
+    backend.config._settings = None
 
 
 @pytest.fixture

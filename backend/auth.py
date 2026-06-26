@@ -266,14 +266,10 @@ def _validate_jwt_token(request: Request, db: Session) -> AuthIdentity:
             detail="Missing JWT token"
         )
     
-    if not SECRET_KEY:
-        raise HTTPException(
-            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail="Authentication service unavailable"
-        )
+    secret_key = _require_secret_key()
     
     try:
-        payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
+        payload = jwt.decode(token, secret_key, algorithms=[ALGORITHM])
         email: Optional[str] = payload.get("sub")
         jti: Optional[str] = payload.get("jti")
         
