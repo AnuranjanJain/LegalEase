@@ -1,9 +1,17 @@
+import os
 import pytest
 import time
 import concurrent.futures
 from unittest.mock import MagicMock, patch
 import redis
 from backend.utils.limiter import SimpleRateLimiter
+import backend.config
+
+# Reset settings before any tests
+backend.config._settings = None
+
+# Set JWT_SECRET_KEY for tests that don't use patch.dict
+os.environ["JWT_SECRET_KEY"] = "testing-secret-key-1234567890-abcdef"
 
 
 @pytest.mark.unit

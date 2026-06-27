@@ -4,26 +4,30 @@ Authentication-specific rate limiting middleware.
 This module provides dedicated rate limiting controls for authentication endpoints
 to prevent brute-force attacks, credential stuffing, signup abuse, and verification spam.
 """
-import os
 import logging
 from typing import Optional
 from fastapi import Request, HTTPException, status
 from backend.utils.limiter import SimpleRateLimiter
+from backend.config import get_settings
 
 logger = logging.getLogger(__name__)
 
+# Get configuration from centralized settings
+settings = get_settings()
+rate_config = settings.rate_limit
+
 # Environment variables for authentication rate limiting
-AUTH_LOGIN_RATE_LIMIT = int(os.getenv("AUTH_LOGIN_RATE_LIMIT", "5"))
-AUTH_LOGIN_RATE_PERIOD = int(os.getenv("AUTH_LOGIN_RATE_PERIOD", "60"))
-AUTH_LOGIN_FAILED_ATTEMPT_LIMIT = int(os.getenv("AUTH_LOGIN_FAILED_ATTEMPT_LIMIT", "10"))
-AUTH_LOGIN_FAILED_ATTEMPT_PERIOD = int(os.getenv("AUTH_LOGIN_FAILED_ATTEMPT_PERIOD", "300"))
-AUTH_LOGIN_LOCKOUT_DURATION = int(os.getenv("AUTH_LOGIN_LOCKOUT_DURATION", "900"))
+AUTH_LOGIN_RATE_LIMIT = rate_config.auth_login_rate_limit
+AUTH_LOGIN_RATE_PERIOD = rate_config.auth_login_rate_period
+AUTH_LOGIN_FAILED_ATTEMPT_LIMIT = rate_config.auth_login_failed_attempt_limit
+AUTH_LOGIN_FAILED_ATTEMPT_PERIOD = rate_config.auth_login_failed_attempt_period
+AUTH_LOGIN_LOCKOUT_DURATION = rate_config.auth_login_lockout_duration
 
-AUTH_SIGNUP_RATE_LIMIT = int(os.getenv("AUTH_SIGNUP_RATE_LIMIT", "3"))
-AUTH_SIGNUP_RATE_PERIOD = int(os.getenv("AUTH_SIGNUP_RATE_PERIOD", "3600"))
+AUTH_SIGNUP_RATE_LIMIT = rate_config.auth_signup_rate_limit
+AUTH_SIGNUP_RATE_PERIOD = rate_config.auth_signup_rate_period
 
-AUTH_VERIFICATION_RATE_LIMIT = int(os.getenv("AUTH_VERIFICATION_RATE_LIMIT", "3"))
-AUTH_VERIFICATION_RATE_PERIOD = int(os.getenv("AUTH_VERIFICATION_RATE_PERIOD", "3600"))
+AUTH_VERIFICATION_RATE_LIMIT = rate_config.auth_verification_rate_limit
+AUTH_VERIFICATION_RATE_PERIOD = rate_config.auth_verification_rate_period
 
 # Initialize rate limiters
 login_ip_limiter = SimpleRateLimiter(AUTH_LOGIN_RATE_LIMIT, AUTH_LOGIN_RATE_PERIOD)
