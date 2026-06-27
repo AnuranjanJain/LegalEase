@@ -1,16 +1,24 @@
+import os
 import pytest
 from unittest.mock import Mock, patch
 from fastapi import status
 from httpx import AsyncClient, ASGITransport
-import os
-
 from backend.main import app
 from backend.services.ai_service import ai_service
+import backend.config
+
+# Reset settings before any tests
+backend.config._settings = None
+
+# Set JWT_SECRET_KEY for tests
+os.environ["JWT_SECRET_KEY"] = "testing-secret-key-1234567890-abcdef"
 
 @pytest.mark.asyncio
 async def test_ai_service_analyze_clauses_stub_mode():
     """Test analyze_clauses returns standard mock data in stub mode"""
-    with patch.dict(os.environ, {"STUB_MODE": "true"}):
+    with patch.dict(os.environ, {"STUB_MODE": "true", "JWT_SECRET_KEY": "testing-secret-key-1234567890-abcdef"}):
+        import backend.config
+        backend.config._settings = None
         ai_service.__init__()
         clauses = await ai_service.analyze_clauses("This is a sample contract text.")
         assert len(clauses) == 3
@@ -54,7 +62,9 @@ async def test_analyze_clauses_endpoint():
     headers = {"x-api-key": "dev-token"}
     payload = {"text": "Subscriber shall indemnify Provider."}
     
-    with patch.dict(os.environ, {"STUB_MODE": "true"}):
+    with patch.dict(os.environ, {"STUB_MODE": "true", "JWT_SECRET_KEY": "testing-secret-key-1234567890-abcdef"}):
+        import backend.config
+        backend.config._settings = None
         ai_service.__init__()
         async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as ac:
             r = await ac.post("/legal/analyze-clauses", json=payload, headers=headers)

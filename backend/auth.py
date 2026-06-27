@@ -342,8 +342,8 @@ def _validate_api_key_token(request: Request) -> AuthIdentity:
         )
     
     # Hash the API key to avoid storing the secret in memory
-    # Use SHA-256 and take first 16 characters as identifier
-    key_hash = hashlib.sha256(token.encode()).hexdigest()[:16]
+    # Use full SHA-256 hash as identifier for strong collision resistance
+    key_hash = hashlib.sha256(token.encode()).hexdigest()
     logger.info(f"API key authentication successful (key_hash={key_hash})")
     return AuthIdentity(
         identity_type="api_key",
@@ -761,8 +761,8 @@ def _validate_api_key_token(request: Request) -> AuthIdentity:
         )
     
     # Hash the API key to avoid storing the secret in memory
-    # Use SHA-256 and take first 16 characters as identifier
-    key_hash = hashlib.sha256(token.encode()).hexdigest()[:16]
+    # Use full SHA-256 hash as identifier for strong collision resistance
+    key_hash = hashlib.sha256(token.encode()).hexdigest()
     logger.info(f"API key authentication successful (key_hash={key_hash})")
     return AuthIdentity(
         identity_type="api_key",
