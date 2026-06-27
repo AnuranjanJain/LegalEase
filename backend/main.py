@@ -20,6 +20,7 @@ from backend.routers import history_routes
 from backend.routers.notifications import router as notifications_router
 from backend.routers.compare_routes import router as compare_router
 from backend.routers import export_routes
+from backend.routers.collaboration_routes import router as collaboration_router
 from backend.auth import validate_token_or_api_key, AuthIdentity
 from backend.utils.limiter import SimpleRateLimiter
 from backend.utils.cleanup import start_token_cleanup_task
@@ -183,6 +184,7 @@ app.include_router(history_routes.router)
 app.include_router(compare_router)
 # Include export router
 app.include_router(export_routes.router)
+app.include_router(collaboration_router)
 
 
 # Environment configuration - defaults to production for security
