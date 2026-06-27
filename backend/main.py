@@ -1,4 +1,5 @@
 import asyncio
+import os
 from contextlib import asynccontextmanager
 from fastapi import BackgroundTasks, Depends, FastAPI, HTTPException, UploadFile, File, Request
 from fastapi.middleware.cors import CORSMiddleware
@@ -6,14 +7,11 @@ from fastapi.responses import JSONResponse, StreamingResponse
 from pydantic import BaseModel
 from datetime import datetime
 from io import BytesIO
-import os
 import logging
 import tempfile
 import time
 from typing import Optional
 import uuid
-
-from dotenv import load_dotenv
 
 from backend.database import engine, Base, SessionLocal
 from backend.routers import auth_routes
@@ -25,6 +23,7 @@ from backend.routers import export_routes
 from backend.auth import validate_token_or_api_key, AuthIdentity
 from backend.utils.limiter import SimpleRateLimiter
 from backend.utils.cleanup import start_token_cleanup_task
+from backend.config import get_settings
 
 # ---------------------------------------------------------------------------
 # In-memory task store for async document processing (#365)
@@ -65,16 +64,19 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-# Load environment variables
-load_dotenv()
+# Get configuration from centralized settings
+settings = get_settings()
+file_config = settings.file_upload
+rate_config = settings.rate_limit
+cors_config = settings.cors
 
 # Track application start time for uptime calculation
 _app_start_time = time.monotonic()
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    # Start the token blacklist cleanup worker in the background (defaulting to 3600s/1h)
-    cleanup_interval = int(os.getenv("TOKEN_CLEANUP_INTERVAL_SECONDS", "3600"))
+    # Start the token blacklist cleanup worker in the background
+    cleanup_interval = file_config.token_cleanup_interval_seconds
     cleanup_task = asyncio.create_task(start_token_cleanup_task(interval_seconds=cleanup_interval))
     try:
         yield
@@ -183,22 +185,24 @@ app.include_router(compare_router)
 app.include_router(export_routes.router)
 
 
+# Environment configuration - defaults to production for security
+ENVIRONMENT = os.getenv("ENVIRONMENT", "production").lower()
+
 # Enable CORS for frontend communication
-raw_allowed_origins = os.getenv("ALLOWED_ORIGINS") or os.getenv(
-    "FRONTEND_URL",
-    "http://localhost:5173"
-)
+raw_allowed_origins = cors_config.allowed_origins or cors_config.frontend_url
 ALLOWED_ORIGINS = [
     origin.strip()
     for origin in raw_allowed_origins.split(",")
     if origin.strip()
 ]
-# Automatically allow common development ports on localhost
-for host in ["http://localhost", "http://127.0.0.1"]:
-    for port in range(5173, 5181):
-        dev_origin = f"{host}:{port}"
-        if dev_origin not in ALLOWED_ORIGINS:
-            ALLOWED_ORIGINS.append(dev_origin)
+# Automatically allow common development ports on localhost ONLY in non-production environments
+# This prevents unintended localhost access in production deployments
+if ENVIRONMENT in ("development", "testing", "local"):
+    for host in ["http://localhost", "http://127.0.0.1"]:
+        for port in range(5173, 5181):
+            dev_origin = f"{host}:{port}"
+            if dev_origin not in ALLOWED_ORIGINS:
+                ALLOWED_ORIGINS.append(dev_origin)
 # Rate-limit middleware registered first so that CORSMiddleware
 # (added second) wraps it — ensuring 429 responses include CORS headers.
 app.add_middleware(RateLimitMiddleware)
@@ -208,6 +212,7 @@ app.add_middleware(
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
+    expose_headers=["X-Citations"],
 )
 logger.info(f"Allowed frontend origins: {ALLOWED_ORIGINS}")
 
@@ -229,16 +234,16 @@ async def correlation_id_middleware(request: Request, call_next):
 
 
 # Configuration
-MAX_UPLOAD_SIZE = int(os.getenv("MAX_UPLOAD_SIZE", str(25 * 1024 * 1024)))  # 25 MB default
+MAX_UPLOAD_SIZE = file_config.max_upload_size
 CHUNK_SIZE = 1024 * 1024
-MAX_PDF_PAGES = int(os.getenv("MAX_PDF_PAGES", "100"))
-MAX_DOCX_PARAGRAPHS = int(os.getenv("MAX_DOCX_PARAGRAPHS", "2000"))
-MAX_EXTRACTED_TEXT_CHARS = int(os.getenv("MAX_EXTRACTED_TEXT_CHARS", "10000"))
-UPLOAD_PARSE_TIMEOUT_SECONDS = float(os.getenv("UPLOAD_PARSE_TIMEOUT_SECONDS", "5"))
+MAX_PDF_PAGES = file_config.max_pdf_pages
+MAX_DOCX_PARAGRAPHS = file_config.max_docx_paragraphs
+MAX_EXTRACTED_TEXT_CHARS = file_config.max_extracted_text_chars
+UPLOAD_PARSE_TIMEOUT_SECONDS = file_config.upload_parse_timeout_seconds
 
 
-RATE_LIMIT_PERIOD = int(os.getenv("RATE_LIMIT_PERIOD", "60"))
-RATE_LIMIT_KEY_CALLS = int(os.getenv("RATE_LIMIT_KEY_CALLS", "300"))
+RATE_LIMIT_PERIOD = rate_config.rate_limit_period
+RATE_LIMIT_KEY_CALLS = rate_config.rate_limit_key_calls
 
 
 # Defaults: 300 requests per minute per API key
@@ -250,6 +255,13 @@ class ChatRequest(BaseModel):
     context: Optional[str] = None
     conversation_history: Optional[list[dict[str, str]]] = None
     stream: Optional[bool] = False
+
+
+class EditMessageRequest(BaseModel):
+    """Request body for the message-edit/branching endpoint (#366)."""
+    new_content: str
+    conversation_history: Optional[list[dict[str, str]]] = None
+    context: Optional[str] = None
 
 
 class SummarizeRequest(BaseModel):
@@ -340,6 +352,7 @@ async def chat(request: Request, payload: ChatRequest, identity: AuthIdentity = 
     # Sanitize inputs
     sanitized_message = sanitize_text(payload.message)
     sanitized_context = sanitize_text(payload.context) if payload.context else None
+    citations = []
 
     # Handle RAG context retrieval for non-streaming requests early.
     # Streaming requests handle RAG inside the generator to avoid blocking initial response.
@@ -350,7 +363,7 @@ async def chat(request: Request, payload: ChatRequest, identity: AuthIdentity = 
         try:
             if doc_hash not in rag_service.indexed_docs:
                 await rag_service.add_document(sanitized_context, doc_hash)
-            sanitized_context = await rag_service.get_context(sanitized_message, doc_hash)
+            sanitized_context, citations = await rag_service.get_context(sanitized_message, doc_hash)
         except Exception as e:
             logger.warning(f"RAG retrieval failed: {e}. Falling back to non-RAG heuristic.")
             # Fall back gracefully to a non-RAG heuristic (truncating context)
@@ -383,7 +396,7 @@ async def chat(request: Request, payload: ChatRequest, identity: AuthIdentity = 
     # Streaming or standard block handling
     if payload.stream:
         async def stream_generator():
-            nonlocal sanitized_context
+            nonlocal sanitized_context, citations
             full_response = ""
             try:
                 # Perform RAG retrieval inside the stream generator asynchronously to prevent blocking the initial response
@@ -394,7 +407,7 @@ async def chat(request: Request, payload: ChatRequest, identity: AuthIdentity = 
                     try:
                         if doc_hash not in rag_service.indexed_docs:
                             await rag_service.add_document(sanitized_context, doc_hash)
-                        sanitized_context = await rag_service.get_context(sanitized_message, doc_hash)
+                        sanitized_context, citations = await rag_service.get_context(sanitized_message, doc_hash)
                     except Exception as e:
                         logger.warning(f"RAG retrieval failed inside stream generator: {e}. Falling back to non-RAG heuristic.")
                         if len(sanitized_context) > 5000:
@@ -424,7 +437,11 @@ async def chat(request: Request, payload: ChatRequest, identity: AuthIdentity = 
                 logger.error(f"[{correlation_id_var.get()}] Stream generation error: {e}")
                 yield "\n[Error: Inference stream failed]"
 
-        return StreamingResponse(stream_generator(), media_type="text/event-stream")
+        headers = {}
+        if citations:
+            import json, base64
+            headers["X-Citations"] = base64.b64encode(json.dumps(citations).encode()).decode()
+        return StreamingResponse(stream_generator(), media_type="text/event-stream", headers=headers)
     else:
         response_gen = ai_service.generate_chat_response(
             message=sanitized_message,
@@ -436,7 +453,7 @@ async def chat(request: Request, payload: ChatRequest, identity: AuthIdentity = 
         async for chunk in response_gen:
             response_text += chunk
         semantic_cache.set(cache_key, response_text)
-        return {"response": response_text}
+        return {"response": response_text, "citations": citations}
 
 
 @app.post("/upload", status_code=202)
@@ -553,6 +570,41 @@ async def _process_document_background(
                 os.unlink(temp_path)
             except OSError:
                 pass
+
+
+@app.put("/chat/messages/{message_id}")
+async def edit_message(
+    message_id: str,
+    payload: EditMessageRequest,
+    request: Request,
+    identity: AuthIdentity = Depends(validate_token_or_api_key),
+):
+    """Edit a previous user message and regenerate the AI response (#366).
+
+    The frontend passes the edited text plus the conversation history up to
+    (but not including) the message being edited.  The backend re-runs the AI
+    and returns a fresh assistant response, leaving branching bookkeeping to
+    the client-side storage layer.
+    """
+    sanitized_message = sanitize_text(payload.new_content)
+    sanitized_context = sanitize_text(payload.context) if payload.context else None
+    validate_chat_input(sanitized_message, sanitized_context)
+
+    response_gen = ai_service.generate_chat_response(
+        message=sanitized_message,
+        context=sanitized_context,
+        history=payload.conversation_history,
+        stream=False,
+    )
+    response_text = ""
+    async for chunk in response_gen:
+        response_text += chunk
+
+    return {
+        "message_id": message_id,
+        "edited_content": sanitized_message,
+        "response": response_text,
+    }
 
 
 @app.get("/upload/status/{task_id}")
