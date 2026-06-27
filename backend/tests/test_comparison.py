@@ -275,12 +275,14 @@ def client():
     backend.config._settings = None
     from backend.main import app
     from backend.auth import validate_token_or_api_key, AuthIdentity
+    from backend.routers.compare_routes import validate_token_or_api_key as compare_auth
 
     # Minimal auth stub
     stub_identity = MagicMock(spec=AuthIdentity)
     stub_identity.get_rate_limit_key.return_value = "test_user"
 
     app.dependency_overrides[validate_token_or_api_key] = lambda: stub_identity
+    app.dependency_overrides[compare_auth] = lambda: stub_identity
     with TestClient(app, raise_server_exceptions=False) as c:
         yield c
     app.dependency_overrides.clear()

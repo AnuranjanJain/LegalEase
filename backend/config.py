@@ -16,6 +16,7 @@ from pydantic import (
     model_validator,
     ValidationError,
     ConfigDict,
+    AliasChoices,
 )
 from pydantic_settings import BaseSettings
 import logging
@@ -83,10 +84,17 @@ class EnvironmentConfig(BaseSettings):
     
     model_config = ConfigDict(env_prefix="", case_sensitive=False)
     
-    environment: Literal["development", "testing", "staging", "production"] = Field(
+    environment: Literal["development", "testing", "staging", "production", "local"] = Field(
         default="production",
         description="Application environment."
     )
+    
+    @field_validator("environment", mode="before")
+    @classmethod
+    def coerce_environment_lowercase(cls, v):
+        if isinstance(v, str):
+            return v.lower()
+        return v
     test_mode: bool = Field(
         default=False,
         description="Enable test mode for controlled failure simulation."
@@ -545,6 +553,15 @@ class Settings(BaseSettings):
     ai: AIConfig = Field(default_factory=AIConfig)
     comparison: ComparisonConfig = Field(default_factory=ComparisonConfig)
     cors: CORSConfig = Field(default_factory=CORSConfig)
+
+    @model_validator(mode="before")
+    @classmethod
+    def format_environment_input(cls, data):
+        if isinstance(data, dict):
+            if "environment" in data:
+                data = dict(data)
+                data["ENVIRONMENT_SECTION_DO_NOT_MATCH_DIRECTLY"] = data.pop("environment")
+        return data
 
 
 # Global settings instance

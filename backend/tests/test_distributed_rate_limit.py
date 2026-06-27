@@ -308,12 +308,18 @@ def test_redis_url_environment_variable():
 @pytest.mark.integration
 def test_no_redis_url_uses_in_memory():
     """Test that absence of REDIS_URL uses in-memory storage."""
-    with patch.dict(os.environ, {}, clear=True):
-        limiter = SimpleRateLimiter(calls=5, period=60)
-        
-        # Verify in-memory storage is used
-        assert limiter._redis_backend is None
-        assert isinstance(limiter._local_storage, InMemoryStorage)
+    with patch.dict(os.environ, {"JWT_SECRET_KEY": "test-secret-key"}, clear=True):
+        import backend.config as config
+        old_settings = config._settings
+        config._settings = None
+        try:
+            limiter = SimpleRateLimiter(calls=5, period=60)
+            
+            # Verify in-memory storage is used
+            assert limiter._redis_backend is None
+            assert isinstance(limiter._local_storage, InMemoryStorage)
+        finally:
+            config._settings = old_settings
 
 
 @pytest.mark.integration
