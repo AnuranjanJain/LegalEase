@@ -37,7 +37,14 @@ jobs:
     - name: Run backend tests
       run: |
         cd backend
-        pytest --cov=. --cov-report=xml --cov-report=term-missing -v
+        pytest --cov=. --cov-report=xml --cov-report=term-missing -v --timeout=120
+      env:
+        JWT_SECRET_KEY: testing-secret-key-1234567890-abcdef
+        ALLOW_DEV: true
+        STUB_MODE: true
+        MAX_MODEL_INPUT_CHARS: 15000
+        DATABASE_URL: sqlite:///./test_legalease.db
+        ENVIRONMENT: testing
     
     - name: Upload coverage to Codecov
       uses: codecov/codecov-action@v7
