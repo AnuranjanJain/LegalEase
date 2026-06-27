@@ -1,13 +1,36 @@
-import { Send, User, Bot, Paperclip, X, FileText, Sparkles, RefreshCcw, PlusCircle, Trash2, History, Copy, Check, ShieldCheck, Download, GitCompare, Layers, Pencil, ChevronLeft, ChevronRight, BookOpen, ChevronDown } from 'lucide-react';
+import { Send, User, Bot, Paperclip, X, FileText, Sparkles, RefreshCcw, PlusCircle, Trash2, History, Copy, Check, ShieldCheck, Download, GitCompare, Layers, MessageSquare, Search, Pencil, ChevronLeft, ChevronRight, BookOpen, ChevronDown } from 'lucide-react';
 import { api } from '../services/api';
-import { useRef } from 'react';
-import { useState } from 'react';
+import { ChatStorageService, ChatMessage, ChatSessionMetadata } from '../services/storage';
+import { useRef, useState, useEffect, useCallback } from 'react';
+import { useToast } from '../contexts/ToastContext';
+import LegalMapping from '../components/LegalMapping';
+import { WebSearchSidebar } from '../components/WebSearchSidebar';
+import { useRedaction } from '../contexts/RedactionContext';
+import { redact } from '../utils/redaction';
+import ReactMarkdown from 'react-markdown';
+import remarkGfm from 'remark-gfm';
+import rehypeRaw from 'rehype-raw';
+// @ts-ignore
+import html2pdf from 'html2pdf.js';
 
-interface Message {
-  id: number;
-  text: string;
-  sender: 'user' | 'bot';
-  time: string;
+function makeGreeting(): ChatMessage {
+  return {
+    id: 'default-greeting',
+    text: "Hello! I'm LegalEase AI. How can I help you understand your legal documents today?",
+    sender: 'bot',
+    time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+    timestamp: new Date().toISOString(),
+  };
+}
+
+const MAX_CONTEXT_MESSAGES = 10;
+const MAX_INPUT_CHARS = 2000; // NEW: Character limit constant added here
+
+function buildConversationHistory(msgs: ChatMessage[]) {
+  return msgs
+    .filter(m => m.id !== 'default-greeting')
+    .slice(-MAX_CONTEXT_MESSAGES)
+    .map(m => ({ role: m.sender === 'user' ? 'user' : 'assistant', content: m.text }));
 }
 
 type Citation = { text: string; source: string; chunk_index: number };
@@ -18,6 +41,7 @@ export function ChatbotPage() {
   const [openCitationId, setOpenCitationId] = useState<string | null>(null);
   const [activeSessionId, setActiveSessionId] = useState<string | null>(null);
   const [sessions, setSessions] = useState<ChatSessionMetadata[]>([]);
+  const [showWebSearch, setShowWebSearch] = useState(false);
   const [input, setInput] = useState('');
   const [isTyping, setIsTyping] = useState(false);
   const [uploadedDoc, setUploadedDoc] = useState<{ name: string; text: string } | null>(null);
@@ -351,138 +375,189 @@ export function ChatbotPage() {
     </button>
   )}
 
-  <p className="text-sm pr-8">{msg.text}</p>
+      {/* Header bar */}
+      <header className="flex items-center justify-between px-4 py-3 bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 flex-shrink-0">
+        <h1 className="text-xl font-bold text-gray-900 dark:text-white flex items-center gap-2">
+          <MessageSquare size={24} className="text-primary-600 dark:text-primary-400" />
+          Legal Assistant
+        </h1>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={() => setShowWebSearch(!showWebSearch)}
+            className={`p-2 rounded-lg transition-colors ${showWebSearch ? 'bg-primary-100 text-primary-700 dark:bg-primary-900/30 dark:text-primary-400' : 'text-gray-500 hover:bg-gray-100 dark:text-gray-400 dark:hover:bg-gray-800'}`}
+            title="Toggle Web Search Context"
+          >
+            <Search size={20} />
+          </button>
+        </div>
+      </header>
 
-                {/* Message Bubble Card */}
-                <div className={`p-3 sm:p-4 rounded-2xl shadow-sm text-left leading-relaxed relative group ${
-                  isUser 
-                    ? 'bg-primary text-white rounded-tr-none' 
-                    : 'bg-white/80 dark:bg-gray-900/60 backdrop-blur-md text-gray-900 dark:text-gray-150 rounded-tl-none border border-gray-150 dark:border-gray-800'
-                }`}>
+      {/* Main Content Area */}
+      <div className="flex-1 flex min-h-0 relative">
+        
+        {/* Web Search Sidebar (Slide-in) */}
+        <div className={`transition-all duration-300 overflow-hidden ${showWebSearch ? 'w-80' : 'w-0'}`}>
+          {showWebSearch && <WebSearchSidebar />}
+        </div>
+
+        {/* Message list - takes remaining space */}
+        <div className="flex-grow overflow-y-auto px-4 sm:px-6 py-6 sm:py-8 space-y-4 sm:space-y-6 relative z-10 min-h-0">
+          {messages.map((msg: ChatMessage) => {
+            const isUser = msg.sender === 'user';
+            const displayText =
+              !isUser && isRedactionEnabled
+                ? redact(msg.text, redactionStyle)
+                : msg.text;
+
+            return (
+              <div 
+                key={msg.id} 
+                className={`flex w-full ${isUser ? 'justify-end' : 'justify-start'} animate-slide-up`}
+              >
+                <div className={`flex items-start max-w-[85%] sm:max-w-[80%] gap-2 sm:gap-3 ${isUser ? 'flex-row-reverse' : 'flex-row'}`}>
                   
-                  {/* Dedicated Copy Button for AI/Bot responses */}
-                  {!isUser && (
-                    <button 
-                      onClick={() => handleCopy(displayText, msg.id)}
-                      className="absolute top-2 right-2 p-1 text-gray-400 hover:text-primary dark:hover:text-primary-400 transition-colors opacity-0 group-hover:opacity-100 focus:opacity-100"
-                      title="Copy to clipboard"
-                      aria-label="Copy response text"
-                    >
-                      {copiedId === msg.id ? <Check size={14} className="text-green-500" /> : <Copy size={14} />}
-                    </button>
-                  )}
-
-                  {/* Edit button for user messages */}
-                  {isUser && editingId !== msg.id && (
-                    <button
-                      onClick={() => { setEditingId(msg.id); setEditText(msg.text); }}
-                      className="absolute top-2 left-2 p-1 text-blue-200 hover:text-white transition-colors opacity-0 group-hover:opacity-100"
-                      title="Edit message"
-                    >
-                      <Pencil size={13} />
-                    </button>
-                  )}
-
-                  {/* Inline edit textarea */}
-                  {isUser && editingId === msg.id ? (
-                    <div className="space-y-2">
-                      <textarea
-                        className="w-full p-2 rounded-lg text-sm text-gray-900 bg-white/90 border border-white/60 resize-none focus:outline-none"
-                        rows={3}
-                        value={editText}
-                        onChange={e => setEditText(e.target.value)}
-                        autoFocus
-                      />
-                      <div className="flex gap-2 justify-end">
-                        <button onClick={() => setEditingId(null)} className="text-xs text-blue-200 hover:text-white">Cancel</button>
-                        <button onClick={() => handleEditSubmit(msg.id)} className="text-xs bg-white/20 hover:bg-white/30 text-white px-3 py-1 rounded-lg font-semibold">Send</button>
-                      </div>
-                    </div>
-                  ) : (
-                    <div className="text-sm font-medium whitespace-pre-wrap pr-4 markdown-body">
-                      <ReactMarkdown 
-                        remarkPlugins={[remarkGfm]} 
-                        rehypePlugins={[rehypeRaw]}
-                        components={{
-                          table: ({node, ...props}) => <table className="border-collapse table-auto w-full text-sm my-2 border border-gray-300 dark:border-gray-600 rounded-lg overflow-hidden" {...props} />,
-                          th: ({node, ...props}) => <th className="border border-gray-300 dark:border-gray-600 px-4 py-2 bg-gray-100 dark:bg-gray-800 text-left font-bold" {...props} />,
-                          td: ({node, ...props}) => <td className="border border-gray-300 dark:border-gray-600 px-4 py-2" {...props} />,
-                          blockquote: ({node, ...props}) => <blockquote className="border-l-4 border-gray-300 dark:border-gray-500 pl-4 italic text-gray-600 dark:text-gray-400 my-2" {...props} />,
-                          a: ({node, ...props}) => <a className="text-primary hover:underline" {...props} />
-                        }}
+                  {/* Glowing Avatar Circles */}
+                  <div className={`flex-shrink-0 h-8 w-8 sm:h-9 sm:w-9 rounded-lg sm:rounded-xl flex items-center justify-center shadow-md ${
+                    isUser 
+                      ? 'bg-gradient-to-tr from-primary to-indigo-600 text-white' 
+                      : 'bg-gradient-to-tr from-emerald-600 to-teal-500 text-white'
+                  }`}>
+                    {isUser ? <User size={14} /> : <Bot size={14} />}
+                  </div>
+                  {/* Message Bubble Card */}
+                  <div className={`p-3 sm:p-4 rounded-2xl shadow-sm text-left leading-relaxed relative group ${
+                    isUser 
+                      ? 'bg-primary text-white rounded-tr-none' 
+                      : 'bg-white/80 dark:bg-gray-900/60 backdrop-blur-md text-gray-900 dark:text-gray-150 rounded-tl-none border border-gray-150 dark:border-gray-800'
+                  }`}>
+                    
+                    {/* Dedicated Copy Button for AI/Bot responses */}
+                    {!isUser && (
+                      <button 
+                        onClick={() => handleCopy(displayText, msg.id)}
+                        className="absolute top-2 right-2 p-1 text-gray-400 hover:text-primary dark:hover:text-primary-400 transition-colors opacity-0 group-hover:opacity-100 focus:opacity-100"
+                        title="Copy to clipboard"
+                        aria-label="Copy response text"
                       >
-                        {displayText}
-                      </ReactMarkdown>
-                    </div>
-                  )}
-                  
-                  <div className="flex items-center justify-between mt-2">
-                    <p className={`text-[9px] font-semibold ${isUser ? 'text-blue-100' : 'text-gray-400 dark:text-gray-500'}`}>
-                      {msg.time}
-                    </p>
-                    {/* Branch navigator shown on user messages that have been edited */}
-                    {isUser && messageBranches[msg.id] && messageBranches[msg.id].length > 1 && (
-                      <div className="flex items-center gap-1">
-                        <button onClick={() => handleBranchNav(msg.id, -1)} disabled={(branchIdx[msg.id] ?? 0) === 0} className="text-blue-200 disabled:opacity-30 hover:text-white">
-                          <ChevronLeft size={12} />
-                        </button>
-                        <span className="text-[9px] text-blue-200 font-bold">
-                          {(branchIdx[msg.id] ?? 0) + 1} / {messageBranches[msg.id].length}
-                        </span>
-                        <button onClick={() => handleBranchNav(msg.id, 1)} disabled={(branchIdx[msg.id] ?? 0) >= messageBranches[msg.id].length - 1} className="text-blue-200 disabled:opacity-30 hover:text-white">
-                          <ChevronRight size={12} />
-                        </button>
+                        {copiedId === msg.id ? <Check size={14} className="text-green-500" /> : <Copy size={14} />}
+                      </button>
+                    )}
+
+                    {/* Edit button for user messages */}
+                    {isUser && editingId !== msg.id && (
+                      <button
+                        onClick={() => { setEditingId(msg.id); setEditText(msg.text); }}
+                        className="absolute top-2 left-2 p-1 text-blue-200 hover:text-white transition-colors opacity-0 group-hover:opacity-100"
+                        title="Edit message"
+                      >
+                        <Pencil size={13} />
+                      </button>
+                    )}
+
+                    {/* Inline edit textarea */}
+                    {isUser && editingId === msg.id ? (
+                      <div className="space-y-2">
+                        <textarea
+                          className="w-full p-2 rounded-lg text-sm text-gray-900 bg-white/90 border border-white/60 resize-none focus:outline-none"
+                          rows={3}
+                          value={editText}
+                          onChange={e => setEditText(e.target.value)}
+                          autoFocus
+                        />
+                        <div className="flex gap-2 justify-end">
+                          <button onClick={() => setEditingId(null)} className="text-xs text-blue-200 hover:text-white">Cancel</button>
+                          <button onClick={() => handleEditSubmit(msg.id)} className="text-xs bg-white/20 hover:bg-white/30 text-white px-3 py-1 rounded-lg font-semibold">Send</button>
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="text-sm font-medium whitespace-pre-wrap pr-4 markdown-body">
+                        <ReactMarkdown 
+                          remarkPlugins={[remarkGfm]} 
+                          rehypePlugins={[rehypeRaw]}
+                          components={{
+                            table: ({node, ...props}) => <table className="border-collapse table-auto w-full text-sm my-2 border border-gray-300 dark:border-gray-600 rounded-lg overflow-hidden" {...props} />,
+                            th: ({node, ...props}) => <th className="border border-gray-300 dark:border-gray-600 px-4 py-2 bg-gray-100 dark:bg-gray-800 text-left font-bold" {...props} />,
+                            td: ({node, ...props}) => <td className="border border-gray-300 dark:border-gray-600 px-4 py-2" {...props} />,
+                            blockquote: ({node, ...props}) => <blockquote className="border-l-4 border-gray-300 dark:border-gray-500 pl-4 italic text-gray-600 dark:text-gray-400 my-2" {...props} />,
+                            a: ({node, ...props}) => <a className="text-primary hover:underline" {...props} />
+                          }}
+                        >
+                          {displayText}
+                        </ReactMarkdown>
                       </div>
                     )}
-                  </div>
-                  {/* Citation panel for bot messages */}
-                  {!isUser && messageCitations[msg.id] && messageCitations[msg.id].length > 0 && (
-                    <div className="mt-3 border-t border-gray-200 dark:border-gray-700 pt-2">
-                      <button
-                        onClick={() => setOpenCitationId(openCitationId === msg.id ? null : msg.id)}
-                        className="flex items-center gap-1.5 text-[10px] font-bold text-primary hover:text-primary/80 transition-colors"
-                      >
-                        <BookOpen size={11} />
-                        {messageCitations[msg.id].length} Source{messageCitations[msg.id].length > 1 ? 's' : ''}
-                        <ChevronDown size={11} className={`transition-transform ${openCitationId === msg.id ? 'rotate-180' : ''}`} />
-                      </button>
-                      {openCitationId === msg.id && (
-                        <div className="mt-2 space-y-2">
-                          {messageCitations[msg.id].map((c, idx) => (
-                            <div key={idx} className="p-2 rounded-lg bg-gray-100 dark:bg-gray-800 border border-gray-200 dark:border-gray-700">
-                              <p className="text-[9px] font-bold text-primary mb-1 flex items-center gap-1">
-                                <span className="inline-flex items-center justify-center w-4 h-4 rounded-full bg-primary text-white text-[8px] font-black">{idx + 1}</span>
-                                {c.source} — chunk {c.chunk_index + 1}
-                              </p>
-                              <p className="text-[10px] text-gray-600 dark:text-gray-400 leading-relaxed line-clamp-3">{c.text}</p>
-                            </div>
-                          ))}
+                    
+                    <div className="flex items-center justify-between mt-2">
+                      <p className={`text-[9px] font-semibold ${isUser ? 'text-blue-100' : 'text-gray-400 dark:text-gray-500'}`}>
+                        {msg.time}
+                      </p>
+                      {/* Branch navigator shown on user messages that have been edited */}
+                      {isUser && messageBranches[msg.id] && messageBranches[msg.id].length > 1 && (
+                        <div className="flex items-center gap-1">
+                          <button onClick={() => handleBranchNav(msg.id, -1)} disabled={(branchIdx[msg.id] ?? 0) === 0} className="text-blue-200 disabled:opacity-30 hover:text-white">
+                            <ChevronLeft size={12} />
+                          </button>
+                          <span className="text-[9px] text-blue-200 font-bold">
+                            {(branchIdx[msg.id] ?? 0) + 1} / {messageBranches[msg.id].length}
+                          </span>
+                          <button onClick={() => handleBranchNav(msg.id, 1)} disabled={(branchIdx[msg.id] ?? 0) >= messageBranches[msg.id].length - 1} className="text-blue-200 disabled:opacity-30 hover:text-white">
+                            <ChevronRight size={12} />
+                          </button>
                         </div>
                       )}
                     </div>
-                  )}
-                </div>
+                    {/* Citation panel for bot messages */}
+                    {!isUser && messageCitations[msg.id] && messageCitations[msg.id].length > 0 && (
+                      <div className="mt-3 border-t border-gray-200 dark:border-gray-700 pt-2">
+                        <button
+                          onClick={() => setOpenCitationId(openCitationId === msg.id ? null : msg.id)}
+                          className="flex items-center gap-1.5 text-[10px] font-bold text-primary hover:text-primary/80 transition-colors"
+                        >
+                          <BookOpen size={11} />
+                          {messageCitations[msg.id].length} Source{messageCitations[msg.id].length > 1 ? 's' : ''}
+                          <ChevronDown size={11} className={`transition-transform ${openCitationId === msg.id ? 'rotate-180' : ''}`} />
+                        </button>
+                        {openCitationId === msg.id && (
+                          <div className="mt-2 space-y-2">
+                            {messageCitations[msg.id].map((c, idx) => (
+                              <div key={idx} className="p-2 rounded-lg bg-gray-100 dark:bg-gray-800 border border-gray-200 dark:border-gray-700">
+                                <p className="text-[9px] font-bold text-primary mb-1 flex items-center gap-1">
+                                  <span className="inline-flex items-center justify-center w-4 h-4 rounded-full bg-primary text-white text-[8px] font-black">{idx + 1}</span>
+                                  {c.source} — chunk {c.chunk_index + 1}
+                                </p>
+                                <p className="text-[10px] text-gray-600 dark:text-gray-400 leading-relaxed line-clamp-3">{c.text}</p>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    )}
+                  </div>
 
+                </div>
               </div>
-            </div>
-          </div>
-        ))}
-        {isTyping && (
-          <div className="flex justify-start">
-            <div className="flex items-start max-w-[80%] flex-row">
-              <div className="flex-shrink-0 h-8 w-8 rounded-full flex items-center justify-center bg-gray-200 dark:bg-gray-700 text-gray-600 dark:text-gray-300 mr-2">
-                <Bot size={16} />
-              </div>
-              <div className="p-3 rounded-lg shadow-sm bg-white dark:bg-gray-800 text-gray-800 dark:text-gray-200 rounded-tl-none border border-gray-100 dark:border-gray-700">
-                <div className="flex gap-1">
-                  <span className="w-2 h-2 bg-gray-400 rounded-full animate-bounce"></span>
-                  <span className="w-2 h-2 bg-gray-400 rounded-full animate-bounce delay-100"></span>
-                  <span className="w-2 h-2 bg-gray-400 rounded-full animate-bounce delay-200"></span>
+            );
+          })}
+
+          {/* Typing Loading Indicator */}
+          {isTyping && (
+            <div className="flex justify-start animate-pulse">
+              <div className="flex items-start max-w-[80%] gap-3">
+                <div className="flex-shrink-0 h-9 w-9 rounded-xl flex items-center justify-center bg-gradient-to-tr from-emerald-600 to-teal-500 text-white shadow-md">
+                  <Bot size={16} />
+                </div>
+                <div className="p-4 rounded-2xl bg-white/80 dark:bg-gray-900/60 backdrop-blur-md text-gray-800 dark:text-gray-200 rounded-tl-none border border-gray-150 dark:border-gray-800">
+                  <div className="flex gap-1.5 items-center py-1">
+                    <span className="w-2.5 h-2.5 bg-emerald-500 rounded-full animate-bounce"></span>
+                    <span className="w-2.5 h-2.5 bg-emerald-500 rounded-full animate-bounce delay-150"></span>
+                    <span className="w-2.5 h-2.5 bg-emerald-500 rounded-full animate-bounce delay-300"></span>
+                  </div>
                 </div>
               </div>
             </div>
-          </div>
-        )}
+          )}
+          <div ref={messagesEndRef} />
+        </div>
       </div>
 
       <div className="p-4 bg-white dark:bg-gray-800 border-t border-gray-200 dark:border-gray-800">
