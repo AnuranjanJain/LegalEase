@@ -841,7 +841,7 @@ export function ChatbotPage() {
           <button
             onClick={() => fileInputRef.current?.click()}
             disabled={isUploading}
-            className="p-2 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 transition-colors"
+            className="p-2 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 transition-colors hover:scale-105 hover:-translate-y-0.5 transition-all duration-200 disabled:cursor-not-allowed disabled:hover:scale-100"
             title="Attach Document"
           >
             {isUploading ? <RefreshCcw size={20} className="animate-spin" /> : <Paperclip size={20} />}
