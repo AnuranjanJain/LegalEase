@@ -33,15 +33,19 @@ from backend.core.validation import sanitize_text, validate_jurisdiction
 from backend.services.comparison_service import comparison_service, MAX_DOCUMENTS
 from backend.services.ai_service import correlation_id_var
 from backend.utils.limiter import SimpleRateLimiter
-import os
+from backend.config import get_settings
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/compare", tags=["compare"])
 
+# Get configuration from centralized settings
+settings = get_settings()
+rate_config = settings.rate_limit
+
 # Separate rate-limiter for comparison requests (they're heavier than plain chat)
-_COMPARE_RATE_CALLS = int(os.getenv("COMPARE_RATE_LIMIT_CALLS", "60"))
-_COMPARE_RATE_PERIOD = int(os.getenv("COMPARE_RATE_LIMIT_PERIOD", "60"))
+_COMPARE_RATE_CALLS = rate_config.compare_rate_limit_calls
+_COMPARE_RATE_PERIOD = rate_config.compare_rate_limit_period
 _compare_limiter = SimpleRateLimiter(calls=_COMPARE_RATE_CALLS, period=_COMPARE_RATE_PERIOD)
 
 

@@ -13,6 +13,7 @@ Run with:
 
 from __future__ import annotations
 
+import os
 import json
 import pytest
 from typing import Any
@@ -270,6 +271,8 @@ class TestComparisonServiceCompareDocuments:
 @pytest.fixture
 def client():
     """TestClient with auth bypassed via a stub token."""
+    import backend.config
+    backend.config._settings = None
     from backend.main import app
     from backend.auth import validate_token_or_api_key, AuthIdentity
 

@@ -11,6 +11,7 @@ import { api } from '../services/api';
 import { ShareButton } from '../components/ShareButton';
 import { WhatsAppShareModal } from '../components/WhatsAppShareModal';
 import { ClauseAnalysisSection } from '../components/ClauseAnalysisSection';
+import { EntityGraph } from '../components/EntityGraph';
 import { ReadabilityScore } from '../components/ReadabilityScore';
 import { useRedaction } from '../contexts/RedactionContext';
 import { redact } from '../utils/redaction';
@@ -956,6 +957,7 @@ export function DocumentsPage() {
                 />
 
                 <ClauseAnalysisSection clauses={selectedAuditDoc.clauses} />
+                <EntityGraph documentText={selectedAuditDoc.text} />
               </div>
             )}
 
