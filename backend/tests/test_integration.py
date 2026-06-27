@@ -1,7 +1,11 @@
+import os
 import pytest
 from fastapi import status
 from httpx import AsyncClient, ASGITransport
 from backend.main import app
+
+# Set JWT_SECRET_KEY for tests
+os.environ["JWT_SECRET_KEY"] = "testing-secret-key-1234567890-abcdef"
 
 
 @pytest.mark.integration

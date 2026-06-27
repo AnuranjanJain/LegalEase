@@ -1,9 +1,10 @@
 import threading
 import time
 from typing import Dict, List
-import os
 import logging
 import redis
+
+from backend.config import get_settings
 
 logger = logging.getLogger(__name__)
 
@@ -260,7 +261,8 @@ class SimpleRateLimiter:
         self._local_storage = InMemoryStorage()
         self._storage = LimiterStorageProxy(self)
 
-        redis_url = os.getenv("REDIS_URL")
+        settings = get_settings()
+        redis_url = settings.database.redis_url
         self._redis_backend = None
         if redis_url:
             try:

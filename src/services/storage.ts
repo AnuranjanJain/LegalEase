@@ -2,6 +2,7 @@ export interface ClauseAnalysis {
   clause: string;
   riskLevel: 'Low' | 'Medium' | 'High';
   riskReason: string;
+  liability_score?: number;
 }
 
 export interface Document {

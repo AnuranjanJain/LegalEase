@@ -1,6 +1,5 @@
 from datetime import timedelta
 import logging
-import os
 
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 from sqlalchemy.exc import IntegrityError, SQLAlchemyError
@@ -28,19 +27,14 @@ from backend.middleware.auth_rate_limit import (
     check_failed_login_lockout,
     clear_failed_login_attempts
 )
+from backend.config import get_settings
 
 logger = logging.getLogger(__name__)
 
-# Environment configuration - defaults to production for safety
-ENVIRONMENT = os.getenv("ENVIRONMENT", "production").lower()
-
-# Test mode configuration - only enabled in non-production environments
-# This allows controlled failure simulation for testing purposes
-# Cannot be enabled in production regardless of TEST_MODE setting
-TEST_MODE = (
-    ENVIRONMENT in ("development", "testing", "staging")
-    and os.getenv("TEST_MODE", "false").lower() in ("true", "1", "yes")
-)
+# Get configuration from centralized settings
+settings = get_settings()
+ENVIRONMENT = settings.environment.environment
+TEST_MODE = settings.environment.test_mode
 
 router = APIRouter(
     prefix="/auth",
@@ -113,8 +107,10 @@ def signup(request: Request, user: UserCreate, db: Session = Depends(get_db)):
 
 @router.post("/login", response_model=TokenResponse)
 def login(request: Request, user: UserLogin, db: Session = Depends(get_db)):
-    # Enforce rate limiting before authentication processing
+    # Enforce rate limiting before processing
     check_login_rate_limit(request, user.email)
+    
+    # Check for failed login lockout
     check_failed_login_lockout(request, user.email)
     
     # Normalize email to match accounts case-insensitively
