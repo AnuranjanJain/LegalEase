@@ -10,3 +10,4 @@ psycopg2-binary
 bcrypt
 python-jose[cryptography]
 email-validator
+redis

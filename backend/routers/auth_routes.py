@@ -113,8 +113,10 @@ def signup(request: Request, user: UserCreate, db: Session = Depends(get_db)):
 
 @router.post("/login", response_model=TokenResponse)
 def login(request: Request, user: UserLogin, db: Session = Depends(get_db)):
-    # Enforce rate limiting before authentication processing
+    # Enforce rate limiting before processing
     check_login_rate_limit(request, user.email)
+    
+    # Check for failed login lockout
     check_failed_login_lockout(request, user.email)
     
     # Normalize email to match accounts case-insensitively
