@@ -1,6 +1,6 @@
 from fastapi import APIRouter, HTTPException, status
 from pydantic import BaseModel, Field
-from typing import List, Dict, Any
+from typing import List, Dict, Any, Optional
 
 from backend.services.legal_mapping import map_problem_to_sections
 from backend.services.ai_service import ai_service
@@ -36,6 +36,7 @@ class ClauseAnalysisItem(BaseModel):
     clause: str
     riskLevel: str
     riskReason: str
+    liability_score: Optional[int] = None
 
 
 class ClauseAnalysisResponse(BaseModel):
