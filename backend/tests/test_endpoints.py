@@ -3,6 +3,12 @@ import uuid
 import pytest
 from fastapi import status
 from httpx import AsyncClient, ASGITransport
+import backend.config
+
+# Reset settings before any tests
+backend.config._settings = None
+
+# Import app (JWT_SECRET_KEY is set by conftest.py)
 from backend.main import app
 
 
@@ -225,6 +231,7 @@ async def test_rate_limiting_on_chat():
     import backend.main
 
     os.environ["ALLOW_DEV"] = "true"
+    os.environ["JWT_SECRET_KEY"] = "testing-secret-key-1234567890-abcdef"
 
     # Patch the limiter directly
     orig_limiter = backend.main.key_limiter

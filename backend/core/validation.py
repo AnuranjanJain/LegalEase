@@ -5,17 +5,22 @@ from io import BytesIO
 from typing import Optional
 from backend.core.exceptions import ValidationError
 from backend.core.jurisdictions import Jurisdictions
+from backend.config import get_settings
+
+# Get configuration from centralized settings
+settings = get_settings()
+input_config = settings.input_validation
 
 # Configuration limits with fallback defaults
-MAX_CHAT_INPUT_CHARS = int(os.getenv("MAX_CHAT_INPUT_CHARS", "4000"))
-MAX_SUMMARIZE_INPUT_CHARS = int(os.getenv("MAX_SUMMARIZE_INPUT_CHARS", "20000"))
-MAX_SIMPLIFY_INPUT_CHARS = int(os.getenv("MAX_SIMPLIFY_INPUT_CHARS", "10000"))
-MAX_CONTEXT_INPUT_CHARS = int(os.getenv("MAX_CONTEXT_INPUT_CHARS", "10000"))
-MAX_DOCX_ARCHIVE_ENTRIES = int(os.getenv("MAX_DOCX_ARCHIVE_ENTRIES", "200"))
-MAX_DOCX_ARCHIVE_UNCOMPRESSED_BYTES = int(os.getenv("MAX_DOCX_ARCHIVE_UNCOMPRESSED_BYTES", str(10 * 1024 * 1024)))
-MAX_DOCX_ARCHIVE_ENTRY_BYTES = int(os.getenv("MAX_DOCX_ARCHIVE_ENTRY_BYTES", str(5 * 1024 * 1024)))
-MAX_DOCX_ARCHIVE_RATIO = float(os.getenv("MAX_DOCX_ARCHIVE_RATIO", "100"))
-MAX_DOCX_XML_BYTES = int(os.getenv("MAX_DOCX_XML_BYTES", str(5 * 1024 * 1024)))
+MAX_CHAT_INPUT_CHARS = input_config.max_chat_input_chars
+MAX_SUMMARIZE_INPUT_CHARS = input_config.max_summarize_input_chars
+MAX_SIMPLIFY_INPUT_CHARS = input_config.max_simplify_input_chars
+MAX_CONTEXT_INPUT_CHARS = input_config.max_context_input_chars
+MAX_DOCX_ARCHIVE_ENTRIES = input_config.max_docx_archive_entries
+MAX_DOCX_ARCHIVE_UNCOMPRESSED_BYTES = input_config.max_docx_archive_uncompressed_bytes
+MAX_DOCX_ARCHIVE_ENTRY_BYTES = input_config.max_docx_archive_entry_bytes
+MAX_DOCX_ARCHIVE_RATIO = input_config.max_docx_archive_ratio
+MAX_DOCX_XML_BYTES = input_config.max_docx_xml_bytes
 
 
 def validate_chat_input(message: str, context: Optional[str] = None):

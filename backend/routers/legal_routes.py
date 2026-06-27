@@ -1,9 +1,13 @@
 from fastapi import APIRouter, HTTPException, status
 from pydantic import BaseModel, Field
-from typing import List, Dict, Any
+from typing import List, Dict, Any, Optional
 
 from backend.services.legal_mapping import map_problem_to_sections
 from backend.services.ai_service import ai_service
+from backend.services.entity_extraction import extract_entities
+from backend.services.search_service import perform_web_search
+from backend.services.langgraph_service import run_agent
+from backend.services.hybrid_search import get_hybrid_results
 
 router = APIRouter(prefix="/legal", tags=["legal"])
 
@@ -33,10 +37,21 @@ class ClauseAnalysisItem(BaseModel):
     clause: str
     riskLevel: str
     riskReason: str
+    liability_score: Optional[int] = None
 
 
 class ClauseAnalysisResponse(BaseModel):
     clauses: List[ClauseAnalysisItem]
+
+
+class AgentRequest(BaseModel):
+    query: str
+    documents: List[str] = []
+
+class HybridSearchRequest(BaseModel):
+    query: str
+    documents: List[str]
+    top_k: int = 3
 
 
 @router.post("/map", response_model=MappingResponse)
@@ -62,3 +77,56 @@ async def analyze_clauses(request: ClauseAnalysisRequest):
             detail=str(e),
         )
 
+
+class EntityExtractionRequest(BaseModel):
+    text: str
+
+
+@router.post("/extract-entities")
+async def extract_document_entities(request: EntityExtractionRequest):
+    try:
+        graph_data = extract_entities(request.text)
+        return graph_data
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=str(e),
+        )
+
+class WebSearchRequest(BaseModel):
+    query: str
+    max_results: int = 5
+
+
+@router.post("/web-search")
+async def dynamic_web_search(request: WebSearchRequest):
+    try:
+        results = perform_web_search(request.query, request.max_results)
+        return {"results": results}
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=str(e),
+        )
+
+@router.post("/agent")
+async def run_legal_agent(request: AgentRequest):
+    try:
+        response = await run_agent(request.query, request.documents)
+        return {"response": response}
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=str(e),
+        )
+
+@router.post("/hybrid-search")
+async def perform_hybrid_search(request: HybridSearchRequest):
+    try:
+        results = get_hybrid_results(request.query, request.documents, request.top_k)
+        return {"results": results}
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=str(e),
+        )
