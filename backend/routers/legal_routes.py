@@ -86,6 +86,12 @@ async def extract_document_entities(request: EntityExtractionRequest):
     try:
         graph_data = extract_entities(request.text)
         return graph_data
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=str(e),
+        )
+
 class WebSearchRequest(BaseModel):
     query: str
     max_results: int = 5
