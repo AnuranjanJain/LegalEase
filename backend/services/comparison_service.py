@@ -208,6 +208,7 @@ class ComparisonService:
         message: str,
         documents: List[Dict[str, str]],
         history: Optional[List[Dict[str, str]]] = None,
+        jurisdiction: str = "General / Not Specified",
     ) -> str:
         """
         Generate a structured cross-document comparison response.
@@ -221,6 +222,8 @@ class ComparisonService:
             Must contain at least 2 entries.
         history:
             Optional previous conversation turns.
+        jurisdiction:
+            Legal jurisdiction context-switching parameter.
 
         Returns
         -------
@@ -255,6 +258,7 @@ class ComparisonService:
             context=None,
             history=None,  # history already embedded in the prompt above
             stream=False,
+            jurisdiction=jurisdiction,
         ):
             response_text += chunk
 
@@ -275,9 +279,122 @@ class ComparisonService:
             "- Retry the comparison once the service is restored."
         )
 
+    async def detect_conflicts(
+        self,
+        primary_doc: Dict[str, str],
+        secondary_doc: Dict[str, str],
+        jurisdiction: str = "General / Not Specified",
+    ) -> List[Dict[str, Any]]:
+        """
+        Compare two documents and return a list of contradictions/conflicts.
+        """
+        from backend.services.ai_service import ai_service
+
+        primary_name = primary_doc.get("name", "Document A")
+        primary_text = primary_doc.get("text", "")
+        secondary_name = secondary_doc.get("name", "Document B")
+        secondary_text = secondary_doc.get("text", "")
+
+        if ai_service.stub_mode:
+            return [
+                {
+                    "primary_clause": "The parties agree to maintain confidentiality for a period of 5 years.",
+                    "secondary_clause": "The employee shall maintain confidentiality indefinitely.",
+                    "explanation": "Confidentiality periods are conflicting: 5 years vs. indefinite.",
+                    "severity": "Medium"
+                },
+                {
+                    "primary_clause": "Either party may terminate this agreement with 30 days written notice.",
+                    "secondary_clause": "Termination requires 60 days written notice by either party.",
+                    "explanation": "Notice periods for termination do not match: 30 days vs. 60 days.",
+                    "severity": "High"
+                }
+            ]
+
+        prompt = (
+            "Analyze the following two documents (Primary Document A and Secondary Document B) "
+            "and identify any contradictions or conflicts where terms or obligations in Document B "
+            "violate, clash, or contradict constraints established in Document A. "
+            "For example, if Document A states payment is due in 30 days but Document B states payment is due in 15 days.\n\n"
+            "You MUST respond ONLY with a valid JSON array of objects, where each object has these exact keys:\n"
+            "  - \"primary_clause\": the clause/sentence from Document A (Primary Document)\n"
+            "  - \"secondary_clause\": the conflicting clause/sentence from Document B (Secondary Document)\n"
+            "  - \"explanation\": a brief description of why this is a contradiction or conflict\n"
+            "  - \"severity\": the severity of the conflict ('High', 'Medium', 'Low')\n\n"
+            "Do not include any commentary, markdown tags, or conversational filler outside of the JSON array. Output must be valid JSON.\n\n"
+            f"PRIMARY DOCUMENT (A):\nName: {primary_name}\nContent:\n{primary_text}\n\n"
+            f"SECONDARY DOCUMENT (B):\nName: {secondary_name}\nContent:\n{secondary_text}"
+        )
+
+        response_text = ""
+        async for chunk in ai_service.generate_chat_response(
+            message=prompt,
+            context=None,
+            history=None,
+            stream=False,
+            jurisdiction=jurisdiction,
+        ):
+            response_text += chunk
+
+        return self._parse_conflicts_json(response_text)
+
+    def _parse_conflicts_json(self, raw_text: str) -> List[Dict[str, Any]]:
+        import json
+        from backend.services.ai_service import ai_service
+        
+        if not raw_text or not raw_text.strip():
+            return []
+
+        cleaned = ai_service._extract_from_markdown(raw_text)
+        
+        try:
+            parsed = json.loads(cleaned)
+            if isinstance(parsed, list):
+                return self._validate_conflicts(parsed)
+        except json.JSONDecodeError:
+            pass
+
+        json_array = ai_service._extract_json_array_balanced(cleaned)
+        if json_array:
+            try:
+                parsed = json.loads(json_array)
+                if isinstance(parsed, list):
+                    return self._validate_conflicts(parsed)
+            except json.JSONDecodeError:
+                pass
+
+        cleaned_json = ai_service._clean_json_string(cleaned)
+        try:
+            parsed = json.loads(cleaned_json)
+            if isinstance(parsed, list):
+                return self._validate_conflicts(parsed)
+        except json.JSONDecodeError:
+            pass
+
+        return []
+
+    def _validate_conflicts(self, parsed: List[Any]) -> List[Dict[str, Any]]:
+        validated = []
+        for item in parsed:
+            if not isinstance(item, dict):
+                continue
+            if "primary_clause" not in item or "secondary_clause" not in item:
+                continue
+            severity = str(item.get("severity", "Low")).strip().capitalize()
+            if severity not in ["High", "Medium", "Low"]:
+                severity = "Low"
+            validated.append({
+                "primary_clause": str(item.get("primary_clause", "")).strip(),
+                "secondary_clause": str(item.get("secondary_clause", "")).strip(),
+                "explanation": str(item.get("explanation", "Conflict detected.")).strip(),
+                "severity": severity
+            })
+        return validated
+
 
 # ---------------------------------------------------------------------------
 # Module-level singleton
 # ---------------------------------------------------------------------------
 
 comparison_service = ComparisonService()
+

@@ -115,7 +115,7 @@ export function ProcessingPage() {
         chunks = chunkText(extractedText, 2000, 200);
         setTotalChunks(chunks.length);
         setStage2Status('completed');
-      } catch (err) {
+      } catch {
         setStage2Status('failed');
         setErrorMessage('Failed to segment document into semantic chunks.');
         StorageService.updateDocumentStatus(docId, 'failed');
@@ -185,7 +185,7 @@ export function ProcessingPage() {
         // Save complete results back to StorageService
         StorageService.updateDocumentStatus(docId, 'processed', compiledBrief, extractedText, analyzedClauses);
         showToast(`"${file.name}" analyzed successfully!`, 'success');
-      } catch (err) {
+      } catch {
         setStage4Status('failed');
         setErrorMessage('Failed to compile and render final analysis report.');
         StorageService.updateDocumentStatus(docId, 'failed');

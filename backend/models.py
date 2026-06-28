@@ -59,6 +59,8 @@ class DocumentRecord(Base):
     filename = Column(String, nullable=False)
     file_type = Column(String, nullable=True)
     summary = Column(Text, nullable=True)
+    clause_analysis = Column(Text, nullable=True)
+    analyzed_at = Column(DateTime, nullable=True) 
     uploaded_at = Column(DateTime, default=datetime.utcnow)
 
     user = relationship("User", back_populates="documents")
