@@ -36,3 +36,6 @@ Object.defineProperty(window, 'localStorage', {
 beforeEach(() => {
   (global as any).__localStorageData = {};
 });
+
+// Mock scrollIntoView since jsdom doesn't support it
+window.HTMLElement.prototype.scrollIntoView = () => {};

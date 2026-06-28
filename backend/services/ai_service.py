@@ -135,7 +135,8 @@ class AIService:
         message: str, 
         context: Optional[str] = None, 
         history: Optional[List[Dict[str, str]]] = None,
-        stream: bool = False
+        stream: bool = False,
+        jurisdiction: str = "General / Not Specified"
     ) -> AsyncGenerator[str, None]:
         """
         Generate response for chatbot requests.
@@ -151,7 +152,20 @@ class AIService:
                 for msg in history[-10:]
             ])
             parts.append(f"Previous conversation:\n{history_text}")
-        parts.append(f"Current question: {message}")
+            
+        # Inject jurisdiction instructions
+        instruction = (
+            "You are an expert legal assistant.\n\n"
+            f"Analyze all legal questions and uploaded documents strictly according to the laws and regulations of: {jurisdiction}.\n\n"
+            "If legal conclusions depend on jurisdiction-specific rules:\n\n"
+            "* Explicitly mention them.\n"
+            "* Flag potentially unenforceable clauses.\n"
+            "* Explain why the clause may be invalid in this jurisdiction.\n"
+            "* State when legal outcomes differ across jurisdictions.\n\n"
+            "Do not assume laws from any other jurisdiction unless comparing them."
+        )
+        injected_message = f"{instruction}\n\n{message}"
+        parts.append(f"Current question: {injected_message}")
         prompt = "\n\n".join(parts)
         
         # Truncation for model input constraints

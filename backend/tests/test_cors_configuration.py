@@ -195,7 +195,9 @@ def test_cors_frontend_url_fallback_in_development():
     """Test that FRONTEND_URL fallback works in development"""
     with patch.dict(os.environ, {
         "ENVIRONMENT": "development",
-        "FRONTEND_URL": "https://frontend.example.com"
+        "FRONTEND_URL": "https://frontend.example.com",
+        "ALLOWED_ORIGINS": "",
+        "JWT_SECRET_KEY": "test-secret-key"
     }, clear=True):
         # Remove ALLOWED_ORIGINS to test fallback
         with patch.dict(os.environ, {}, clear=False):

@@ -9,6 +9,7 @@ are secure by default.
 import os
 import pytest
 from pydantic import ValidationError
+from unittest.mock import patch
 
 from backend.config import (
     SecurityConfig,
@@ -70,8 +71,9 @@ class TestSecretValidation:
 
     def test_allow_dev_default_false(self):
         """Test that ALLOW_DEV defaults to False for security."""
-        config = SecurityConfig(jwt_secret_key="test_secret")
-        assert config.allow_dev is False
+        with patch.dict(os.environ, {}, clear=True):
+            config = SecurityConfig(jwt_secret_key="test_secret")
+            assert config.allow_dev is False
 
     def test_allow_dev_can_be_enabled(self):
         """Test that ALLOW_DEV can be explicitly enabled."""
@@ -84,8 +86,9 @@ class TestProductionSecurity:
 
     def test_environment_defaults_to_production(self):
         """Test that ENVIRONMENT defaults to production for safety."""
-        config = EnvironmentConfig()
-        assert config.environment == "production"
+        with patch.dict(os.environ, {}, clear=True):
+            config = EnvironmentConfig()
+            assert config.environment == "production"
 
     def test_test_mode_rejected_in_production(self):
         """Test that TEST_MODE cannot be enabled in production."""
@@ -186,8 +189,9 @@ class TestSecurityDefaults:
 
     def test_stub_mode_default_false(self):
         """Test that STUB_MODE defaults to False for security."""
-        config = AIConfig()
-        assert config.stub_mode is False
+        with patch.dict(os.environ, {}, clear=True):
+            config = AIConfig()
+            assert config.stub_mode is False
 
     def test_health_debug_default_false(self):
         """Test that HEALTH_DEBUG defaults to False for security."""
@@ -294,17 +298,18 @@ class TestConfigurationHardening:
         import backend.config
         backend.config._settings = None
         
-        settings = Settings(
-            security={"jwt_secret_key": "test_secret_key_12345678"},
-            environment={"environment": "production"},
-            _env_file=None
-        )
-        # Check secure defaults
-        assert settings.environment.environment == "production"
-        assert settings.environment.test_mode is False
-        assert settings.security.allow_dev is False
-        assert settings.ai.stub_mode is False
-        assert settings.ai.health_debug is False
+        with patch.dict(os.environ, {}, clear=True):
+            settings = Settings(
+                security={"jwt_secret_key": "test_secret_key_12345678"},
+                environment={"environment": "production"},
+                _env_file=None
+            )
+            # Check secure defaults
+            assert settings.environment.environment == "production"
+            assert settings.environment.test_mode is False
+            assert settings.security.allow_dev is False
+            assert settings.ai.stub_mode is False
+            assert settings.ai.health_debug is False
         backend.config._settings = None
 
     def test_cannot_override_production_security_defaults_unsafely(self):

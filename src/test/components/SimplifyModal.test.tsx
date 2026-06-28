@@ -127,4 +127,47 @@ describe('SimplifyModal Component', () => {
       expect(onClose).toHaveBeenCalled();
     });
   });
+
+  it('triggers DOCX redline export on button click', async () => {
+    vi.spyOn(api, 'post').mockResolvedValue({ simplifiedText: 'Simplified version text.' });
+    const postBlobSpy = vi.spyOn(api, 'postBlob').mockResolvedValue(new Blob(['mock docx'], { type: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' }));
+    
+    // Mock URL API methods
+    const mockCreateObjectURL = vi.fn(() => 'blob:http://localhost/mock-blob-url');
+    const mockRevokeObjectURL = vi.fn();
+    Object.defineProperty(window.URL, 'createObjectURL', { value: mockCreateObjectURL });
+    Object.defineProperty(window.URL, 'revokeObjectURL', { value: mockRevokeObjectURL });
+
+    // Mock anchor link click behaviour
+    const originalCreateElement = document.createElement;
+    const mockAnchor = originalCreateElement.call(document, 'a');
+    mockAnchor.click = vi.fn();
+    const createElementSpy = vi.spyOn(document, 'createElement').mockImplementation((tagName) => {
+      if (tagName === 'a') return mockAnchor as any;
+      return originalCreateElement.call(document, tagName);
+    });
+
+    render(
+      <ToastProvider>
+        <SimplifyModal clauseText="Original complex legalese text" onClose={vi.fn()} />
+      </ToastProvider>
+    );
+
+    await waitFor(() => {
+      expect(screen.getByText('Simplified version text.')).toBeInTheDocument();
+    });
+
+    const exportBtn = screen.getByRole('button', { name: /export redline/i });
+    fireEvent.click(exportBtn);
+
+    await waitFor(() => {
+      expect(postBlobSpy).toHaveBeenCalledWith('/api/export/redline-docx', {
+        original_text: 'Original complex legalese text',
+        suggested_text: 'Simplified version text.',
+      });
+      expect(mockAnchor.click).toHaveBeenCalled();
+    });
+
+    createElementSpy.mockRestore();
+  });
 });
