@@ -25,6 +25,22 @@ if root_path not in sys.path:
 import pytest
 
 @pytest.fixture(autouse=True)
+def isolate_test_environment():
+    import os
+    import backend.config as config
+    
+    # Backup os.environ and settings cache
+    old_environ = dict(os.environ)
+    old_settings = config._settings
+    
+    yield
+    
+    # Restore os.environ and settings cache
+    os.environ.clear()
+    os.environ.update(old_environ)
+    config._settings = old_settings
+
+@pytest.fixture(autouse=True)
 def clear_rate_limiters():
     # Clear main key limiter
     try:

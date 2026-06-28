@@ -94,6 +94,42 @@ async def export_pdf(
         )
 
 
+class ExportRedlineRequest(BaseModel):
+    original_text: str = Field(..., max_length=100000)
+    suggested_text: str = Field(..., max_length=100000)
+
+
+@router.post("/api/export/redline-docx")
+@router.post("/export/redline-docx")
+async def export_redline_docx(
+    payload: ExportRedlineRequest,
+    identity: AuthIdentity = Depends(validate_token_or_api_key)
+):
+    """
+    Secure endpoint to export original vs suggested changes as a redlined DOCX.
+    """
+    try:
+        sanitized_original = sanitize_text(payload.original_text)
+        sanitized_suggested = sanitize_text(payload.suggested_text)
+        
+        from backend.services.docx_service import generate_redlined_docx
+        docx_bytes = generate_redlined_docx(sanitized_original, sanitized_suggested)
+        
+        return StreamingResponse(
+            BytesIO(docx_bytes),
+            media_type="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+            headers={
+                "Content-Disposition": "attachment; filename=redline_export.docx"
+            }
+        )
+    except Exception as e:
+        logger.error(f"DOCX redline generation failed: {e}", exc_info=True)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="An error occurred while generating the redlined DOCX document."
+        )
+
+
 @router.post("/api/export/pdf/stream")
 @router.post("/export/pdf/stream")
 async def export_pdf_stream(

@@ -97,8 +97,13 @@ class TestEnvironmentConfig:
 
     def test_environment_default_production(self):
         """Test that ENVIRONMENT defaults to production."""
-        config = EnvironmentConfig()
-        assert config.environment == "production"
+        old_env = os.environ.pop("ENVIRONMENT", None)
+        try:
+            config = EnvironmentConfig()
+            assert config.environment == "production"
+        finally:
+            if old_env is not None:
+                os.environ["ENVIRONMENT"] = old_env
 
     def test_environment_valid_values(self):
         """Test that valid environment values are accepted."""
@@ -358,6 +363,7 @@ class TestSettingsIntegration:
         """Test that Settings can be initialized with all defaults except required."""
         # Set required environment variable
         os.environ["JWT_SECRET_KEY"] = "test_secret_key_12345678"
+        old_env = os.environ.pop("ENVIRONMENT", None)
         try:
             settings = Settings()
             assert settings.security.jwt_secret_key == "test_secret_key_12345678"
@@ -365,6 +371,8 @@ class TestSettingsIntegration:
             assert settings.file_upload.max_upload_size == 25 * 1024 * 1024
         finally:
             os.environ.pop("JWT_SECRET_KEY", None)
+            if old_env is not None:
+                os.environ["ENVIRONMENT"] = old_env
 
     def test_settings_missing_required_variable(self):
         """Test that Settings fails without required JWT_SECRET_KEY."""
