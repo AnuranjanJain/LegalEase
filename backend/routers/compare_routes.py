@@ -29,19 +29,23 @@ from fastapi import APIRouter, Depends, HTTPException, Request, status
 from pydantic import BaseModel, Field, field_validator
 
 from backend.auth import validate_token_or_api_key, AuthIdentity
-from backend.core.validation import sanitize_text
+from backend.core.validation import sanitize_text, validate_jurisdiction
 from backend.services.comparison_service import comparison_service, MAX_DOCUMENTS
 from backend.services.ai_service import correlation_id_var
 from backend.utils.limiter import SimpleRateLimiter
-import os
+from backend.config import get_settings
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/compare", tags=["compare"])
 
+# Get configuration from centralized settings
+settings = get_settings()
+rate_config = settings.rate_limit
+
 # Separate rate-limiter for comparison requests (they're heavier than plain chat)
-_COMPARE_RATE_CALLS = int(os.getenv("COMPARE_RATE_LIMIT_CALLS", "60"))
-_COMPARE_RATE_PERIOD = int(os.getenv("COMPARE_RATE_LIMIT_PERIOD", "60"))
+_COMPARE_RATE_CALLS = rate_config.compare_rate_limit_calls
+_COMPARE_RATE_PERIOD = rate_config.compare_rate_limit_period
 _compare_limiter = SimpleRateLimiter(calls=_COMPARE_RATE_CALLS, period=_COMPARE_RATE_PERIOD)
 
 
@@ -92,6 +96,8 @@ class CompareRequest(BaseModel):
     document_texts: List[DocumentPayload] = Field(..., min_length=2)
     document_ids: Optional[List[str]] = None
     conversation_history: Optional[List[dict]] = None
+    jurisdiction: str = "General / Not Specified"
+
 
     @field_validator("document_texts")
     @classmethod
@@ -149,6 +155,16 @@ async def compare_chat(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Message must not be empty after sanitisation.",
         )
+    
+    # Validate jurisdiction
+    from backend.core.exceptions import ValidationError
+    try:
+        validate_jurisdiction(payload.jurisdiction)
+    except ValidationError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=str(exc),
+        )
 
     # Build the document list for the service layer, sanitising each text field
     documents = [
@@ -173,6 +189,7 @@ async def compare_chat(
             message=sanitized_message,
             documents=documents,
             history=payload.conversation_history,
+            jurisdiction=payload.jurisdiction,
         )
     except ValueError as exc:
         # Raised by comparison_service for invalid document count etc.
@@ -187,3 +204,77 @@ async def compare_chat(
         )
 
     return CompareResponse(response=result)
+
+
+class ConflictsRequest(BaseModel):
+    primary_document: DocumentPayload
+    secondary_document: DocumentPayload
+    jurisdiction: str = "General / Not Specified"
+
+class ContradictionItem(BaseModel):
+    primary_clause: str
+    secondary_clause: str
+    explanation: str
+    severity: str
+
+class ConflictsResponse(BaseModel):
+    conflicts: List[ContradictionItem]
+
+@router.post(
+    "/conflicts",
+    response_model=ConflictsResponse,
+    summary="Cross-document contradiction detection",
+    description="Compares primary and secondary documents to detect contradictions or conflicting terms."
+)
+async def check_conflicts(
+    request: Request,
+    payload: ConflictsRequest,
+    identity: AuthIdentity = Depends(validate_token_or_api_key),
+) -> ConflictsResponse:
+    corr_id = correlation_id_var.get()
+
+    # Rate limiting (reuse comparison limiter)
+    if not _compare_limiter.check(identity.get_rate_limit_key())["allowed"]:
+        raise HTTPException(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            detail="Comparison rate limit exceeded. Please wait before retrying.",
+        )
+
+    # Validate jurisdiction
+    from backend.core.exceptions import ValidationError
+    try:
+        validate_jurisdiction(payload.jurisdiction)
+    except ValidationError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=str(exc),
+        )
+
+    # Construct primary & secondary payloads
+    primary_doc = {
+        "id": payload.primary_document.id,
+        "name": payload.primary_document.name,
+        "text": sanitize_text(payload.primary_document.text) if payload.primary_document.text else "",
+    }
+    secondary_doc = {
+        "id": payload.secondary_document.id,
+        "name": payload.secondary_document.name,
+        "text": sanitize_text(payload.secondary_document.text) if payload.secondary_document.text else "",
+    }
+
+    try:
+        conflicts = await comparison_service.detect_conflicts(
+            primary_doc=primary_doc,
+            secondary_doc=secondary_doc,
+            jurisdiction=payload.jurisdiction,
+        )
+        return ConflictsResponse(conflicts=conflicts)
+    except Exception as exc:
+        logger.error(
+            "[%s] Contradiction service error: %s", corr_id, exc, exc_info=True
+        )
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail="The AI contradiction service encountered an error. Please try again.",
+        )
+

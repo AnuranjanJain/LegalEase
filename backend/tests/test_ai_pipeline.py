@@ -108,61 +108,52 @@ async def test_correlation_id_propagation():
 @pytest.mark.asyncio
 async def test_ai_service_stub_mode():
     """Test AI Service behaviors in Stub Mode"""
-    with patch.dict(os.environ, {"STUB_MODE": "true", "HEALTH_DEBUG": "true"}):
-        # Re-initialize service settings for stub mode
-        ai_service.__init__()
-        
-        # Test Chat Response in Stub Mode
-        chat_gen = ai_service.generate_chat_response(message="Hi", stream=False)
-        chat_res = ""
-        async for chunk in chat_gen:
-            chat_res += chunk
-        assert "[STUB CHAT RESPONSE]" in chat_res
-        
-        # Test Summarize Response in Stub Mode
-        summary = await ai_service.generate_summary(text="Summarize this text")
-        assert "[STUB SUMMARY RESPONSE]" in summary
-        
-        # Test Health status in Stub Mode
-        health = ai_service.check_health()
-        assert health["status"] == "ok"
-        assert health["details"]["stub_mode"] is True
-        
-        # Revert environment settings
-        with patch.dict(os.environ, {"STUB_MODE": "false", "HEALTH_DEBUG": "false"}):
-            ai_service.__init__()
+    # Re-initialize service settings for stub mode
+    ai_service.__init__()
+    
+    # Test Chat Response in Stub Mode
+    chat_gen = ai_service.generate_chat_response(message="Hi", stream=False)
+    chat_res = ""
+    async for chunk in chat_gen:
+        chat_res += chunk
+    assert "[STUB CHAT RESPONSE]" in chat_res
+    
+    # Test Summarize Response in Stub Mode
+    summary = await ai_service.generate_summary(text="Summarize this text")
+    assert "[STUB SUMMARY RESPONSE]" in summary
+    
+    # Test Health status in Stub Mode
+    health = ai_service.check_health()
+    assert health["status"] == "ok"
+    assert health["details"]["stub_mode"] is True
 
 
 @pytest.mark.asyncio
 async def test_ai_service_streaming_mode():
     """Test AI Service streaming responses chunk generator"""
-    with patch.dict(os.environ, {"STUB_MODE": "true"}):
-        ai_service.__init__()
+    ai_service.__init__()
+    
+    chat_gen = ai_service.generate_chat_response(message="This is a stream", stream=True)
+    chunks = []
+    async for chunk in chat_gen:
+        chunks.append(chunk)
         
-        chat_gen = ai_service.generate_chat_response(message="This is a stream", stream=True)
-        chunks = []
-        async for chunk in chat_gen:
-            chunks.append(chunk)
-            
-        assert len(chunks) > 1
-        
-        # Parse SSE format and extract response values
-        full_response = ""
-        for chunk in chunks:
-            # Extract JSON from "data: {...}" format
-            if chunk.startswith("data: ") and chunk != "data: [DONE]\n\n":
-                try:
-                    import json
-                    json_str = chunk.replace("data: ", "").strip()
-                    data = json.loads(json_str)
-                    full_response += data.get("response", "")
-                except (json.JSONDecodeError, ValueError):
-                    pass
-        
-        assert full_response.startswith("[STUB CHAT RESPONSE]")
-        
-        with patch.dict(os.environ, {"STUB_MODE": "false"}):
-            ai_service.__init__()
+    assert len(chunks) > 1
+    
+    # Parse SSE format and extract response values
+    full_response = ""
+    for chunk in chunks:
+        # Extract JSON from "data: {...}" format
+        if chunk.startswith("data: ") and chunk != "data: [DONE]\n\n":
+            try:
+                import json
+                json_str = chunk.replace("data: ", "").strip()
+                data = json.loads(json_str)
+                full_response += data.get("response", "")
+            except (json.JSONDecodeError, ValueError):
+                pass
+    
+    assert full_response.startswith("[STUB CHAT RESPONSE]")
 
 
 @pytest.mark.asyncio

@@ -75,8 +75,29 @@ export function ProcessingPage() {
         const formData = new FormData();
         formData.append('file', file);
 
-        const uploadData = await api.upload<{ filename: string; text: string }>('/upload', formData);
-        extractedText = uploadData.text;
+        const uploadData = await api.upload<{ task_id?: string; filename?: string; text?: string; status?: string }>('/upload', formData);
+        
+        if (uploadData.task_id) {
+          // Poll for task completion
+          let isComplete = false;
+          let pollResult: any = null;
+          while (!isComplete) {
+            await new Promise(resolve => setTimeout(resolve, 1000));
+            pollResult = await api.get<{ status: string; progress: number; result: any }>(`/upload/status/${uploadData.task_id}`);
+            if (pollResult.status === 'done' || pollResult.status === 'failed') {
+              isComplete = true;
+            }
+          }
+          if (pollResult.status === 'failed') {
+            throw new Error(pollResult.result?.error || 'Document processing failed on server.');
+          }
+          extractedText = pollResult.result?.text || '';
+        } else {
+          extractedText = uploadData.text || '';
+        }
+
+        if (!extractedText) throw new Error('No text extracted from document.');
+
         setOriginalText(extractedText);
         setStage1Status('completed');
       } catch (err) {
@@ -94,7 +115,7 @@ export function ProcessingPage() {
         chunks = chunkText(extractedText, 2000, 200);
         setTotalChunks(chunks.length);
         setStage2Status('completed');
-      } catch (err) {
+      } catch {
         setStage2Status('failed');
         setErrorMessage('Failed to segment document into semantic chunks.');
         StorageService.updateDocumentStatus(docId, 'failed');
@@ -164,7 +185,7 @@ export function ProcessingPage() {
         // Save complete results back to StorageService
         StorageService.updateDocumentStatus(docId, 'processed', compiledBrief, extractedText, analyzedClauses);
         showToast(`"${file.name}" analyzed successfully!`, 'success');
-      } catch (err) {
+      } catch {
         setStage4Status('failed');
         setErrorMessage('Failed to compile and render final analysis report.');
         StorageService.updateDocumentStatus(docId, 'failed');

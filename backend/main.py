@@ -1,4 +1,5 @@
 import asyncio
+import os
 from contextlib import asynccontextmanager
 from fastapi import BackgroundTasks, Depends, FastAPI, HTTPException, UploadFile, File, Request
 from fastapi.middleware.cors import CORSMiddleware
@@ -6,14 +7,11 @@ from fastapi.responses import JSONResponse, StreamingResponse
 from pydantic import BaseModel
 from datetime import datetime
 from io import BytesIO
-import os
 import logging
 import tempfile
 import time
 from typing import Optional
 import uuid
-
-from dotenv import load_dotenv
 
 from backend.database import engine, Base, SessionLocal
 from backend.routers import auth_routes
@@ -22,10 +20,11 @@ from backend.routers import history_routes
 from backend.routers.notifications import router as notifications_router
 from backend.routers.compare_routes import router as compare_router
 from backend.routers import export_routes
-
+from backend.routers.collaboration_routes import router as collaboration_router
 from backend.auth import validate_token_or_api_key, AuthIdentity
 from backend.utils.limiter import SimpleRateLimiter
 from backend.utils.cleanup import start_token_cleanup_task
+from backend.config import get_settings
 
 # ---------------------------------------------------------------------------
 # In-memory task store for async document processing (#365)
@@ -50,7 +49,7 @@ from backend.core.exceptions import (
 )
 from backend.core.validation import (
     validate_chat_input, validate_summarize_input, validate_simplify_input, sanitize_text, validate_mime_and_bytes,
-    validate_docx_archive_safety
+    validate_docx_archive_safety, validate_jurisdiction
 )
 from backend.services.ai_service import ai_service, correlation_id_var
 from backend.services.rag_service import rag_service
@@ -66,16 +65,19 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-# Load environment variables
-load_dotenv()
+# Get configuration from centralized settings
+settings = get_settings()
+file_config = settings.file_upload
+rate_config = settings.rate_limit
+cors_config = settings.cors
 
 # Track application start time for uptime calculation
 _app_start_time = time.monotonic()
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    # Start the token blacklist cleanup worker in the background (defaulting to 3600s/1h)
-    cleanup_interval = int(os.getenv("TOKEN_CLEANUP_INTERVAL_SECONDS", "3600"))
+    # Start the token blacklist cleanup worker in the background
+    cleanup_interval = file_config.token_cleanup_interval_seconds
     cleanup_task = asyncio.create_task(start_token_cleanup_task(interval_seconds=cleanup_interval))
     try:
         yield
@@ -182,24 +184,27 @@ app.include_router(history_routes.router)
 app.include_router(compare_router)
 # Include export router
 app.include_router(export_routes.router)
+app.include_router(collaboration_router)
 
+
+# Environment configuration - defaults to production for security
+ENVIRONMENT = os.getenv("ENVIRONMENT", "production").lower()
 
 # Enable CORS for frontend communication
-raw_allowed_origins = os.getenv("ALLOWED_ORIGINS") or os.getenv(
-    "FRONTEND_URL",
-    "http://localhost:5173"
-)
+raw_allowed_origins = cors_config.allowed_origins or cors_config.frontend_url
 ALLOWED_ORIGINS = [
     origin.strip()
     for origin in raw_allowed_origins.split(",")
     if origin.strip()
 ]
-# Automatically allow common development ports on localhost
-for host in ["http://localhost", "http://127.0.0.1"]:
-    for port in range(5173, 5181):
-        dev_origin = f"{host}:{port}"
-        if dev_origin not in ALLOWED_ORIGINS:
-            ALLOWED_ORIGINS.append(dev_origin)
+# Automatically allow common development ports on localhost ONLY in non-production environments
+# This prevents unintended localhost access in production deployments
+if ENVIRONMENT in ("development", "testing", "local"):
+    for host in ["http://localhost", "http://127.0.0.1"]:
+        for port in range(5173, 5181):
+            dev_origin = f"{host}:{port}"
+            if dev_origin not in ALLOWED_ORIGINS:
+                ALLOWED_ORIGINS.append(dev_origin)
 # Rate-limit middleware registered first so that CORSMiddleware
 # (added second) wraps it — ensuring 429 responses include CORS headers.
 app.add_middleware(RateLimitMiddleware)
@@ -231,16 +236,16 @@ async def correlation_id_middleware(request: Request, call_next):
 
 
 # Configuration
-MAX_UPLOAD_SIZE = int(os.getenv("MAX_UPLOAD_SIZE", str(25 * 1024 * 1024)))  # 25 MB default
+MAX_UPLOAD_SIZE = file_config.max_upload_size
 CHUNK_SIZE = 1024 * 1024
-MAX_PDF_PAGES = int(os.getenv("MAX_PDF_PAGES", "100"))
-MAX_DOCX_PARAGRAPHS = int(os.getenv("MAX_DOCX_PARAGRAPHS", "2000"))
-MAX_EXTRACTED_TEXT_CHARS = int(os.getenv("MAX_EXTRACTED_TEXT_CHARS", "10000"))
-UPLOAD_PARSE_TIMEOUT_SECONDS = float(os.getenv("UPLOAD_PARSE_TIMEOUT_SECONDS", "5"))
+MAX_PDF_PAGES = file_config.max_pdf_pages
+MAX_DOCX_PARAGRAPHS = file_config.max_docx_paragraphs
+MAX_EXTRACTED_TEXT_CHARS = file_config.max_extracted_text_chars
+UPLOAD_PARSE_TIMEOUT_SECONDS = file_config.upload_parse_timeout_seconds
 
 
-RATE_LIMIT_PERIOD = int(os.getenv("RATE_LIMIT_PERIOD", "60"))
-RATE_LIMIT_KEY_CALLS = int(os.getenv("RATE_LIMIT_KEY_CALLS", "300"))
+RATE_LIMIT_PERIOD = rate_config.rate_limit_period
+RATE_LIMIT_KEY_CALLS = rate_config.rate_limit_key_calls
 
 
 # Defaults: 300 requests per minute per API key
@@ -252,6 +257,7 @@ class ChatRequest(BaseModel):
     context: Optional[str] = None
     conversation_history: Optional[list[dict[str, str]]] = None
     stream: Optional[bool] = False
+    jurisdiction: str = "General / Not Specified"
 
 
 class EditMessageRequest(BaseModel):
@@ -369,6 +375,7 @@ async def chat(request: Request, payload: ChatRequest, identity: AuthIdentity = 
 
     # Early payload validation
     validate_chat_input(sanitized_message, sanitized_context)
+    validate_jurisdiction(payload.jurisdiction)
 
     cache_key = f"{sanitized_message} || {sanitized_context}" if sanitized_context else sanitized_message
     cached_response = semantic_cache.get(cache_key)
@@ -414,7 +421,8 @@ async def chat(request: Request, payload: ChatRequest, identity: AuthIdentity = 
                     message=sanitized_message,
                     context=sanitized_context,
                     history=payload.conversation_history,
-                    stream=True
+                    stream=True,
+                    jurisdiction=payload.jurisdiction
                 ):
                     # Clean the SSE format to cache clean raw text
                     if chunk.startswith("data: ") and chunk != "data: [DONE]\n\n":
@@ -444,7 +452,8 @@ async def chat(request: Request, payload: ChatRequest, identity: AuthIdentity = 
             message=sanitized_message,
             context=sanitized_context,
             history=payload.conversation_history,
-            stream=False
+            stream=False,
+            jurisdiction=payload.jurisdiction
         )
         response_text = ""
         async for chunk in response_gen:
