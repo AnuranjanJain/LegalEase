@@ -62,7 +62,7 @@ async def test_analyze_clauses_endpoint():
     headers = {"x-api-key": "dev-token"}
     payload = {"text": "Subscriber shall indemnify Provider."}
     
-    with patch.dict(os.environ, {"STUB_MODE": "true", "JWT_SECRET_KEY": "testing-secret-key-1234567890-abcdef"}):
+    with patch.dict(os.environ, {"STUB_MODE": "true", "JWT_SECRET_KEY": "testing-secret-key-1234567890-abcdef", "ALLOW_DEV": "true"}):
         import backend.config
         backend.config._settings = None
         ai_service.__init__()
