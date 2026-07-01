@@ -6,7 +6,7 @@ from pydantic import BaseModel, Field
 from typing import List, Dict, Any, Optional
 from sqlalchemy.orm import Session
 
-from backend.auth import validate_token_or_api_key, get_current_user, AuthIdentity
+from backend.auth import validate_token_or_api_key, AuthIdentity
 from backend.database import get_db
 from backend import models
 from backend.core.validation import validate_jurisdiction
@@ -20,17 +20,21 @@ from backend.services.hybrid_search import get_hybrid_results
 from backend.utils.limiter import SimpleRateLimiter
 from backend.config import get_settings
 
-DEFAULT_JURISDICTION = "General / Not Specified"
-
 router = APIRouter(prefix="/legal", tags=["legal"])
 
-# Reuses the same per-identity rate limiting pattern already established for
-# /chat, /simplify, and /compare, scoped to this router's AI endpoints.
+# These AI-powered endpoints previously had no auth requirement and no rate
+# limiting at all, unlike /chat and /simplify which already use key_limiter.
+# Reuses the same per-identity rate limiting pattern established there.
 _settings = get_settings()
-_redline_limiter = SimpleRateLimiter(
+_legal_ai_limiter = SimpleRateLimiter(
     calls=_settings.rate_limit.rate_limit_key_calls,
     period=_settings.rate_limit.rate_limit_period,
 )
+
+
+def _check_rate_limit(identity: AuthIdentity):
+    if not _legal_ai_limiter.check(identity.get_rate_limit_key())["allowed"]:
+        raise HTTPException(status_code=status.HTTP_429_TOO_MANY_REQUESTS, detail="Rate limit exceeded")
 
 
 class ProblemRequest(BaseModel):
@@ -92,7 +96,11 @@ class HybridSearchRequest(BaseModel):
 
 
 @router.post("/map", response_model=MappingResponse)
-async def map_problem(request: ProblemRequest):
+async def map_problem(
+    request: ProblemRequest,
+    identity: AuthIdentity = Depends(validate_token_or_api_key),
+):
+    _check_rate_limit(identity)
     try:
         suggestions = await map_problem_to_sections(request.description)
         return {"suggestions": suggestions}
@@ -106,9 +114,10 @@ async def map_problem(request: ProblemRequest):
 @router.post("/analyze-clauses", response_model=ClauseAnalysisResponse)
 async def analyze_clauses(
     request: ClauseAnalysisRequest,
-    current_user: AuthIdentity = Depends(validate_token_or_api_key),
+    current_user:AuthIdentity = Depends(validate_token_or_api_key),
     db: Session = Depends(get_db),
 ):
+    _check_rate_limit(current_user)
     try:
         validate_jurisdiction(request.jurisdiction)
     except ValidationError as exc:
@@ -267,7 +276,11 @@ class EntityExtractionRequest(BaseModel):
 
 
 @router.post("/extract-entities")
-async def extract_document_entities(request: EntityExtractionRequest):
+async def extract_document_entities(
+    request: EntityExtractionRequest,
+    identity: AuthIdentity = Depends(validate_token_or_api_key),
+):
+    _check_rate_limit(identity)
     try:
         graph_data = extract_entities(request.text)
         return graph_data
@@ -283,7 +296,11 @@ class WebSearchRequest(BaseModel):
 
 
 @router.post("/web-search")
-async def dynamic_web_search(request: WebSearchRequest):
+async def dynamic_web_search(
+    request: WebSearchRequest,
+    identity: AuthIdentity = Depends(validate_token_or_api_key),
+):
+    _check_rate_limit(identity)
     try:
         results = perform_web_search(request.query, request.max_results)
         return {"results": results}
@@ -294,7 +311,11 @@ async def dynamic_web_search(request: WebSearchRequest):
         )
 
 @router.post("/agent")
-async def run_legal_agent(request: AgentRequest):
+async def run_legal_agent(
+    request: AgentRequest,
+    identity: AuthIdentity = Depends(validate_token_or_api_key),
+):
+    _check_rate_limit(identity)
     try:
         response = await run_agent(request.query, request.documents)
         return {"response": response}
@@ -305,7 +326,11 @@ async def run_legal_agent(request: AgentRequest):
         )
 
 @router.post("/hybrid-search")
-async def perform_hybrid_search(request: HybridSearchRequest):
+async def perform_hybrid_search(
+    request: HybridSearchRequest,
+    identity: AuthIdentity = Depends(validate_token_or_api_key),
+):
+    _check_rate_limit(identity)
     try:
         results = get_hybrid_results(request.query, request.documents, request.top_k)
         return {"results": results}

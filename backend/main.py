@@ -672,6 +672,10 @@ async def upload_status(task_id: str, identity: AuthIdentity = Depends(validate_
 
 @app.post("/summarize")
 async def summarize(request: Request, payload: SummarizeRequest, identity: AuthIdentity = Depends(validate_token_or_api_key)):
+    # Rate limiting using the authenticated identity (already applied to
+    # /chat and /simplify; this endpoint was missing it)
+    if not key_limiter.check(identity.get_rate_limit_key())["allowed"]:
+        raise HTTPException(status_code=429, detail="Rate limit exceeded")
 
     # Sanitize input
     sanitized_text = sanitize_text(payload.text)
