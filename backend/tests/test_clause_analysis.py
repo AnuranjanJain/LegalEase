@@ -425,3 +425,51 @@ async def test_analyze_clauses_partial_chunk_failure_keeps_successful_results():
                 assert call_count["n"] > 1
                 assert len(clauses) == call_count["n"] - 1
                 assert all("Clause from chunk" in c["clause"] for c in clauses)
+
+
+@pytest.mark.asyncio
+async def test_analyze_clauses_injects_jurisdiction_into_prompt():
+    """The jurisdiction parameter must reach the prompt sent to the model."""
+    captured_messages = {}
+
+    async def fake_execute(model_name, messages):
+        captured_messages["messages"] = messages
+        return Mock(output='[{"clause": "Test", "riskLevel": "High", "riskReason": "Test"}]')
+
+    with patch.object(ai_service, "stub_mode", False):
+        with patch.object(ai_service, "_execute_with_retry_and_timeout", side_effect=fake_execute):
+            await ai_service.analyze_clauses("Some clause text.", jurisdiction="California Law")
+            prompt_content = captured_messages["messages"][0]["content"]
+            assert "California Law" in prompt_content
+
+
+@pytest.mark.asyncio
+async def test_analyze_clauses_default_jurisdiction_when_unspecified():
+    """Omitting jurisdiction should fall back to the general default, matching chat/compare."""
+    captured_messages = {}
+
+    async def fake_execute(model_name, messages):
+        captured_messages["messages"] = messages
+        return Mock(output='[{"clause": "Test", "riskLevel": "High", "riskReason": "Test"}]')
+
+    with patch.object(ai_service, "stub_mode", False):
+        with patch.object(ai_service, "_execute_with_retry_and_timeout", side_effect=fake_execute):
+            await ai_service.analyze_clauses("Some clause text.")
+            prompt_content = captured_messages["messages"][0]["content"]
+            assert "General / Not Specified" in prompt_content
+
+
+@pytest.mark.asyncio
+async def test_analyze_clauses_endpoint_rejects_invalid_jurisdiction():
+    """POST /legal/analyze-clauses must reject an unsupported jurisdiction with 400."""
+    headers = {"x-api-key": "dev-token"}
+    payload = {"text": "Subscriber shall indemnify Provider.", "jurisdiction": "Nonexistent Legal System"}
+
+    with patch.dict(os.environ, {"STUB_MODE": "true", "ALLOW_DEV": "true", "JWT_SECRET_KEY": "testing-secret-key-1234567890-abcdef"}):
+        import backend.config
+        backend.config._settings = None
+        ai_service.__init__()
+        async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as ac:
+            r = await ac.post("/legal/analyze-clauses", json=payload, headers=headers)
+            assert r.status_code == status.HTTP_400_BAD_REQUEST
+        ai_service.__init__()

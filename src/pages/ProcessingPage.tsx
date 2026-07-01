@@ -171,10 +171,13 @@ export function ProcessingPage() {
 
         setFinalSummary(compiledBrief);
 
-        // Fetch clause-level risk assessment
+        // Fetch clause-level risk assessment, scoped to the user's selected
+        // jurisdiction so flagged clauses reflect jurisdiction-specific risk
+        // instead of generic, jurisdiction-agnostic rules.
         let analyzedClauses: any[] = [];
         try {
-          const response = await api.post<{ clauses: any[] }>('/legal/analyze-clauses', { text: extractedText });
+          const jurisdiction = localStorage.getItem('le_selected_jurisdiction') || 'General / Not Specified';
+          const response = await api.post<{ clauses: any[] }>('/legal/analyze-clauses', { text: extractedText, jurisdiction });
           analyzedClauses = response.clauses;
         } catch (clauseErr) {
           console.warn('Failed to analyze clauses, falling back to empty clauses array:', clauseErr);
