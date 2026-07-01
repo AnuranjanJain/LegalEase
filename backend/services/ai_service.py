@@ -268,32 +268,71 @@ class AIService:
                 logger.error(f"[{self._get_corr_id()}] Error in simplify generation, graceful degradation disabled: {e}")
                 raise
 
-    async def analyze_clauses(self, text: str) -> List[Dict[str, Any]]:
+    # Clause analysis prompt template, with placeholders for the jurisdiction
+    # and document excerpt so we can measure fixed overhead and budget chunks.
+    _CLAUSE_ANALYSIS_INSTRUCTIONS_TEMPLATE = (
+        "Analyze the following legal text and extract up to 5 key clauses, "
+        "strictly according to the laws and regulations of: {jurisdiction}. "
+        "For each clause, assign a riskLevel ('High', 'Medium', or 'Low') and a riskReason "
+        "explaining the risk assignment. If a clause may be invalid or unenforceable under this "
+        "jurisdiction, state that explicitly in the riskReason. Additionally, assign a "
+        "liability_score from 1 to 100 representing the severity.\n\n"
+        "You MUST respond ONLY with a valid JSON array of objects, where each object has these exact keys:\n"
+        "  - \"clause\": the exact text of the contract clause\n"
+        "  - \"riskLevel\": the assigned risk level ('High', 'Medium', 'Low')\n"
+        "  - \"riskReason\": a brief explanation of why this risk level was assigned\n"
+        "  - \"liability_score\": integer from 1 to 100\n\n"
+        "Do not include any other commentary, markdown formatting (outside of valid JSON structure), "
+        "or conversational filler. Output must be parsable as JSON.\n\n"
+        "Text to analyze:\n"
+    )
+
+    # Hard cap on how many chunks a single document is split into, so an
+    # extremely long upload cannot trigger unbounded AI calls / cost.
+    _MAX_CLAUSE_ANALYSIS_CHUNKS = 5
+
+    def _build_clause_analysis_prompt(self, text_chunk: str, jurisdiction: str) -> str:
+        return self._CLAUSE_ANALYSIS_INSTRUCTIONS_TEMPLATE.format(jurisdiction=jurisdiction) + text_chunk
+
+    def _chunk_text_for_clause_analysis(self, text: str, jurisdiction: str = "General / Not Specified") -> List[str]:
+        """
+        Split document text into chunks that fit the model's input budget,
+        so clauses that appear later in a long document are still analyzed
+        instead of being silently dropped by a single tail truncation.
+        """
+        overhead = len(self._CLAUSE_ANALYSIS_INSTRUCTIONS_TEMPLATE.format(jurisdiction=jurisdiction))
+        budget = max(self.max_model_input_chars - overhead, 500)
+
+        if len(text) <= budget:
+            return [text]
+
+        chunks = [text[i:i + budget] for i in range(0, len(text), budget)]
+        if len(chunks) > self._MAX_CLAUSE_ANALYSIS_CHUNKS:
+            logger.info(
+                f"[{self._get_corr_id()}] Document split into {len(chunks)} chunks, "
+                f"capping to {self._MAX_CLAUSE_ANALYSIS_CHUNKS} for clause analysis."
+            )
+            chunks = chunks[:self._MAX_CLAUSE_ANALYSIS_CHUNKS]
+        return chunks
+
+    async def analyze_clauses(
+        self, text: str, jurisdiction: str = "General / Not Specified"
+    ) -> List[Dict[str, Any]]:
         """
         Analyze contract clauses and extract key clauses with risk levels and reasons.
+
+        Long documents are split into chunks that each fit the model's input
+        budget, and analyzed separately, so clauses near the end of a long
+        contract are not silently dropped by a single tail truncation.
+
+        jurisdiction:
+            Legal jurisdiction context, matching the same parameter already
+            used by generate_chat_response and the comparison service, so
+            risk assessment reflects jurisdiction-specific enforceability
+            instead of generic, jurisdiction-agnostic rules.
         """
         if not text or not text.strip():
             return []
-
-        prompt = (
-            "Analyze the following legal text and extract up to 5 key clauses. "
-            "For each clause, assign a riskLevel ('High', 'Medium', or 'Low') and a riskReason "
-            "explaining the risk assignment. Additionally, assign a liability_score from 1 to 100 representing the severity.\n\n"
-            "You MUST respond ONLY with a valid JSON array of objects, where each object has these exact keys:\n"
-            "  - \"clause\": the exact text of the contract clause\n"
-            "  - \"riskLevel\": the assigned risk level ('High', 'Medium', 'Low')\n"
-            "  - \"riskReason\": a brief explanation of why this risk level was assigned\n"
-            "  - \"liability_score\": integer from 1 to 100\n\n"
-            "Do not include any other commentary, markdown formatting (outside of valid JSON structure), "
-            "or conversational filler. Output must be parsable as JSON.\n\n"
-            f"Text to analyze:\n{text}"
-        )
-
-        # Truncation for model input constraints
-        if len(prompt) > self.max_model_input_chars:
-            prompt = prompt[:self.max_model_input_chars]
-
-        messages = [{"role": "user", "content": prompt}]
 
         # Check for stub mode
         if self.stub_mode:
@@ -318,12 +357,28 @@ class AIService:
                 }
             ]
 
-        try:
-            output = await self._execute_with_retry_and_timeout(self.chat_model_name, messages)
-            response_text = output.output if hasattr(output, 'output') else str(output)
-            return self._parse_clauses_json(response_text)
-        except Exception as e:
-            logger.error(f"[{self._get_corr_id()}] Clause analysis failed: {e}")
+        chunks = self._chunk_text_for_clause_analysis(text, jurisdiction)
+        all_clauses: List[Dict[str, Any]] = []
+        seen_clauses = set()
+        last_error: Optional[Exception] = None
+
+        for chunk in chunks:
+            prompt = self._build_clause_analysis_prompt(chunk, jurisdiction)
+            messages = [{"role": "user", "content": prompt}]
+            try:
+                output = await self._execute_with_retry_and_timeout(self.chat_model_name, messages)
+                response_text = output.output if hasattr(output, 'output') else str(output)
+                chunk_clauses = self._parse_clauses_json(response_text)
+                for clause in chunk_clauses:
+                    key = clause.get("clause")
+                    if key and key not in seen_clauses:
+                        seen_clauses.add(key)
+                        all_clauses.append(clause)
+            except Exception as e:
+                logger.error(f"[{self._get_corr_id()}] Clause analysis failed for a chunk: {e}")
+                last_error = e
+
+        if not all_clauses and last_error is not None:
             if self.graceful_degradation:
                 # Return standard fallback clauses
                 return [
@@ -333,7 +388,9 @@ class AIService:
                         "riskReason": "Unilateral termination rights may negatively impact the user (fallback)."
                     }
                 ]
-            raise
+            raise last_error
+
+        return all_clauses
 
     def _extract_json_array_balanced(self, text: str) -> Optional[str]:
         """

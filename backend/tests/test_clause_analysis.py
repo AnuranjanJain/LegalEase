@@ -347,9 +347,129 @@ async def test_ai_service_analyze_clauses_markdown_output():
 async def test_ai_service_analyze_clauses_with_explanatory_text():
     """Test analyze_clauses with explanatory text around JSON"""
     mock_run = Mock(output='Here are the clauses:\n[{"clause": "Test", "riskLevel": "High", "riskReason": "Test"}]\nHope this helps.')
-    
+
     with patch.object(ai_service, "_execute_with_retry_and_timeout", return_value=mock_run):
         with patch.object(ai_service, "stub_mode", False):
             clauses = await ai_service.analyze_clauses("Some text")
             assert len(clauses) == 1
             assert clauses[0]["clause"] == "Test"
+
+
+@pytest.mark.unit
+def test_chunk_text_for_clause_analysis_short_text_single_chunk():
+    """Short documents should not be split at all."""
+    with patch.object(ai_service, "max_model_input_chars", 5000):
+        chunks = ai_service._chunk_text_for_clause_analysis("Short contract text.")
+        assert len(chunks) == 1
+        assert chunks[0] == "Short contract text."
+
+
+@pytest.mark.unit
+def test_chunk_text_for_clause_analysis_long_text_multiple_chunks():
+    """Long documents should be split into multiple chunks instead of truncated."""
+    with patch.object(ai_service, "max_model_input_chars", 2000):
+        long_text = "Clause text. " * 200  # ~2600 chars
+        chunks = ai_service._chunk_text_for_clause_analysis(long_text)
+        assert len(chunks) > 1
+        # Every character of the original document must be preserved across chunks.
+        assert "".join(chunks) == long_text
+
+
+@pytest.mark.unit
+def test_chunk_text_for_clause_analysis_caps_chunk_count():
+    """An extremely long document is capped to avoid unbounded AI calls."""
+    with patch.object(ai_service, "max_model_input_chars", 600):
+        huge_text = "Clause text. " * 5000  # ~65000 chars
+        chunks = ai_service._chunk_text_for_clause_analysis(huge_text)
+        assert len(chunks) == ai_service._MAX_CLAUSE_ANALYSIS_CHUNKS
+
+
+@pytest.mark.asyncio
+async def test_analyze_clauses_merges_results_across_chunks():
+    """Clauses found in later chunks of a long document must not be dropped."""
+    call_count = {"n": 0}
+
+    async def fake_execute(model_name, messages):
+        call_count["n"] += 1
+        clause_text = f"Clause from chunk {call_count['n']}"
+        return Mock(output=f'[{{"clause": "{clause_text}", "riskLevel": "High", "riskReason": "Test"}}]')
+
+    with patch.object(ai_service, "max_model_input_chars", 1000):
+        with patch.object(ai_service, "stub_mode", False):
+            with patch.object(ai_service, "_execute_with_retry_and_timeout", side_effect=fake_execute):
+                long_text = "Clause text. " * 200
+                clauses = await ai_service.analyze_clauses(long_text)
+                assert len(clauses) == call_count["n"]
+                assert call_count["n"] > 1
+                assert clauses[0]["clause"] == "Clause from chunk 1"
+                assert clauses[-1]["clause"] == f"Clause from chunk {call_count['n']}"
+
+
+@pytest.mark.asyncio
+async def test_analyze_clauses_partial_chunk_failure_keeps_successful_results():
+    """If one chunk's AI call fails, clauses from other chunks are still returned."""
+    call_count = {"n": 0}
+
+    async def fake_execute(model_name, messages):
+        call_count["n"] += 1
+        if call_count["n"] == 1:
+            raise RuntimeError("Provider error on first chunk")
+        clause_text = f"Clause from chunk {call_count['n']}"
+        return Mock(output=f'[{{"clause": "{clause_text}", "riskLevel": "High", "riskReason": "Test"}}]')
+
+    with patch.object(ai_service, "max_model_input_chars", 1000):
+        with patch.object(ai_service, "stub_mode", False):
+            with patch.object(ai_service, "_execute_with_retry_and_timeout", side_effect=fake_execute):
+                long_text = "Clause text. " * 200
+                clauses = await ai_service.analyze_clauses(long_text)
+                assert call_count["n"] > 1
+                assert len(clauses) == call_count["n"] - 1
+                assert all("Clause from chunk" in c["clause"] for c in clauses)
+
+
+@pytest.mark.asyncio
+async def test_analyze_clauses_injects_jurisdiction_into_prompt():
+    """The jurisdiction parameter must reach the prompt sent to the model."""
+    captured_messages = {}
+
+    async def fake_execute(model_name, messages):
+        captured_messages["messages"] = messages
+        return Mock(output='[{"clause": "Test", "riskLevel": "High", "riskReason": "Test"}]')
+
+    with patch.object(ai_service, "stub_mode", False):
+        with patch.object(ai_service, "_execute_with_retry_and_timeout", side_effect=fake_execute):
+            await ai_service.analyze_clauses("Some clause text.", jurisdiction="California Law")
+            prompt_content = captured_messages["messages"][0]["content"]
+            assert "California Law" in prompt_content
+
+
+@pytest.mark.asyncio
+async def test_analyze_clauses_default_jurisdiction_when_unspecified():
+    """Omitting jurisdiction should fall back to the general default, matching chat/compare."""
+    captured_messages = {}
+
+    async def fake_execute(model_name, messages):
+        captured_messages["messages"] = messages
+        return Mock(output='[{"clause": "Test", "riskLevel": "High", "riskReason": "Test"}]')
+
+    with patch.object(ai_service, "stub_mode", False):
+        with patch.object(ai_service, "_execute_with_retry_and_timeout", side_effect=fake_execute):
+            await ai_service.analyze_clauses("Some clause text.")
+            prompt_content = captured_messages["messages"][0]["content"]
+            assert "General / Not Specified" in prompt_content
+
+
+@pytest.mark.asyncio
+async def test_analyze_clauses_endpoint_rejects_invalid_jurisdiction():
+    """POST /legal/analyze-clauses must reject an unsupported jurisdiction with 400."""
+    headers = {"x-api-key": "dev-token"}
+    payload = {"text": "Subscriber shall indemnify Provider.", "jurisdiction": "Nonexistent Legal System"}
+
+    with patch.dict(os.environ, {"STUB_MODE": "true", "ALLOW_DEV": "true", "JWT_SECRET_KEY": "testing-secret-key-1234567890-abcdef"}):
+        import backend.config
+        backend.config._settings = None
+        ai_service.__init__()
+        async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as ac:
+            r = await ac.post("/legal/analyze-clauses", json=payload, headers=headers)
+            assert r.status_code == status.HTTP_400_BAD_REQUEST
+        ai_service.__init__()
