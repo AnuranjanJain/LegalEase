@@ -103,6 +103,34 @@ def validate_mime_and_bytes(content: bytes, content_type: str, filename: str):
     elif file_extension == ".docx":
         if not content.startswith(b"PK\x03\x04"):
             raise ValidationError("File content signature does not match DOCX structure (ZIP archive)")
+    elif file_extension == ".txt":
+        # .txt has no magic bytes to check, so a renamed binary, script, or
+        # executable disguised as text would otherwise pass through with no
+        # content-level validation at all. Reject anything that isn't
+        # actually decodable plain text.
+        #
+        # Callers may only pass a size-limited prefix of the file, which can
+        # end mid-way through a multi-byte UTF-8 character. Trim up to 3
+        # trailing bytes (the longest a UTF-8 character can be) before
+        # giving up, so a truncated prefix doesn't cause a false rejection.
+        if b"\x00" in content:
+            raise ValidationError("File content contains binary data and is not valid plain text")
+
+        decoded = None
+        for trim in range(0, 4):
+            probe = content[: len(content) - trim] if trim else content
+            try:
+                decoded = probe.decode("utf-8")
+                break
+            except UnicodeDecodeError:
+                continue
+        if decoded is None:
+            raise ValidationError("File content is not valid UTF-8 plain text")
+
+        if decoded:
+            control_chars = sum(1 for c in decoded if ord(c) < 32 and c not in "\n\r\t")
+            if control_chars / len(decoded) > 0.01:
+                raise ValidationError("File content contains excessive non-printable characters and is not valid plain text")
 
 def validate_docx_archive_safety(file_path: str):
     """
