@@ -842,3 +842,36 @@ def extract_jwt_from_authorization(request: Request) -> Optional[str]:
 def extract_api_key(request: Request) -> Optional[str]:
     """Helper alias for backward compatibility with older test suites."""
     return _extract_api_key(request)
+
+
+def authenticate_websocket_token(token: Optional[str], db: Session) -> Optional[AuthIdentity]:
+    """
+    Validate a JWT passed as a WebSocket query parameter and return the
+    matching AuthIdentity, or None if the token is missing or invalid.
+
+    Browser WebSocket clients cannot set custom Authorization headers, so
+    the token is passed as `?token=...` on the connection URL instead. This
+    mirrors get_current_user's JWT validation (signature, expiry, and
+    revocation checks) without depending on FastAPI's header-based
+    OAuth2PasswordBearer dependency, which only works for regular HTTP
+    requests.
+    """
+    if not token:
+        return None
+
+    secret_key = _require_secret_key()
+    try:
+        payload = jwt.decode(token, secret_key, algorithms=[ALGORITHM])
+        email: Optional[str] = payload.get("sub")
+        if email is None:
+            return None
+        jti: Optional[str] = payload.get("jti")
+        if jti and is_token_revoked(jti, db):
+            return None
+    except JWTError:
+        return None
+
+    user = db.query(models.User).filter(models.User.email == email).first()
+    if user is None:
+        return None
+    return AuthIdentity(identity_type="user", identifier=email, user=user)
