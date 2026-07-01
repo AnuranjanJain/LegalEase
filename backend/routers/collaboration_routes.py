@@ -13,7 +13,11 @@ import logging
 import asyncio
 from datetime import datetime
 from typing import Dict, Set, Optional
-from fastapi import APIRouter, WebSocket, WebSocketDisconnect, Query
+from fastapi import APIRouter, Depends, WebSocket, WebSocketDisconnect, Query, status
+from sqlalchemy.orm import Session
+
+from backend.auth import authenticate_websocket_token
+from backend.database import get_db
 
 logger = logging.getLogger(__name__)
 
@@ -110,8 +114,9 @@ manager = ConnectionManager()
 async def websocket_collaborate(
     websocket: WebSocket,
     room_id: str,
-    user_id: str = Query(...),
-    username: str = Query(default="Anonymous")
+    token: Optional[str] = Query(default=None),
+    username: str = Query(default="Anonymous"),
+    db: Session = Depends(get_db),
 ):
     """
     WebSocket endpoint for real-time document collaboration.
@@ -120,7 +125,21 @@ async def websocket_collaborate(
       - Send cursor position updates
       - Send document edits
       - Receive broadcasts of other users' cursors and edits
+
+    Requires a valid JWT passed as `?token=...` (browser WebSocket clients
+    cannot set custom Authorization headers). The connecting user's identity
+    is derived from the validated token rather than trusted from client
+    input, so a client can no longer join any room and impersonate an
+    arbitrary user_id. `username` remains a client-supplied display label
+    only, not a security boundary.
     """
+    identity = authenticate_websocket_token(token, db)
+    if identity is None:
+        await websocket.close(code=status.WS_1008_POLICY_VIOLATION, reason="Authentication required")
+        return
+
+    user_id = identity.identifier
+
     await manager.connect(websocket, room_id, user_id, username)
     try:
         while True:
