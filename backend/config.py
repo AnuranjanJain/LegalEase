@@ -517,9 +517,9 @@ class ComparisonConfig(BaseSettings):
 
 class CORSConfig(BaseSettings):
     """CORS configuration."""
-    
+
     model_config = ConfigDict(env_prefix="", case_sensitive=False)
-    
+
     allowed_origins: str = Field(
         default="http://localhost:5173",
         description="Comma-separated list of allowed CORS origins."
@@ -527,6 +527,23 @@ class CORSConfig(BaseSettings):
     frontend_url: str = Field(
         default="http://localhost:5173",
         description="Frontend URL for CORS (fallback for allowed_origins)."
+    )
+
+
+class EncryptionConfig(BaseSettings):
+    """Configuration for at-rest encryption of stored contract content."""
+
+    model_config = ConfigDict(env_prefix="", case_sensitive=False)
+
+    document_encryption_key: Optional[str] = Field(
+        default=None,
+        description=(
+            "Secret used to derive the key that encrypts contract content at "
+            "rest (document summaries, clause analysis, chat messages). If "
+            "unset, a key is derived from JWT_SECRET_KEY instead so the app "
+            "still runs, but a dedicated key is strongly recommended in "
+            "production."
+        ),
     )
 
 
@@ -553,6 +570,7 @@ class Settings(BaseSettings):
     ai: AIConfig = Field(default_factory=AIConfig)
     comparison: ComparisonConfig = Field(default_factory=ComparisonConfig)
     cors: CORSConfig = Field(default_factory=CORSConfig)
+    encryption: EncryptionConfig = Field(default_factory=EncryptionConfig)
 
     @model_validator(mode="before")
     @classmethod
