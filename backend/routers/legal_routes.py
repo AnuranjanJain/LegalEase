@@ -6,7 +6,7 @@ from pydantic import BaseModel, Field
 from typing import List, Dict, Any, Optional
 from sqlalchemy.orm import Session
 
-from backend.auth import get_current_user, AuthIdentity
+from backend.auth import validate_token_or_api_key, AuthIdentity
 from backend.database import get_db
 from backend import models
 from backend.services.legal_mapping import map_problem_to_sections
@@ -76,7 +76,7 @@ async def map_problem(request: ProblemRequest):
 @router.post("/analyze-clauses", response_model=ClauseAnalysisResponse)
 async def analyze_clauses(
     request: ClauseAnalysisRequest,
-    current_user:AuthIdentity = Depends(get_current_user),
+    current_user:AuthIdentity = Depends(validate_token_or_api_key),
     db: Session = Depends(get_db),
 ):
     try:
@@ -124,7 +124,7 @@ async def analyze_clauses(
 @router.get("/documents/{document_id}/clauses", response_model=ClauseAnalysisResponse)
 def get_cached_clauses(
     document_id: int,
-    current_user: AuthIdentity = Depends(get_current_user),
+    current_user: AuthIdentity = Depends(validate_token_or_api_key),
     db: Session = Depends(get_db),
 ):
     """
