@@ -9,6 +9,8 @@ from sqlalchemy.orm import Session
 from backend.auth import validate_token_or_api_key, AuthIdentity
 from backend.database import get_db
 from backend import models
+from backend.core.validation import validate_jurisdiction
+from backend.core.exceptions import ValidationError
 from backend.services.legal_mapping import map_problem_to_sections
 from backend.services.ai_service import ai_service
 from backend.services.entity_extraction import extract_entities
@@ -17,6 +19,8 @@ from backend.services.langgraph_service import run_agent
 from backend.services.hybrid_search import get_hybrid_results
 from backend.utils.limiter import SimpleRateLimiter
 from backend.config import get_settings
+
+DEFAULT_JURISDICTION = "General / Not Specified"
 
 router = APIRouter(prefix="/legal", tags=["legal"])
 
@@ -49,6 +53,7 @@ class MappingResponse(BaseModel):
 class ClauseAnalysisRequest(BaseModel):
     text: str
     document_id: Optional[int] = None
+    jurisdiction: str = DEFAULT_JURISDICTION
 
 class ClauseAnalysisItem(BaseModel):
     clause: str
@@ -90,10 +95,21 @@ async def analyze_clauses(
     db: Session = Depends(get_db),
 ):
     try:
+        validate_jurisdiction(request.jurisdiction)
+    except ValidationError as exc:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc))
+
+    try:
+        # Cached results are jurisdiction-agnostic (stored under the default
+        # jurisdiction), so only serve/populate the cache for that case.
+        # A jurisdiction-specific request always goes through fresh AI
+        # inference, otherwise a cached "General" analysis would be silently
+        # reused for a jurisdiction-specific risk assessment.
+        is_cacheable = request.jurisdiction == DEFAULT_JURISDICTION
         user_id = current_user.get_user_id()
 
         # If a document_id is supplied, check for a cached result first
-        if request.document_id and user_id:
+        if is_cacheable and request.document_id and user_id:
             doc = (
                 db.query(models.DocumentRecord)
                 .filter(
@@ -107,8 +123,8 @@ async def analyze_clauses(
                 return {"clauses": json.loads(doc.clause_analysis)}
 
         # Run AI inference
-        clauses = await ai_service.analyze_clauses(request.text)
-        if request.document_id and user_id:
+        clauses = await ai_service.analyze_clauses(request.text, jurisdiction=request.jurisdiction)
+        if is_cacheable and request.document_id and user_id:
             doc = (
                 db.query(models.DocumentRecord)
                 .filter(
