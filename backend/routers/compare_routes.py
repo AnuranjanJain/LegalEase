@@ -31,6 +31,7 @@ from pydantic import BaseModel, Field, field_validator
 from backend.auth import validate_token_or_api_key, AuthIdentity
 from backend.core.validation import sanitize_text, validate_jurisdiction
 from backend.services.comparison_service import comparison_service, MAX_DOCUMENTS
+from backend.services.diff_service import compute_diff
 from backend.services.ai_service import correlation_id_var
 from backend.utils.limiter import SimpleRateLimiter
 from backend.config import get_settings
@@ -277,4 +278,65 @@ async def check_conflicts(
             status_code=status.HTTP_502_BAD_GATEWAY,
             detail="The AI contradiction service encountered an error. Please try again.",
         )
+
+
+class DiffRequest(BaseModel):
+    original_document: DocumentPayload
+    revised_document: DocumentPayload
+
+
+class DiffSegment(BaseModel):
+    type: str
+    text: str
+
+
+class DiffStats(BaseModel):
+    added_words: int
+    removed_words: int
+    unchanged_words: int
+    similarity_ratio: float
+
+
+class DiffResponse(BaseModel):
+    segments: List[DiffSegment]
+    stats: DiffStats
+
+
+@router.post(
+    "/diff",
+    response_model=DiffResponse,
+    summary="Word-level structural diff between two document versions",
+    description=(
+        "Computes an exact, deterministic word-level diff between two "
+        "versions of a document, returning ordered added/removed/unchanged "
+        "segments. This is a non-AI, non-streaming endpoint suitable for a "
+        "track-changes style comparison view."
+    ),
+)
+async def compare_diff(
+    request: Request,
+    payload: DiffRequest,
+    identity: AuthIdentity = Depends(validate_token_or_api_key),
+) -> DiffResponse:
+    corr_id = correlation_id_var.get()
+
+    # Rate limiting (reuse comparison limiter; diffing is cheap but still bounded)
+    if not _compare_limiter.check(identity.get_rate_limit_key())["allowed"]:
+        raise HTTPException(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            detail="Comparison rate limit exceeded. Please wait before retrying.",
+        )
+
+    original_text = sanitize_text(payload.original_document.text) if payload.original_document.text else ""
+    revised_text = sanitize_text(payload.revised_document.text) if payload.revised_document.text else ""
+
+    logger.info(
+        "[%s] Diff request, original length %d, revised length %d",
+        corr_id,
+        len(original_text),
+        len(revised_text),
+    )
+
+    result = compute_diff(original_text, revised_text)
+    return DiffResponse(**result)
 

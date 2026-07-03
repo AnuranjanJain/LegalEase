@@ -17,10 +17,20 @@ from backend.services.entity_extraction import extract_entities
 from backend.services.search_service import perform_web_search
 from backend.services.langgraph_service import run_agent
 from backend.services.hybrid_search import get_hybrid_results
+from backend.utils.limiter import SimpleRateLimiter
+from backend.config import get_settings
 
 DEFAULT_JURISDICTION = "General / Not Specified"
 
 router = APIRouter(prefix="/legal", tags=["legal"])
+
+# Reuses the same per-identity rate limiting pattern already established for
+# /chat, /simplify, and /compare, scoped to this router's AI endpoints.
+_settings = get_settings()
+_redline_limiter = SimpleRateLimiter(
+    calls=_settings.rate_limit.rate_limit_key_calls,
+    period=_settings.rate_limit.rate_limit_period,
+)
 
 
 class ProblemRequest(BaseModel):
@@ -223,4 +233,42 @@ async def perform_hybrid_search(request: HybridSearchRequest):
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=str(e),
+        )
+
+
+class RedlineSuggestionRequest(BaseModel):
+    clause: str = Field(..., min_length=1, max_length=20_000)
+    risk_reason: str = Field(default="", max_length=2_000)
+    jurisdiction: str = "General / Not Specified"
+
+
+class RedlineSuggestionResponse(BaseModel):
+    original_text: str
+    suggested_text: str
+
+
+@router.post("/suggest-redline", response_model=RedlineSuggestionResponse)
+async def suggest_redline(
+    request: RedlineSuggestionRequest,
+    identity: AuthIdentity = Depends(validate_token_or_api_key),
+):
+    """
+    Suggest an alternative, less risky phrasing for a single contract clause,
+    typically one already flagged by /analyze-clauses. The response is shaped
+    to be passed directly to /export/redline-docx.
+    """
+    if not _redline_limiter.check(identity.get_rate_limit_key())["allowed"]:
+        raise HTTPException(status_code=status.HTTP_429_TOO_MANY_REQUESTS, detail="Rate limit exceeded")
+
+    try:
+        suggested_text = await ai_service.suggest_redline(
+            clause_text=request.clause,
+            risk_reason=request.risk_reason,
+            jurisdiction=request.jurisdiction,
+        )
+        return RedlineSuggestionResponse(original_text=request.clause, suggested_text=suggested_text)
+    except Exception:
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail="The AI redline suggestion service encountered an error. Please try again.",
         )

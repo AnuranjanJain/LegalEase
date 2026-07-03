@@ -567,9 +567,18 @@ async def _process_document_background(
         logger.info(f"Background processing complete for task {task_id} ({filename})")
     except Exception as e:
         logger.error(f"Background processing failed for task {task_id}: {e}", exc_info=True)
+        # Controlled HTTPExceptions (e.g. "file too complex", from
+        # _run_bounded_parser) carry a safe, user-facing detail message.
+        # Anything else is an unexpected internal error, so its raw message
+        # (which may contain file paths or library internals) must not be
+        # returned to the client via /upload/status/{task_id}.
+        if isinstance(e, HTTPException):
+            error_message = str(e.detail)
+        else:
+            error_message = "Failed to process the uploaded document. Please try again or use a different file."
         _upload_tasks[task_id]["status"] = "failed"
         _upload_tasks[task_id]["progress"] = 0
-        _upload_tasks[task_id]["result"] = {"error": str(e)}
+        _upload_tasks[task_id]["result"] = {"error": error_message}
     finally:
         if os.path.exists(temp_path):
             try:
