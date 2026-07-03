@@ -232,6 +232,54 @@ class AIService:
                 logger.error(f"[{self._get_corr_id()}] Error in summary generation, graceful degradation disabled: {e}")
                 raise
 
+    async def suggest_redline(
+        self, clause_text: str, risk_reason: str = "", jurisdiction: str = "General / Not Specified"
+    ) -> str:
+        """
+        Suggest an alternative, less risky phrasing for a contract clause.
+
+        Intended to run on a single clause already flagged by analyze_clauses,
+        so the output can be fed directly into the redline DOCX export
+        (original_text / suggested_text).
+        """
+        if not clause_text or not clause_text.strip():
+            return ""
+
+        risk_context = f"\n\nThis clause was flagged with the following concern: {risk_reason}" if risk_reason else ""
+        prompt = (
+            "You are a contract negotiation assistant. Rewrite the following clause to reduce risk "
+            "for the party reviewing the contract, while preserving its core commercial intent and "
+            f"remaining valid under the laws of: {jurisdiction}. "
+            "Keep the rewritten clause concise and in formal legal language.\n\n"
+            "Respond with ONLY the rewritten clause text. Do not include any explanation, "
+            "commentary, markdown formatting, or conversational filler.\n"
+            f"{risk_context}\n\n"
+            f"Original clause:\n{clause_text}"
+        )
+
+        if len(prompt) > self.max_model_input_chars:
+            logger.info(f"[{self._get_corr_id()}] Redline prompt length ({len(prompt)}) exceeds max limit ({self.max_model_input_chars}). Truncating.")
+            prompt = prompt[:self.max_model_input_chars]
+
+        messages = [{"role": "user", "content": prompt}]
+
+        if self.stub_mode:
+            return f"[STUB REDLINE SUGGESTION] Revised version of: {clause_text[:80]}"
+
+        try:
+            output = await self._execute_with_retry_and_timeout(self.chat_model_name, messages)
+            suggestion = output.output if hasattr(output, 'output') else str(output)
+            return suggestion.strip()
+        except Exception as e:
+            if self.graceful_degradation:
+                logger.info(f"[{self._get_corr_id()}] Graceful degradation fallback activated for redline suggestion error: {e}")
+                return (
+                    "Unable to generate an automated redline suggestion right now. "
+                    "Please review this clause manually and consult qualified legal counsel before relying on it."
+                )
+            logger.error(f"[{self._get_corr_id()}] Error in redline suggestion, graceful degradation disabled: {e}")
+            raise
+
     async def simplify_clause(self, text: str) -> str:
         """
         Simplify the legal text into plain English.
