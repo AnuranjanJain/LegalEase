@@ -303,6 +303,14 @@ class RateLimitConfig(BaseSettings):
         default=False,
         description="Trust X-Forwarded-* headers for client IP detection."
     )
+    require_redis_in_production: bool = Field(
+        default=False,
+        description="Require Redis for rate limiting in production environment. When enabled, application will fail to start if Redis is unavailable in production."
+    )
+    redis_fail_fast: bool = Field(
+        default=False,
+        description="Fail fast if Redis initialization fails. When enabled, application will fail to start if Redis URL is configured but connection fails."
+    )
     
     # Authentication rate limits
     auth_login_rate_limit: int = Field(
@@ -351,6 +359,22 @@ class RateLimitConfig(BaseSettings):
         default=60,
         description="Rate limit period for comparison requests in seconds."
     )
+    
+    @model_validator(mode='after')
+    def validate_redis_config_environment(self):
+        """Ensure Redis configuration is appropriate for environment."""
+        environment = os.getenv("ENVIRONMENT", "production")
+        
+        if environment == "production" and self.require_redis_in_production:
+            redis_url = os.getenv("REDIS_URL")
+            if not redis_url:
+                logger.warning(
+                    "REQUIRE_REDIS_IN_PRODUCTION is enabled but REDIS_URL is not set. "
+                    "Rate limiting will use in-memory storage, which is not suitable for distributed deployments. "
+                    "Set REDIS_URL or disable REQUIRE_REDIS_IN_PRODUCTION."
+                )
+        
+        return self
     
     @field_validator('rate_limit_period', 'auth_login_rate_period', 
                    'auth_login_failed_attempt_period', 'auth_login_lockout_duration',
