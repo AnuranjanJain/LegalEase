@@ -9,6 +9,7 @@ import { StorageService } from '../services/storage';
 import { useToast } from '../contexts/ToastContext';
 import { useRedactedText } from '../hooks/useRedactedText';
 import { useRedaction } from '../contexts/RedactionContext';
+import { useCompliance } from '../contexts/ComplianceContext';
 import { RedactedText } from '../components/RedactedText';
 import { ReadabilityScore } from '../components/ReadabilityScore';
 
@@ -58,6 +59,7 @@ export function ProcessingPage() {
   // Apply PII redaction to the live preview (original summary kept in state)
   const redactedSummary = useRedactedText(finalSummary);
   const { isRedactionEnabled } = useRedaction();
+  const { requireCompliance } = useCompliance();
 
   // Run the document processing pipeline
   useEffect(() => {
@@ -196,8 +198,10 @@ export function ProcessingPage() {
       }
     };
 
-    executePipeline();
-  }, [docId, file, showToast]);
+    requireCompliance(() => {
+      executePipeline();
+    });
+  }, [docId, file, showToast, requireCompliance]);
 
   const handleExportPDF = async () => {
     if (!finalSummary) {
