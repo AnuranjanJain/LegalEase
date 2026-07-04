@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import { Bot, User, Scale, Play, CheckCircle, AlertTriangle, RefreshCcw, FileText } from 'lucide-react';
 import { NegotiationService, NegotiationMessage, FinalCompromiseDraft } from '../services/negotiationService';
 import { useToast } from '../contexts/ToastContext';
@@ -176,7 +176,7 @@ export function SimulationRoom() {
                     <div className="w-32 h-2 bg-gray-200 dark:bg-gray-600 rounded-full overflow-hidden">
                       <div 
                         className="h-full bg-purple-500" 
-                        style={{ width: \`\${finalDraft.resilienceScore}%\` }}
+                        style={{ width: `${finalDraft.resilienceScore}%` }}
                       />
                     </div>
                     <span className="text-sm font-bold text-gray-900 dark:text-white">

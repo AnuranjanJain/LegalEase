@@ -29,7 +29,7 @@ export class NegotiationService {
   /**
    * Evaluates the initial contract text to flag loopholes (Opposing Counsel)
    */
-  static async startNegotiation(clauseId: string, text: string): Promise<NegotiationMessage> {
+  static async startNegotiation(_clauseId: string, text: string): Promise<NegotiationMessage> {
     const prompt = `As Opposing Counsel, analyze the following legal clause and flag any liability loopholes, vague compliance parameters, or unfavorable indemnification allocations. Clause: "${text}"`;
     
     // Using the generic chat endpoint to simulate the agent
@@ -49,7 +49,7 @@ export class NegotiationService {
   /**
    * Originating Counsel responds to objections
    */
-  static async counterProposal(clauseId: string, text: string, objections: string): Promise<NegotiationMessage> {
+  static async counterProposal(_clauseId: string, text: string, objections: string): Promise<NegotiationMessage> {
     const prompt = `As Originating Counsel, review these objections: "${objections}". Draft a counter-argument and structural amendments to protect our client while addressing valid concerns.`;
     
     const response = await api.post<{ response: string }>('/chat', {
