@@ -11,7 +11,7 @@ import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import rehypeRaw from 'rehype-raw';
 import { JURISDICTIONS } from '../config/jurisdictions';
-
+import { FeedbackWidget } from '../components/FeedbackWidget';
 function makeGreeting(): ChatMessage {
   return {
     id: 'default-greeting',
@@ -1115,6 +1115,9 @@ export function ChatbotPage() {
                               </div>
                             )}
                           </div>
+                        )}
+                        {!isUser && msg.text && msg.id !== 'default-greeting' && !isTyping && (
+                          <FeedbackWidget responseType="chatbot" />
                         )}
                       </div>
 

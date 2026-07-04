@@ -11,6 +11,7 @@ import { useRedactedText } from '../hooks/useRedactedText';
 import { useRedaction } from '../contexts/RedactionContext';
 import { RedactedText } from '../components/RedactedText';
 import { ReadabilityScore } from '../components/ReadabilityScore';
+import { FeedbackWidget } from '../components/FeedbackWidget';
 
 // Word-based sliding window chunking algorithm
 function chunkText(text: string, windowSize: number = 2000, overlap: number = 200): string[] {
@@ -576,6 +577,7 @@ export function ProcessingPage() {
                         <RedactedText text={redactedSummary} />
                       </div>
                     </div>
+                    <FeedbackWidget responseType="summary" />
                   </div>
                   <ReadabilityScore originalText={originalText} summaryText={finalSummary} />
                 </>
