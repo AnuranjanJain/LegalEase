@@ -20,6 +20,8 @@ from backend.services.hybrid_search import get_hybrid_results
 from backend.utils.limiter import SimpleRateLimiter
 from backend.config import get_settings
 
+DEFAULT_JURISDICTION = "General / Not Specified"
+
 router = APIRouter(prefix="/legal", tags=["legal"])
 
 # These AI-powered endpoints previously had no auth requirement and no rate
@@ -31,6 +33,13 @@ _legal_ai_limiter = SimpleRateLimiter(
     period=_settings.rate_limit.rate_limit_period,
 )
 
+
+
+
+_redline_limiter = SimpleRateLimiter(
+    calls=_settings.rate_limit.rate_limit_key_calls,
+    period=_settings.rate_limit.rate_limit_period,
+)
 
 def _check_rate_limit(identity: AuthIdentity):
     if not _legal_ai_limiter.check(identity.get_rate_limit_key())["allowed"]:
