@@ -2,6 +2,7 @@ import { useState, useRef, useEffect } from 'react';
 import { Bot, User, Scale, Play, CheckCircle, AlertTriangle, RefreshCcw, FileText } from 'lucide-react';
 import { NegotiationService, NegotiationMessage, FinalCompromiseDraft } from '../services/negotiationService';
 import { useToast } from '../contexts/ToastContext';
+import { useCompliance } from '../contexts/ComplianceContext';
 
 export function SimulationRoom() {
   const [clauseText, setClauseText] = useState('In the event of a breach, the receiving party shall hold the disclosing party harmless against any and all claims, without limitation to time or monetary cap, including all indirect and consequential damages.');
@@ -9,21 +10,23 @@ export function SimulationRoom() {
   const [status, setStatus] = useState<'idle' | 'negotiating' | 'arbitrating' | 'complete'>('idle');
   const [finalDraft, setFinalDraft] = useState<FinalCompromiseDraft | null>(null);
   const { showToast } = useToast();
+  const { requireCompliance } = useCompliance();
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages, status]);
 
-  const startSimulation = async () => {
-    if (!clauseText.trim()) {
-      showToast("Please enter a legal clause to simulate.", "warning");
-      return;
-    }
-    
-    setMessages([]);
-    setFinalDraft(null);
-    setStatus('negotiating');
+  const startSimulation = () => {
+    requireCompliance(async () => {
+      if (!clauseText.trim()) {
+        showToast("Please enter a legal clause to simulate.", "warning");
+        return;
+      }
+      
+      setMessages([]);
+      setFinalDraft(null);
+      setStatus('negotiating');
     
     try {
       // Turn 1: Opposing Counsel
@@ -43,11 +46,12 @@ export function SimulationRoom() {
       setStatus('complete');
       showToast("Arbitration complete. Final draft ready.", "success");
       
-    } catch (err) {
-      console.error("Simulation failed:", err);
-      showToast("Simulation failed to complete. Please try again.", "error");
-      setStatus('idle');
-    }
+      } catch (err) {
+        console.error("Simulation failed:", err);
+        showToast("Simulation failed to complete. Please try again.", "error");
+        setStatus('idle');
+      }
+    });
   };
 
   const getRoleIcon = (role: string) => {
