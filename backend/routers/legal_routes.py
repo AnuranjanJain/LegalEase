@@ -66,6 +66,20 @@ class ClauseAnalysisResponse(BaseModel):
     clauses: List[ClauseAnalysisItem]
 
 
+class DeadlineExtractionRequest(BaseModel):
+    text: str
+
+
+class DeadlineItem(BaseModel):
+    title: str
+    date: str
+    description: str
+
+
+class DeadlineExtractionResponse(BaseModel):
+    deadlines: List[DeadlineItem]
+
+
 class AgentRequest(BaseModel):
     query: str
     documents: List[str] = []
@@ -146,7 +160,21 @@ async def analyze_clauses(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=str(e),
         )
-    
+
+@router.post("/extract-deadlines", response_model=DeadlineExtractionResponse)
+async def extract_deadlines(
+    request: DeadlineExtractionRequest,
+    current_user: AuthIdentity = Depends(validate_token_or_api_key)
+):
+    try:
+        deadlines = await ai_service.extract_deadlines(request.text)
+        return {"deadlines": deadlines}
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=str(e),
+        )
+
 @router.get("/documents/{document_id}/clauses", response_model=ClauseAnalysisResponse)
 def get_cached_clauses(
     document_id: int,

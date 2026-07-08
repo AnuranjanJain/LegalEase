@@ -12,6 +12,7 @@ import { useRedaction } from '../contexts/RedactionContext';
 import { useCompliance } from '../contexts/ComplianceContext';
 import { RedactedText } from '../components/RedactedText';
 import { ReadabilityScore } from '../components/ReadabilityScore';
+import { CalendarExportWidget } from '../components/CalendarExportWidget';
 
 // Word-based sliding window chunking algorithm
 function chunkText(text: string, windowSize: number = 2000, overlap: number = 200): string[] {
@@ -582,6 +583,7 @@ export function ProcessingPage() {
                     </div>
                   </div>
                   <ReadabilityScore originalText={originalText} summaryText={finalSummary} />
+                  <CalendarExportWidget documentText={originalText} />
                 </>
               )}
 

@@ -89,8 +89,8 @@ export class NegotiationService {
     try {
       // Basic JSON extraction to handle markdown blocks
       let jsonStr = response.response;
-      if (jsonStr.includes('\`\`\`json')) {
-        jsonStr = jsonStr.split('\`\`\`json')[1].split('\`\`\`')[0].trim();
+      if (jsonStr.includes('```json')) {
+        jsonStr = jsonStr.split('```json')[1].split('```')[0].trim();
       }
       return JSON.parse(jsonStr) as FinalCompromiseDraft;
     } catch (e) {
