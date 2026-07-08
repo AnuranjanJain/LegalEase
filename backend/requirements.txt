@@ -10,6 +10,7 @@ sqlalchemy
 psycopg2-binary  # Required only for PostgreSQL
 bcrypt
 python-jose[cryptography]
+cryptography
 email-validator
 redis
 reportlab
