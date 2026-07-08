@@ -6,7 +6,7 @@ from pydantic import BaseModel, Field
 from typing import List, Dict, Any, Optional
 from sqlalchemy.orm import Session
 
-from backend.auth import validate_token_or_api_key, AuthIdentity
+from backend.auth import validate_token_or_api_key, get_current_user, AuthIdentity
 from backend.database import get_db
 from backend import models
 from backend.core.validation import validate_jurisdiction
@@ -91,7 +91,7 @@ async def map_problem(request: ProblemRequest):
 @router.post("/analyze-clauses", response_model=ClauseAnalysisResponse)
 async def analyze_clauses(
     request: ClauseAnalysisRequest,
-    current_user:AuthIdentity = Depends(validate_token_or_api_key),
+    current_user: AuthIdentity = Depends(validate_token_or_api_key),
     db: Session = Depends(get_db),
 ):
     try:

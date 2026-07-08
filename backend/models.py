@@ -4,6 +4,7 @@ from sqlalchemy import Column, DateTime, ForeignKey, Integer, String, Text, Uniq
 from sqlalchemy.orm import relationship
 
 from backend.database import Base
+from backend.core.encryption import EncryptedText
 
 
 class User(Base):
@@ -37,7 +38,7 @@ class ChatMessage(Base):
     id = Column(Integer, primary_key=True, index=True)
     session_id = Column(Integer, ForeignKey("chat_sessions.id"), nullable=False, index=True)
     role = Column(String, nullable=False)  # 'user' or 'assistant'
-    content = Column(Text, nullable=False)
+    content = Column(EncryptedText, nullable=False)
     created_at = Column(DateTime, default=datetime.utcnow)
 
     # Conversation branching support (#366):
@@ -58,8 +59,8 @@ class DocumentRecord(Base):
     user_id = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
     filename = Column(String, nullable=False)
     file_type = Column(String, nullable=True)
-    summary = Column(Text, nullable=True)
-    clause_analysis = Column(Text, nullable=True)
+    summary = Column(EncryptedText, nullable=True)
+    clause_analysis = Column(EncryptedText, nullable=True)
     analyzed_at = Column(DateTime, nullable=True) 
     uploaded_at = Column(DateTime, default=datetime.utcnow)
 
