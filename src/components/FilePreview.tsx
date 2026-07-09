@@ -53,8 +53,9 @@ export function FilePreview({ file, onRemove }: FilePreviewProps) {
       <div className="flex-1 bg-gray-50 dark:bg-gray-900/50 flex items-center justify-center overflow-hidden border-b border-gray-200 dark:border-gray-700 p-2 relative">
         {isPdf && objectUrl ? (
           <div className="w-full h-full relative overflow-hidden pointer-events-none rounded">
-            <iframe
+            <embed
               src={getSafeIframeSrc()}
+              type="application/pdf"
               className="absolute top-0 left-0 w-[200%] h-[200%] origin-top-left scale-50"
               title={`Preview of ${file.name}`}
               style={{ border: 'none', background: 'transparent' }}
