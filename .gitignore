@@ -47,3 +47,4 @@ backend/coverage.xml
 backend/.flake8
 *.db
 pnpm-lock.yaml
+venv_test/  
