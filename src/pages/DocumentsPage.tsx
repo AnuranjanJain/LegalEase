@@ -16,9 +16,11 @@ import { useRedaction } from '../contexts/RedactionContext';
 import { redact } from '../utils/redaction';
 import { RedactedText } from '../components/RedactedText';
 import { DocumentCompareSelector } from '../components/DocumentCompareSelector';
+import { FilePreview } from '../components/FilePreview';
 
 export function DocumentsPage() {
   const [isDragging, setIsDragging] = useState(false);
+  const [stagedFiles, setStagedFiles] = useState<File[]>([]);
   const [documents, setDocuments] = useState<Document[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedTypeFilter, setSelectedTypeFilter] = useState<'All' | 'PDF' | 'DOCX' | 'TXT'>('All');
@@ -87,12 +89,20 @@ export function DocumentsPage() {
     setDocuments(StorageService.getDocuments());
   }, []);
 
-  /** Upload each file to the backend for real AI extraction. */
-  const processFiles = (files: FileList) => {
-    if (files.length === 0) return;
+  /** Stage files for preview before uploading */
+  const stageFiles = (files: FileList | File[]) => {
+    const newFiles = Array.from(files);
+    if (newFiles.length === 0) return;
+    setStagedFiles((prev) => [...prev, ...newFiles]);
+  };
+
+  /** Confirm upload and process all staged files */
+  const confirmUpload = () => {
+    if (stagedFiles.length === 0) return;
     
-    // Process the first file and navigate to /processing
-    const file = files[0];
+    // Process the first file and navigate to /processing (current behavior)
+    // In a full implementation, we'd process all files in batch.
+    const file = stagedFiles[0];
     const fileExtension = file.name.split('.').pop()?.toLowerCase() || 'txt';
     
     const newDoc: Document = {
@@ -107,6 +117,7 @@ export function DocumentsPage() {
     // Save to StorageService and update state
     StorageService.saveDocument(newDoc);
     setDocuments(StorageService.getDocuments());
+    setStagedFiles([]);
     showToast(`Initializing processing pipeline for "${file.name}"...`, 'info');
 
     // Navigate to processing page, passing the document details and the real File object
@@ -127,13 +138,13 @@ export function DocumentsPage() {
     e.preventDefault();
     setIsDragging(false);
     if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
-      processFiles(e.dataTransfer.files);
+      stageFiles(e.dataTransfer.files);
     }
   };
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files.length > 0) {
-      processFiles(e.target.files);
+      stageFiles(e.target.files);
       if (e.target.value) e.target.value = '';
     }
   };
@@ -367,7 +378,9 @@ export function DocumentsPage() {
           onDragLeave={handleDragLeave}
           onDrop={handleDrop}
           onClick={() => fileInputRef.current?.click()}
-          className={`group cursor-pointer p-10 rounded-2xl border-2 border-dashed text-center transition-all duration-500 bg-white/70 dark:bg-gray-950/40 backdrop-blur-md relative overflow-hidden mb-10 ${
+          className={`group cursor-pointer p-10 rounded-2xl border-2 border-dashed text-center transition-all duration-500 bg-white/70 dark:bg-gray-950/40 backdrop-blur-md relative overflow-hidden ${
+            stagedFiles.length === 0 ? 'mb-10' : 'mb-6'
+          } ${
             isDragging
               ? 'border-primary-600 bg-primary-600/5 dark:bg-primary-500/10 shadow-[0_0_30px_rgba(37,99,235,0.15)] scale-[1.01]'
               : 'border-gray-250 dark:border-gray-800 hover:border-primary-600 hover:bg-gray-50/50 dark:hover:bg-gray-900/20 hover:shadow-md'
@@ -401,6 +414,41 @@ export function DocumentsPage() {
             Max File Size: 10MB
           </span>
         </div>
+
+        {/* --- STAGED FILES PREVIEW --- */}
+        {stagedFiles.length > 0 && (
+          <div className="mb-10 animate-fade-in">
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
+                Staged for Upload ({stagedFiles.length})
+              </h3>
+              <div className="flex gap-3">
+                <button
+                  onClick={() => setStagedFiles([])}
+                  className="px-4 py-2 text-sm font-semibold text-gray-600 dark:text-gray-300 hover:text-red-600 dark:hover:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-xl transition-colors"
+                >
+                  Clear All
+                </button>
+                <button
+                  onClick={confirmUpload}
+                  className="inline-flex items-center px-4 py-2 text-sm font-semibold text-white bg-primary-600 hover:bg-primary-500 rounded-xl shadow-md shadow-primary-500/20 transition-all active:scale-95"
+                >
+                  <UploadCloud size={16} className="mr-2" />
+                  Confirm Upload
+                </button>
+              </div>
+            </div>
+            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4">
+              {stagedFiles.map((file, idx) => (
+                <FilePreview
+                  key={`${file.name}-${idx}`}
+                  file={file}
+                  onRemove={() => setStagedFiles(prev => prev.filter((_, i) => i !== idx))}
+                />
+              ))}
+            </div>
+          </div>
+        )}
 
         {/* search and Filters Bar */}
         <div className="bg-white/80 dark:bg-gray-950/80 border border-gray-150 dark:border-gray-850 p-4 rounded-2xl shadow-sm backdrop-blur-md flex flex-col md:flex-row gap-4 justify-between items-center mb-8">
