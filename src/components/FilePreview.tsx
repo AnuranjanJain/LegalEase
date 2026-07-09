@@ -30,6 +30,17 @@ export function FilePreview({ file, onRemove }: FilePreviewProps) {
     }
   }, [file, isPdf, isText]);
 
+  const getSafeIframeSrc = () => {
+    if (!objectUrl) return undefined;
+    try {
+      const url = new URL(objectUrl);
+      url.hash = 'toolbar=0&navpanes=0&scrollbar=0&view=FitH';
+      return url.toString();
+    } catch (e) {
+      return objectUrl;
+    }
+  };
+
   return (
     <div className="relative group bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 shadow-sm overflow-hidden flex flex-col h-48 w-full">
       <button
@@ -47,7 +58,7 @@ export function FilePreview({ file, onRemove }: FilePreviewProps) {
         {isPdf && objectUrl ? (
           <div className="w-full h-full relative overflow-hidden pointer-events-none rounded">
             <iframe
-              src={`${objectUrl}#toolbar=0&navpanes=0&scrollbar=0&view=FitH`}
+              src={getSafeIframeSrc()}
               className="absolute top-0 left-0 w-[200%] h-[200%] origin-top-left scale-50"
               title={`Preview of ${file.name}`}
               style={{ border: 'none', background: 'transparent' }}
