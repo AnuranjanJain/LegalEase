@@ -110,6 +110,7 @@ export function Header() {
     { name: 'Dashboard', path: '/dashboard' },
     { name: 'Documents', path: '/documents' },
     { name: 'Legal Resources', path: '/documentation' },
+    { name: 'Simulation Room', path: '/simulation' },
   ];
 
   return (
