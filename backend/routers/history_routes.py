@@ -138,21 +138,25 @@ def get_chat_messages(
 
 @router.get("/documents", response_model=List[DocumentRecordOut])
 def list_documents(
+    limit: int = 20,
+    offset: int = 0,
     current_user: AuthIdentity = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    """Return all uploaded documents for the authenticated user."""
+    """Return uploaded documents for the authenticated user, paginated."""
     user_id = current_user.get_user_id()
     if not user_id:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="User not found",
         )
-    
+
     docs = (
         db.query(models.DocumentRecord)
         .filter(models.DocumentRecord.user_id == user_id)
         .order_by(models.DocumentRecord.uploaded_at.desc())
+        .limit(limit)
+        .offset(offset)
         .all()
     )
     return [

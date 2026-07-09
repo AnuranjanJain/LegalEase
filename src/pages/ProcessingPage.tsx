@@ -9,8 +9,10 @@ import { StorageService } from '../services/storage';
 import { useToast } from '../contexts/ToastContext';
 import { useRedactedText } from '../hooks/useRedactedText';
 import { useRedaction } from '../contexts/RedactionContext';
+import { useCompliance } from '../contexts/ComplianceContext';
 import { RedactedText } from '../components/RedactedText';
 import { ReadabilityScore } from '../components/ReadabilityScore';
+import { CalendarExportWidget } from '../components/CalendarExportWidget';
 
 // Word-based sliding window chunking algorithm
 function chunkText(text: string, windowSize: number = 2000, overlap: number = 200): string[] {
@@ -58,6 +60,7 @@ export function ProcessingPage() {
   // Apply PII redaction to the live preview (original summary kept in state)
   const redactedSummary = useRedactedText(finalSummary);
   const { isRedactionEnabled } = useRedaction();
+  const { requireCompliance } = useCompliance();
 
   // Run the document processing pipeline
   useEffect(() => {
@@ -75,8 +78,29 @@ export function ProcessingPage() {
         const formData = new FormData();
         formData.append('file', file);
 
-        const uploadData = await api.upload<{ filename: string; text: string }>('/upload', formData);
-        extractedText = uploadData.text;
+        const uploadData = await api.upload<{ task_id?: string; filename?: string; text?: string; status?: string }>('/upload', formData);
+        
+        if (uploadData.task_id) {
+          // Poll for task completion
+          let isComplete = false;
+          let pollResult: any = null;
+          while (!isComplete) {
+            await new Promise(resolve => setTimeout(resolve, 1000));
+            pollResult = await api.get<{ status: string; progress: number; result: any }>(`/upload/status/${uploadData.task_id}`);
+            if (pollResult.status === 'done' || pollResult.status === 'failed') {
+              isComplete = true;
+            }
+          }
+          if (pollResult.status === 'failed') {
+            throw new Error(pollResult.result?.error || 'Document processing failed on server.');
+          }
+          extractedText = pollResult.result?.text || '';
+        } else {
+          extractedText = uploadData.text || '';
+        }
+
+        if (!extractedText) throw new Error('No text extracted from document.');
+
         setOriginalText(extractedText);
         setStage1Status('completed');
       } catch (err) {
@@ -94,7 +118,7 @@ export function ProcessingPage() {
         chunks = chunkText(extractedText, 2000, 200);
         setTotalChunks(chunks.length);
         setStage2Status('completed');
-      } catch (err) {
+      } catch {
         setStage2Status('failed');
         setErrorMessage('Failed to segment document into semantic chunks.');
         StorageService.updateDocumentStatus(docId, 'failed');
@@ -150,10 +174,13 @@ export function ProcessingPage() {
 
         setFinalSummary(compiledBrief);
 
-        // Fetch clause-level risk assessment
+        // Fetch clause-level risk assessment, scoped to the user's selected
+        // jurisdiction so flagged clauses reflect jurisdiction-specific risk
+        // instead of generic, jurisdiction-agnostic rules.
         let analyzedClauses: any[] = [];
         try {
-          const response = await api.post<{ clauses: any[] }>('/legal/analyze-clauses', { text: extractedText });
+          const jurisdiction = localStorage.getItem('le_selected_jurisdiction') || 'General / Not Specified';
+          const response = await api.post<{ clauses: any[] }>('/legal/analyze-clauses', { text: extractedText, jurisdiction });
           analyzedClauses = response.clauses;
         } catch (clauseErr) {
           console.warn('Failed to analyze clauses, falling back to empty clauses array:', clauseErr);
@@ -164,7 +191,7 @@ export function ProcessingPage() {
         // Save complete results back to StorageService
         StorageService.updateDocumentStatus(docId, 'processed', compiledBrief, extractedText, analyzedClauses);
         showToast(`"${file.name}" analyzed successfully!`, 'success');
-      } catch (err) {
+      } catch {
         setStage4Status('failed');
         setErrorMessage('Failed to compile and render final analysis report.');
         StorageService.updateDocumentStatus(docId, 'failed');
@@ -172,8 +199,10 @@ export function ProcessingPage() {
       }
     };
 
-    executePipeline();
-  }, [docId, file, showToast]);
+    requireCompliance(() => {
+      executePipeline();
+    });
+  }, [docId, file, showToast, requireCompliance]);
 
   const handleExportPDF = async () => {
     if (!finalSummary) {
@@ -554,6 +583,7 @@ export function ProcessingPage() {
                     </div>
                   </div>
                   <ReadabilityScore originalText={originalText} summaryText={finalSummary} />
+                  <CalendarExportWidget documentText={originalText} />
                 </>
               )}
 

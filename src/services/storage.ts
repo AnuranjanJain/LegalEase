@@ -2,6 +2,7 @@ export interface ClauseAnalysis {
   clause: string;
   riskLevel: 'Low' | 'Medium' | 'High';
   riskReason: string;
+  liability_score?: number;
 }
 
 export interface Document {
@@ -61,6 +62,7 @@ export interface ChatSessionData {
   id: string;
   title: string;
   messages: ChatMessage[];
+  jurisdiction?: string;
   documentContext?: {
     name: string;
     text: string;
@@ -299,10 +301,12 @@ export const ChatStorageService = {
 
   createSession: (title: string = 'New Conversation'): ChatSessionData => {
     const id = crypto.randomUUID();
+    const defaultJurisdiction = localStorage.getItem('le_selected_jurisdiction') || 'General / Not Specified';
     const sessionData: ChatSessionData = {
       id,
       messages: [],
-      title
+      title,
+      jurisdiction: defaultJurisdiction
     };
     ChatStorageService.saveSession(sessionData);
     ChatStorageService.setActiveSessionId(id);

@@ -4,6 +4,7 @@ import { Header } from '../components/Header';
 import { Footer } from '../components/Footer';
 import { ToastContainer } from '../components/ToastContainer';
 import { useGlobalShortcuts } from '../hooks/useGlobalShortcuts';
+import { ComplianceModal } from '../components/ComplianceModal';
 
 export function Layout() {
   const navigate = useNavigate();
@@ -28,6 +29,7 @@ export function Layout() {
 
       <Footer />
       <ToastContainer />
+      <ComplianceModal />
     </div>
   );
 }

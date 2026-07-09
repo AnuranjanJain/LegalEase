@@ -218,3 +218,56 @@ async def test_list_documents(db_session, test_user, user_token):
         # Documents are ordered by uploaded_at desc
         assert data[0]["filename"] in ["contract1.pdf", "contract2.docx"]
         assert data[1]["filename"] in ["contract1.pdf", "contract2.docx"]
+
+
+@pytest.mark.asyncio
+async def test_list_documents_respects_limit(db_session, test_user, user_token):
+    """A user with many uploaded documents does not get them all back unbounded."""
+    for i in range(30):
+        db_session.add(
+            models.DocumentRecord(
+                user_id=test_user.id,
+                filename=f"contract{i}.pdf",
+                file_type="application/pdf",
+                summary=f"Summary {i}",
+            )
+        )
+    db_session.commit()
+
+    headers = {"authorization": f"Bearer {user_token}"}
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as ac:
+        # Default limit caps the response instead of returning all 30
+        r = await ac.get("/history/documents", headers=headers)
+        assert r.status_code == 200
+        assert len(r.json()) == 20
+
+        r = await ac.get("/history/documents?limit=5", headers=headers)
+        assert r.status_code == 200
+        assert len(r.json()) == 5
+
+
+@pytest.mark.asyncio
+async def test_list_documents_pagination_offset(db_session, test_user, user_token):
+    """offset lets a client page through results beyond the first page."""
+    for i in range(5):
+        db_session.add(
+            models.DocumentRecord(
+                user_id=test_user.id,
+                filename=f"doc{i}.pdf",
+                file_type="application/pdf",
+            )
+        )
+    db_session.commit()
+
+    headers = {"authorization": f"Bearer {user_token}"}
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as ac:
+        page1 = await ac.get("/history/documents?limit=2&offset=0", headers=headers)
+        page2 = await ac.get("/history/documents?limit=2&offset=2", headers=headers)
+
+        assert page1.status_code == 200
+        assert page2.status_code == 200
+        page1_ids = {d["id"] for d in page1.json()}
+        page2_ids = {d["id"] for d in page2.json()}
+        assert len(page1_ids) == 2
+        assert len(page2_ids) == 2
+        assert page1_ids.isdisjoint(page2_ids)

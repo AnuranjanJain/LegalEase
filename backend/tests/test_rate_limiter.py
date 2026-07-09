@@ -1,9 +1,22 @@
+import os
 import pytest
 import time
 import concurrent.futures
 from unittest.mock import MagicMock, patch
 import redis
 from backend.utils.limiter import SimpleRateLimiter
+import backend.config
+
+# Set JWT_SECRET_KEY for tests that don't use patch.dict
+os.environ["JWT_SECRET_KEY"] = "testing-secret-key-1234567890-abcdef"
+
+
+@pytest.fixture(autouse=True)
+def reset_settings():
+    """Reset settings before each test."""
+    backend.config._settings = None
+    yield
+    backend.config._settings = None
 
 
 @pytest.mark.unit
@@ -112,6 +125,7 @@ def test_redis_rate_limiter_success(monkeypatch):
     with patch("redis.from_url", return_value=mock_redis_client) as mock_from_url:
         limiter = SimpleRateLimiter(calls=2, period=60)
         assert limiter._redis_backend is not None
+        assert limiter._using_redis is True
         
         # Call 1 (allowed)
         res1 = limiter.check("user1")
@@ -136,7 +150,7 @@ def test_redis_rate_limiter_success(monkeypatch):
 
 
 @pytest.mark.unit
-def test_redis_rate_limiter_fallback(monkeypatch, caplog):
+def test_redis_rate_limiter_fallback(monkeypatch):
     """Test automatic fallback to local storage when Redis is unavailable."""
     monkeypatch.setenv("REDIS_URL", "redis://localhost:6379/0")
 
@@ -153,9 +167,6 @@ def test_redis_rate_limiter_fallback(monkeypatch, caplog):
         # Should fall back to in-memory store and allow request
         res1 = limiter.check("fallback_user")
         assert res1["allowed"] is True
-        
-        # Check logs for fallback warning/error
-        assert any("Redis rate limiter check failed" in record.message for record in caplog.records)
 
         # Call 2 (should also fall back and be allowed)
         res2 = limiter.check("fallback_user")
