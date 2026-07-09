@@ -8,6 +8,7 @@ import { ToastProvider } from './contexts/ToastContext.tsx'
 import { NotificationProvider } from './contexts/NotificationContext.tsx'
 import { RedactionProvider } from './contexts/RedactionContext.tsx'
 import { AuthProvider } from './contexts/AuthContext.tsx'
+import { ComplianceProvider } from './contexts/ComplianceContext.tsx'
 
 // Global error handlers for uncaught exceptions and unhandled promise rejections
 window.addEventListener('error', (event) => {
@@ -25,7 +26,9 @@ ReactDOM.createRoot(document.getElementById('root')!).render(
         <NotificationProvider>
           <ToastProvider>
             <RedactionProvider>
-              <App />
+              <ComplianceProvider>
+                <App />
+              </ComplianceProvider>
             </RedactionProvider>
           </ToastProvider>
         </NotificationProvider>

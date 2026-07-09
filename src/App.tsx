@@ -12,6 +12,7 @@ import { SettingsPage } from './pages/SettingsPage';
 import { PrivacyPage } from './pages/PrivacyPage';
 import { TermsPage } from './pages/TermsPage';
 import { SecurityPage } from './pages/SecurityPage';
+import { SimulationRoom } from './pages/SimulationRoom';
 import { StorageService } from './services/storage';
 import { NotFoundPage } from "./pages/NotFoundPage";
 import { ScrollToTop } from './components/ScrollToTop';
@@ -41,6 +42,7 @@ function App() {
           <Route path="dashboard" element={<ProtectedRoute><DashboardPage /></ProtectedRoute>} />
           <Route path="documents" element={<ProtectedRoute><DocumentsPage /></ProtectedRoute>} />
           <Route path="documentation" element={<DocumentationPage />} />
+          <Route path="simulation" element={<ProtectedRoute><SimulationRoom /></ProtectedRoute>} />
           <Route path="processing" element={<ProtectedRoute><ProcessingPage /></ProtectedRoute>} />
           <Route path="chatbot" element={<ProtectedRoute><ChatbotPage /></ProtectedRoute>} />
           <Route path="profile" element={<ProtectedRoute><ProfilePage /></ProtectedRoute>} />
