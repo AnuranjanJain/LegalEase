@@ -3,6 +3,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { ChatbotPage } from '../../pages/ChatbotPage';
 import { ToastProvider } from '../../contexts/ToastContext';
 import { RedactionProvider } from '../../contexts/RedactionContext';
+import { ComplianceProvider } from '../../contexts/ComplianceContext';
 
 // Mock api client to prevent hitting real network
 vi.mock('../../services/api', () => ({
@@ -28,11 +29,14 @@ const renderChatbot = () => {
   return render(
     <ToastProvider>
       <RedactionProvider>
-        <ChatbotPage />
+        <ComplianceProvider>
+          <ChatbotPage />
+        </ComplianceProvider>
       </RedactionProvider>
     </ToastProvider>
   );
 };
+
 
 describe('Jurisdiction Selector Component', () => {
   beforeEach(() => {

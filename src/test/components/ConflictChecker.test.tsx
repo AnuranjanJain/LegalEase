@@ -4,6 +4,7 @@ import { MemoryRouter } from 'react-router-dom';
 import { ChatbotPage } from '../../pages/ChatbotPage';
 import { ToastProvider } from '../../contexts/ToastContext';
 import { RedactionProvider } from '../../contexts/RedactionContext';
+import { ComplianceProvider } from '../../contexts/ComplianceContext';
 import { ChatStorageService } from '../../services/storage';
 import { api } from '../../services/api';
 
@@ -18,12 +19,15 @@ describe('ConflictChecker integration in ChatbotPage', () => {
       <MemoryRouter>
         <ToastProvider>
           <RedactionProvider>
-            <ChatbotPage />
+            <ComplianceProvider>
+              <ChatbotPage />
+            </ComplianceProvider>
           </RedactionProvider>
         </ToastProvider>
       </MemoryRouter>
     );
   };
+
 
   it('renders tab selector and handles switching to Conflict Checker view', async () => {
     // Setup a comparison session in Storage
