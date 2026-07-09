@@ -1,9 +1,10 @@
-import os
 import time
 import logging
 import asyncio
 from typing import Optional, List, Dict, Any, AsyncGenerator
 from contextvars import ContextVar
+
+from backend.config import get_settings
 
 # Optional imports
 try:
@@ -21,17 +22,21 @@ correlation_id_var: ContextVar[str] = ContextVar("correlation_id", default="syst
 
 class AIService:
     def __init__(self):
-        self.api_key = os.getenv("BYTEZ_API_KEY")
-        self.chat_model_name = os.getenv("CHAT_MODEL", "inference-net/Schematron-3B")
-        self.summarize_model_name = os.getenv("SUMMARIZE_MODEL", "inference-net/Schematron-3B")
-        self.max_model_input_chars = int(os.getenv("MAX_MODEL_INPUT_CHARS", "15000"))
+        # Get configuration from centralized settings
+        settings = get_settings()
+        ai_config = settings.ai
+        
+        self.api_key = ai_config.bytez_api_key
+        self.chat_model_name = ai_config.chat_model
+        self.summarize_model_name = ai_config.summarize_model
+        self.max_model_input_chars = ai_config.max_model_input_chars
         
         # Resilience parameters
-        self.provider_timeout = float(os.getenv("PROVIDER_TIMEOUT", "30.0"))
-        self.max_retries = int(os.getenv("PROVIDER_RETRIES", "3"))
-        self.retry_backoff_factor = float(os.getenv("RETRY_BACKOFF_FACTOR", "2.0"))
-        self.graceful_degradation = os.getenv("GRACEFUL_DEGRADATION", "true").lower() in ("true", "1", "yes")
-        self.stub_mode = os.getenv("STUB_MODE", "false").lower() in ("true", "1", "yes")
+        self.provider_timeout = ai_config.provider_timeout
+        self.max_retries = ai_config.provider_retries
+        self.retry_backoff_factor = ai_config.retry_backoff_factor
+        self.graceful_degradation = ai_config.graceful_degradation
+        self.stub_mode = ai_config.stub_mode
         
         # Client initialization
         self.client = None
@@ -130,7 +135,8 @@ class AIService:
         message: str, 
         context: Optional[str] = None, 
         history: Optional[List[Dict[str, str]]] = None,
-        stream: bool = False
+        stream: bool = False,
+        jurisdiction: str = "General / Not Specified"
     ) -> AsyncGenerator[str, None]:
         """
         Generate response for chatbot requests.
@@ -146,7 +152,20 @@ class AIService:
                 for msg in history[-10:]
             ])
             parts.append(f"Previous conversation:\n{history_text}")
-        parts.append(f"Current question: {message}")
+            
+        # Inject jurisdiction instructions
+        instruction = (
+            "You are an expert legal assistant.\n\n"
+            f"Analyze all legal questions and uploaded documents strictly according to the laws and regulations of: {jurisdiction}.\n\n"
+            "If legal conclusions depend on jurisdiction-specific rules:\n\n"
+            "* Explicitly mention them.\n"
+            "* Flag potentially unenforceable clauses.\n"
+            "* Explain why the clause may be invalid in this jurisdiction.\n"
+            "* State when legal outcomes differ across jurisdictions.\n\n"
+            "Do not assume laws from any other jurisdiction unless comparing them."
+        )
+        injected_message = f"{instruction}\n\n{message}"
+        parts.append(f"Current question: {injected_message}")
         prompt = "\n\n".join(parts)
         
         # Truncation for model input constraints
@@ -213,6 +232,54 @@ class AIService:
                 logger.error(f"[{self._get_corr_id()}] Error in summary generation, graceful degradation disabled: {e}")
                 raise
 
+    async def suggest_redline(
+        self, clause_text: str, risk_reason: str = "", jurisdiction: str = "General / Not Specified"
+    ) -> str:
+        """
+        Suggest an alternative, less risky phrasing for a contract clause.
+
+        Intended to run on a single clause already flagged by analyze_clauses,
+        so the output can be fed directly into the redline DOCX export
+        (original_text / suggested_text).
+        """
+        if not clause_text or not clause_text.strip():
+            return ""
+
+        risk_context = f"\n\nThis clause was flagged with the following concern: {risk_reason}" if risk_reason else ""
+        prompt = (
+            "You are a contract negotiation assistant. Rewrite the following clause to reduce risk "
+            "for the party reviewing the contract, while preserving its core commercial intent and "
+            f"remaining valid under the laws of: {jurisdiction}. "
+            "Keep the rewritten clause concise and in formal legal language.\n\n"
+            "Respond with ONLY the rewritten clause text. Do not include any explanation, "
+            "commentary, markdown formatting, or conversational filler.\n"
+            f"{risk_context}\n\n"
+            f"Original clause:\n{clause_text}"
+        )
+
+        if len(prompt) > self.max_model_input_chars:
+            logger.info(f"[{self._get_corr_id()}] Redline prompt length ({len(prompt)}) exceeds max limit ({self.max_model_input_chars}). Truncating.")
+            prompt = prompt[:self.max_model_input_chars]
+
+        messages = [{"role": "user", "content": prompt}]
+
+        if self.stub_mode:
+            return f"[STUB REDLINE SUGGESTION] Revised version of: {clause_text[:80]}"
+
+        try:
+            output = await self._execute_with_retry_and_timeout(self.chat_model_name, messages)
+            suggestion = output.output if hasattr(output, 'output') else str(output)
+            return suggestion.strip()
+        except Exception as e:
+            if self.graceful_degradation:
+                logger.info(f"[{self._get_corr_id()}] Graceful degradation fallback activated for redline suggestion error: {e}")
+                return (
+                    "Unable to generate an automated redline suggestion right now. "
+                    "Please review this clause manually and consult qualified legal counsel before relying on it."
+                )
+            logger.error(f"[{self._get_corr_id()}] Error in redline suggestion, graceful degradation disabled: {e}")
+            raise
+
     async def simplify_clause(self, text: str) -> str:
         """
         Simplify the legal text into plain English.
@@ -249,31 +316,71 @@ class AIService:
                 logger.error(f"[{self._get_corr_id()}] Error in simplify generation, graceful degradation disabled: {e}")
                 raise
 
-    async def analyze_clauses(self, text: str) -> List[Dict[str, Any]]:
+    # Clause analysis prompt template, with placeholders for the jurisdiction
+    # and document excerpt so we can measure fixed overhead and budget chunks.
+    _CLAUSE_ANALYSIS_INSTRUCTIONS_TEMPLATE = (
+        "Analyze the following legal text and extract up to 5 key clauses, "
+        "strictly according to the laws and regulations of: {jurisdiction}. "
+        "For each clause, assign a riskLevel ('High', 'Medium', or 'Low') and a riskReason "
+        "explaining the risk assignment. If a clause may be invalid or unenforceable under this "
+        "jurisdiction, state that explicitly in the riskReason. Additionally, assign a "
+        "liability_score from 1 to 100 representing the severity.\n\n"
+        "You MUST respond ONLY with a valid JSON array of objects, where each object has these exact keys:\n"
+        "  - \"clause\": the exact text of the contract clause\n"
+        "  - \"riskLevel\": the assigned risk level ('High', 'Medium', 'Low')\n"
+        "  - \"riskReason\": a brief explanation of why this risk level was assigned\n"
+        "  - \"liability_score\": integer from 1 to 100\n\n"
+        "Do not include any other commentary, markdown formatting (outside of valid JSON structure), "
+        "or conversational filler. Output must be parsable as JSON.\n\n"
+        "Text to analyze:\n"
+    )
+
+    # Hard cap on how many chunks a single document is split into, so an
+    # extremely long upload cannot trigger unbounded AI calls / cost.
+    _MAX_CLAUSE_ANALYSIS_CHUNKS = 5
+
+    def _build_clause_analysis_prompt(self, text_chunk: str, jurisdiction: str) -> str:
+        return self._CLAUSE_ANALYSIS_INSTRUCTIONS_TEMPLATE.format(jurisdiction=jurisdiction) + text_chunk
+
+    def _chunk_text_for_clause_analysis(self, text: str, jurisdiction: str = "General / Not Specified") -> List[str]:
+        """
+        Split document text into chunks that fit the model's input budget,
+        so clauses that appear later in a long document are still analyzed
+        instead of being silently dropped by a single tail truncation.
+        """
+        overhead = len(self._CLAUSE_ANALYSIS_INSTRUCTIONS_TEMPLATE.format(jurisdiction=jurisdiction))
+        budget = max(self.max_model_input_chars - overhead, 500)
+
+        if len(text) <= budget:
+            return [text]
+
+        chunks = [text[i:i + budget] for i in range(0, len(text), budget)]
+        if len(chunks) > self._MAX_CLAUSE_ANALYSIS_CHUNKS:
+            logger.info(
+                f"[{self._get_corr_id()}] Document split into {len(chunks)} chunks, "
+                f"capping to {self._MAX_CLAUSE_ANALYSIS_CHUNKS} for clause analysis."
+            )
+            chunks = chunks[:self._MAX_CLAUSE_ANALYSIS_CHUNKS]
+        return chunks
+
+    async def analyze_clauses(
+        self, text: str, jurisdiction: str = "General / Not Specified"
+    ) -> List[Dict[str, Any]]:
         """
         Analyze contract clauses and extract key clauses with risk levels and reasons.
+
+        Long documents are split into chunks that each fit the model's input
+        budget, and analyzed separately, so clauses near the end of a long
+        contract are not silently dropped by a single tail truncation.
+
+        jurisdiction:
+            Legal jurisdiction context, matching the same parameter already
+            used by generate_chat_response and the comparison service, so
+            risk assessment reflects jurisdiction-specific enforceability
+            instead of generic, jurisdiction-agnostic rules.
         """
         if not text or not text.strip():
             return []
-
-        prompt = (
-            "Analyze the following legal text and extract up to 5 key clauses. "
-            "For each clause, assign a riskLevel ('High', 'Medium', or 'Low') and a riskReason "
-            "explaining the risk assignment.\n\n"
-            "You MUST respond ONLY with a valid JSON array of objects, where each object has these exact keys:\n"
-            "  - \"clause\": the exact text of the contract clause\n"
-            "  - \"riskLevel\": the assigned risk level ('High', 'Medium', 'Low')\n"
-            "  - \"riskReason\": a brief explanation of why this risk level was assigned\n\n"
-            "Do not include any other commentary, markdown formatting (outside of valid JSON structure), "
-            "or conversational filler. Output must be parsable as JSON.\n\n"
-            f"Text to analyze:\n{text}"
-        )
-
-        # Truncation for model input constraints
-        if len(prompt) > self.max_model_input_chars:
-            prompt = prompt[:self.max_model_input_chars]
-
-        messages = [{"role": "user", "content": prompt}]
 
         # Check for stub mode
         if self.stub_mode:
@@ -281,26 +388,45 @@ class AIService:
                 {
                     "clause": "The company may terminate this agreement at any time without notice.",
                     "riskLevel": "High",
-                    "riskReason": "Unilateral termination rights may negatively impact the user."
+                    "riskReason": "Unilateral termination rights may negatively impact the user.",
+                    "liability_score": 85
                 },
                 {
                     "clause": "Subscriber shall indemnify and hold harmless Provider against any and all claims.",
                     "riskLevel": "Medium",
-                    "riskReason": "Broad indemnification clauses can lead to unexpected liabilities."
+                    "riskReason": "Broad indemnification clauses can lead to unexpected liabilities.",
+                    "liability_score": 60
                 },
                 {
                     "clause": "This Agreement shall be governed by the laws of the State of Delaware.",
                     "riskLevel": "Low",
-                    "riskReason": "Standard governing law clause, standard jurisdiction choice."
+                    "riskReason": "Standard governing law clause, standard jurisdiction choice.",
+                    "liability_score": 15
                 }
             ]
 
-        try:
-            output = await self._execute_with_retry_and_timeout(self.chat_model_name, messages)
-            response_text = output.output if hasattr(output, 'output') else str(output)
-            return self._parse_clauses_json(response_text)
-        except Exception as e:
-            logger.error(f"[{self._get_corr_id()}] Clause analysis failed: {e}")
+        chunks = self._chunk_text_for_clause_analysis(text, jurisdiction)
+        all_clauses: List[Dict[str, Any]] = []
+        seen_clauses = set()
+        last_error: Optional[Exception] = None
+
+        for chunk in chunks:
+            prompt = self._build_clause_analysis_prompt(chunk, jurisdiction)
+            messages = [{"role": "user", "content": prompt}]
+            try:
+                output = await self._execute_with_retry_and_timeout(self.chat_model_name, messages)
+                response_text = output.output if hasattr(output, 'output') else str(output)
+                chunk_clauses = self._parse_clauses_json(response_text)
+                for clause in chunk_clauses:
+                    key = clause.get("clause")
+                    if key and key not in seen_clauses:
+                        seen_clauses.add(key)
+                        all_clauses.append(clause)
+            except Exception as e:
+                logger.error(f"[{self._get_corr_id()}] Clause analysis failed for a chunk: {e}")
+                last_error = e
+
+        if not all_clauses and last_error is not None:
             if self.graceful_degradation:
                 # Return standard fallback clauses
                 return [
@@ -310,6 +436,84 @@ class AIService:
                         "riskReason": "Unilateral termination rights may negatively impact the user (fallback)."
                     }
                 ]
+            raise last_error
+
+        return all_clauses
+
+    async def extract_deadlines(self, text: str) -> List[Dict[str, Any]]:
+        """
+        Extract key legal deadlines, renewal milestones, and dates from the document.
+        Returns a list of dictionaries with 'title', 'date' (YYYY-MM-DD), and 'description'.
+        """
+        if not text or not text.strip():
+            return []
+            
+        if self.stub_mode:
+            return [
+                {
+                    "title": "Contract Renewal Date",
+                    "date": "2026-12-01",
+                    "description": "Automatic renewal if not cancelled 30 days prior."
+                },
+                {
+                    "title": "Initial Payment Due",
+                    "date": "2024-08-15",
+                    "description": "Deadline for the first installment payment."
+                }
+            ]
+            
+        prompt = (
+            "You are a legal assistant analyzing a contract or legal document. "
+            "Extract all key deadlines, important dates, renewal milestones, and court filings mentioned in the text. "
+            "Respond ONLY with a valid JSON array of objects, where each object has these exact keys:\n"
+            "  - \"title\": a short name for the event or deadline\n"
+            "  - \"date\": the date in YYYY-MM-DD format (if exact date is unknown but relative, try to estimate based on context or leave as best effort YYYY-MM-DD)\n"
+            "  - \"description\": a brief explanation of the milestone\n\n"
+            "Do not include any other commentary or markdown formatting outside of the valid JSON structure.\n\n"
+            f"Text to analyze:\n{text[:self.max_model_input_chars - 1000]}"
+        )
+        
+        messages = [{"role": "user", "content": prompt}]
+        
+        try:
+            output = await self._execute_with_retry_and_timeout(self.chat_model_name, messages)
+            response_text = output.output if hasattr(output, 'output') else str(output)
+            
+            # Use generic JSON extraction instead of clause-specific parser
+            import json
+            import re
+            
+            cleaned = self._extract_from_markdown(response_text)
+            cleaned_json = self._clean_json_string(cleaned)
+            json_array = self._extract_json_array_balanced(cleaned_json) or cleaned_json
+            
+            try:
+                parsed = json.loads(json_array)
+            except json.JSONDecodeError:
+                array_match = re.search(r"\[\s*\{[\s\S]*\}\s*\]", cleaned)
+                if array_match:
+                    parsed = json.loads(array_match.group(0))
+                else:
+                    parsed = []
+                    
+            if not isinstance(parsed, list):
+                parsed = []
+            
+            # Validate output format
+            validated_deadlines = []
+            for item in parsed:
+                if isinstance(item, dict) and "title" in item and "date" in item:
+                    validated_deadlines.append({
+                        "title": str(item.get("title", "")).strip(),
+                        "date": str(item.get("date", "")).strip(),
+                        "description": str(item.get("description", "")).strip()
+                    })
+            return validated_deadlines
+            
+        except Exception as e:
+            logger.error(f"[{self._get_corr_id()}] Deadline extraction failed: {e}")
+            if self.graceful_degradation:
+                return []
             raise
 
     def _extract_json_array_balanced(self, text: str) -> Optional[str]:
@@ -523,7 +727,8 @@ class AIService:
         if not self.client and not self.stub_mode:
             status = "degraded"
 
-        if os.getenv("HEALTH_DEBUG", "false").lower() in ("true", "1", "yes"):
+        settings = get_settings()
+        if settings.ai.health_debug:
             details = {
                 "bytez": bool(self.client),
                 "initialized": bool(self.client),
@@ -533,6 +738,10 @@ class AIService:
                 "summarize_model": self.summarize_model_name,
             }
             return {"status": status, "details": details}
+
+        # Always include details for stub mode to support tests
+        if self.stub_mode:
+            return {"status": status, "details": {"stub_mode": True}}
 
         return {"status": status}
 

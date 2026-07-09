@@ -11,12 +11,112 @@ import { api } from '../services/api';
 import { ShareButton } from '../components/ShareButton';
 import { WhatsAppShareModal } from '../components/WhatsAppShareModal';
 import { ClauseAnalysisSection } from '../components/ClauseAnalysisSection';
+import { EntityGraph } from '../components/EntityGraph';
 import { ReadabilityScore } from '../components/ReadabilityScore';
 import { useRedaction } from '../contexts/RedactionContext';
 import { redact } from '../utils/redaction';
 import { RedactedText } from '../components/RedactedText';
 import { DocumentCompareSelector } from '../components/DocumentCompareSelector';
 import { FilePreview } from '../components/FilePreview';
+
+function renderHighlightedText(text: string, clauses: any[]) {
+  if (!text) return '';
+  if (!clauses || clauses.length === 0) return text;
+
+  interface Interval {
+    start: number;
+    end: number;
+    clause: any;
+  }
+
+  const intervals: Interval[] = [];
+
+  clauses.forEach(c => {
+    if (!c.clause || c.clause.trim() === '') return;
+    
+    let index = text.indexOf(c.clause);
+    while (index !== -1) {
+      intervals.push({
+        start: index,
+        end: index + c.clause.length,
+        clause: c
+      });
+      index = text.indexOf(c.clause, index + c.clause.length);
+    }
+  });
+
+  intervals.sort((a, b) => {
+    if (a.start !== b.start) {
+      return a.start - b.start;
+    }
+    return b.end - a.end;
+  });
+
+  const nonOverlapping: Interval[] = [];
+  let lastEnd = 0;
+
+  for (const interval of intervals) {
+    if (interval.start >= lastEnd) {
+      nonOverlapping.push(interval);
+      lastEnd = interval.end;
+    }
+  }
+
+  const result: React.ReactNode[] = [];
+  let currentIdx = 0;
+
+  nonOverlapping.forEach((interval, idx) => {
+    if (interval.start > currentIdx) {
+      result.push(<span key={`text-${idx}`}>{text.substring(currentIdx, interval.start)}</span>);
+    }
+
+    const riskLower = interval.clause.riskLevel.toLowerCase();
+    let highlightClass = '';
+    if (riskLower === 'high') {
+      highlightClass = 'bg-red-500/25 border-b-2 border-red-500 dark:bg-red-500/30 text-red-950 dark:text-red-200';
+    } else if (riskLower === 'medium') {
+      highlightClass = 'bg-amber-500/25 border-b-2 border-amber-500 dark:bg-amber-500/30 text-amber-950 dark:text-amber-200';
+    } else {
+      highlightClass = 'bg-emerald-500/25 border-b-2 border-emerald-500 dark:bg-emerald-500/30 text-emerald-950 dark:text-emerald-250';
+    }
+
+    result.push(
+      <span
+        key={`highlight-${idx}`}
+        className="group relative inline cursor-help rounded-sm font-semibold transition-all px-0.5"
+        title={`${interval.clause.riskLevel} Risk: ${interval.clause.riskReason}`}
+        data-testid="heatmap-highlight"
+      >
+        <span className={highlightClass}>
+          {text.substring(interval.start, interval.end)}
+        </span>
+        
+        {/* HSL Glassmorphic Tooltip on hover */}
+        <span className="pointer-events-none absolute bottom-full left-1/2 -translate-x-1/2 mb-2 w-72 origin-bottom scale-95 opacity-0 transition-all duration-200 group-hover:scale-100 group-hover:pointer-events-auto group-hover:opacity-100 z-30 p-3 rounded-xl bg-white dark:bg-gray-900 border border-gray-250 dark:border-gray-800 shadow-2xl backdrop-blur-md">
+          <span className="flex items-center gap-1.5 mb-1.5">
+            <span className={`w-2 h-2 rounded-full ${
+              riskLower === 'high' ? 'bg-red-500' : riskLower === 'medium' ? 'bg-amber-500' : 'bg-emerald-500'
+            }`} />
+            <span className="text-[10px] font-extrabold uppercase tracking-wider text-gray-500 dark:text-gray-400">
+              {interval.clause.riskLevel} Risk Details
+            </span>
+          </span>
+          <p className="text-[11px] font-bold text-gray-900 dark:text-white leading-normal text-left font-sans">
+            {interval.clause.riskReason}
+          </p>
+        </span>
+      </span>
+    );
+
+    currentIdx = interval.end;
+  });
+
+  if (currentIdx < text.length) {
+    result.push(<span key="text-end">{text.substring(currentIdx)}</span>);
+  }
+
+  return result;
+}
 
 export function DocumentsPage() {
   const [isDragging, setIsDragging] = useState(false);
@@ -27,6 +127,12 @@ export function DocumentsPage() {
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
   const [shareDoc, setShareDoc] = useState<Document | null>(null);
   const [selectedAuditDoc, setSelectedAuditDoc] = useState<Document | null>(null);
+  const [auditTab, setAuditTab] = useState<'overview' | 'heatmap'>('overview');
+
+  useEffect(() => {
+    setAuditTab('overview');
+  }, [selectedAuditDoc]);
+
   const [isExporting, setIsExporting] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const { showToast } = useToast();
@@ -155,7 +261,7 @@ export function DocumentsPage() {
       setDocuments(remaining);
       localStorage.setItem('le_documents', JSON.stringify(remaining));
       showToast(`"${name}" deleted successfully.`, 'info');
-    } catch (err) {
+    } catch {
       showToast('Failed to delete document.', 'error');
     }
   };
@@ -374,6 +480,7 @@ export function DocumentsPage() {
 
         {/* --- UPLOAD AREA WITH GLASSMORPHISM AND NEUMORPHIC GLOW --- */}
         <div
+          id="global-upload-trigger"
           onDragOver={handleDragOver}
           onDragLeave={handleDragLeave}
           onDrop={handleDrop}
@@ -457,6 +564,7 @@ export function DocumentsPage() {
           <div className="relative w-full md:w-80">
             <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 dark:text-gray-500" />
             <input 
+              id="global-search-input"
               type="text" 
               placeholder="Search documents..."
               value={searchQuery}
@@ -800,37 +908,108 @@ export function DocumentsPage() {
               </button>
             </div>
 
-            {/* Modal Body */}
-            <div className="p-6 md:p-8 overflow-y-auto flex-grow text-left space-y-6 scrollbar-thin scrollbar-thumb-gray-200 dark:scrollbar-thumb-gray-850">
-              
-              {/* Ready Badge & Overview */}
-              <div className="flex items-center gap-2 flex-wrap">
-                <div className="flex items-center gap-2 p-3 bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 border border-emerald-500/15 rounded-xl text-xs font-bold w-fit">
-                  <CheckCircle size={16} />
-                  <span>AI Cognitive Audit Audit Ready</span>
-                </div>
-                {isRedactionEnabled && (
-                  <div className="flex items-center gap-2 p-3 bg-primary-600/5 text-primary dark:text-primary-400 border border-primary-600/15 rounded-xl text-xs font-bold w-fit">
-                    <ShieldCheck size={16} />
-                    <span>PII Redacted</span>
-                  </div>
-                )}
-              </div>
-
-              {/* Summary Text Content */}
-              <div className="prose prose-sm dark:prose-invert max-w-none text-gray-700 dark:text-gray-200 whitespace-pre-line leading-relaxed text-sm">
-                <RedactedText text={auditSummaryDisplay} />
-              </div>
-
-              {/* Readability Score Analysis */}
-              <ReadabilityScore 
-                originalText={selectedAuditDoc.text} 
-                summaryText={selectedAuditDoc.summary} 
-              />
-
-              <ClauseAnalysisSection clauses={selectedAuditDoc.clauses} />
-
+            {/* Tabs */}
+            <div className="flex border-b border-gray-150 dark:border-gray-850 px-6 bg-gray-50/20 dark:bg-gray-900/10">
+              <button
+                onClick={() => setAuditTab('overview')}
+                className={`py-3 px-4 text-xs font-bold border-b-2 transition-all ${
+                  auditTab === 'overview'
+                    ? 'border-primary-600 text-primary-650 dark:text-primary-450 border-b-primary-600'
+                    : 'border-transparent text-gray-500 hover:text-gray-850 dark:hover:text-gray-300'
+                }`}
+                data-testid="audit-overview-tab"
+              >
+                Overview
+              </button>
+              <button
+                onClick={() => setAuditTab('heatmap')}
+                className={`py-3 px-4 text-xs font-bold border-b-2 transition-all ${
+                  auditTab === 'heatmap'
+                    ? 'border-primary-600 text-primary-650 dark:text-primary-450 border-b-primary-600'
+                    : 'border-transparent text-gray-500 hover:text-gray-850 dark:hover:text-gray-300'
+                }`}
+                data-testid="audit-heatmap-tab"
+              >
+                Risk Heatmap
+              </button>
             </div>
+
+            {/* Modal Body */}
+            {auditTab === 'heatmap' ? (
+              <div className="flex flex-col md:flex-row h-[60vh] overflow-hidden" data-testid="risk-heatmap-view">
+                {/* Left/Main: Full Document Text with Highlights */}
+                <div className="flex-1 p-6 md:p-8 overflow-y-auto text-left border-r border-gray-150 dark:border-gray-850 scrollbar-thin scrollbar-thumb-gray-200 dark:scrollbar-thumb-gray-850">
+                  <h4 className="text-xs font-bold uppercase tracking-wider text-gray-900 dark:text-white mb-4">
+                    Highlighted Contract Text
+                  </h4>
+                  <div className="prose prose-sm dark:prose-invert max-w-none text-gray-700 dark:text-gray-350 font-sans leading-relaxed whitespace-pre-wrap select-text">
+                    {renderHighlightedText(selectedAuditDoc.text || '', selectedAuditDoc.clauses || [])}
+                  </div>
+                </div>
+
+                {/* Right: Legend / Clauses list */}
+                <div className="w-full md:w-80 bg-gray-50/50 dark:bg-gray-900/10 p-6 overflow-y-auto text-left space-y-4 scrollbar-thin scrollbar-thumb-gray-200 dark:scrollbar-thumb-gray-850">
+                  <h4 className="text-xs font-bold uppercase tracking-wider text-gray-900 dark:text-white">
+                    Risk Legend
+                  </h4>
+                  <p className="text-[11px] text-gray-500 dark:text-gray-400">
+                    Hover over highlighted text to view risk details, or browse identified risk clauses below.
+                  </p>
+                  <div className="space-y-3">
+                    {(selectedAuditDoc.clauses || []).map((item, idx) => {
+                      const riskLower = item.riskLevel.toLowerCase();
+                      const bgClass = riskLower === 'high' ? 'bg-red-500/10 border-red-500/25' : riskLower === 'medium' ? 'bg-amber-500/10 border-amber-500/25' : 'bg-emerald-500/10 border-emerald-500/25';
+                      const badgeClass = riskLower === 'high' ? 'bg-red-500/15 text-red-650 dark:text-red-400 border-red-500/20' : riskLower === 'medium' ? 'bg-amber-500/15 text-amber-600 dark:text-amber-400 border-amber-500/20' : 'bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 border-emerald-500/20';
+                      return (
+                        <div key={idx} className={`p-3 rounded-xl border text-xs leading-normal ${bgClass}`} data-testid="heatmap-legend-item">
+                          <div className="flex items-center justify-between mb-1.5">
+                            <span className={`px-2 py-0.5 rounded-full text-[9px] font-extrabold uppercase border tracking-wider ${badgeClass}`}>
+                              {item.riskLevel} Risk
+                            </span>
+                          </div>
+                          <p className="font-semibold text-gray-800 dark:text-gray-200 mb-1">
+                            {item.riskReason}
+                          </p>
+                          <p className="text-[10px] text-gray-500 dark:text-gray-450 line-clamp-2 font-mono">
+                            "{item.clause}"
+                          </p>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              </div>
+            ) : (
+              <div className="p-6 md:p-8 overflow-y-auto flex-grow text-left space-y-6 scrollbar-thin scrollbar-thumb-gray-200 dark:scrollbar-thumb-gray-850">
+                {/* Ready Badge & Overview */}
+                <div className="flex items-center gap-2 flex-wrap">
+                  <div className="flex items-center gap-2 p-3 bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 border border-emerald-500/15 rounded-xl text-xs font-bold w-fit">
+                    <CheckCircle size={16} />
+                    <span>AI Cognitive Audit Audit Ready</span>
+                  </div>
+                  {isRedactionEnabled && (
+                    <div className="flex items-center gap-2 p-3 bg-primary-600/5 text-primary dark:text-primary-400 border border-primary-600/15 rounded-xl text-xs font-bold w-fit">
+                      <ShieldCheck size={16} />
+                      <span>PII Redacted</span>
+                    </div>
+                  )}
+                </div>
+
+                {/* Summary Text Content */}
+                <div className="prose prose-sm dark:prose-invert max-w-none text-gray-700 dark:text-gray-200 whitespace-pre-line leading-relaxed text-sm">
+                  <RedactedText text={auditSummaryDisplay} />
+                </div>
+
+                {/* Readability Score Analysis */}
+                <ReadabilityScore 
+                  originalText={selectedAuditDoc.text} 
+                  summaryText={selectedAuditDoc.summary} 
+                />
+
+                <ClauseAnalysisSection clauses={selectedAuditDoc.clauses} />
+                <EntityGraph documentText={selectedAuditDoc.text} />
+              </div>
+            )}
 
             {/* Modal Footer */}
             <div className="p-4 md:p-6 bg-gray-50/50 dark:bg-gray-900/20 border-t border-gray-150 dark:border-gray-850 flex flex-col sm:flex-row items-center justify-between gap-3">

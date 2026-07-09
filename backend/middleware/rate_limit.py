@@ -3,11 +3,15 @@ from fastapi.responses import JSONResponse
 from starlette.middleware.base import BaseHTTPMiddleware
 from backend.utils.limiter import SimpleRateLimiter
 import ipaddress
-import os
+from backend.config import get_settings
 
-RATE_LIMIT_PERIOD = int(os.getenv("RATE_LIMIT_PERIOD", "60"))
-RATE_LIMIT_IP_CALLS = int(os.getenv("RATE_LIMIT_IP_CALLS", "60"))
-TRUST_PROXY_HEADERS = os.getenv("TRUST_PROXY_HEADERS", "false").lower() in ("1", "true", "yes")
+# Get configuration from centralized settings
+settings = get_settings()
+rate_config = settings.rate_limit
+
+RATE_LIMIT_PERIOD = rate_config.rate_limit_period
+RATE_LIMIT_IP_CALLS = rate_config.rate_limit_ip_calls
+TRUST_PROXY_HEADERS = rate_config.trust_proxy_headers
 
 ip_limiter=SimpleRateLimiter(
     RATE_LIMIT_IP_CALLS,

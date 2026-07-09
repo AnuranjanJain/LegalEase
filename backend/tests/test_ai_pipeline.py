@@ -93,6 +93,51 @@ def test_mime_aware_validation():
     assert "Unsupported file extension" in str(exc.value)
 
 
+@pytest.mark.unit
+def test_txt_upload_validation():
+    """Test content-level validation for .txt uploads (no magic bytes exist for plain text)"""
+    # Valid plain text passes
+    validate_mime_and_bytes(b"This is a plain text legal document.", "text/plain", "file.txt")
+
+    # Binary content with null bytes disguised as .txt is rejected
+    with pytest.raises(ValidationError) as exc:
+        validate_mime_and_bytes(b"\x00\x01\x02binary garbage\x00", "text/plain", "file.txt")
+    assert "binary data" in str(exc.value)
+
+    # Non-UTF-8 content (no null bytes, so this exercises the encoding check
+    # rather than the binary-data check above) is rejected
+    with pytest.raises(ValidationError) as exc:
+        validate_mime_and_bytes(b"\xff\xfeinvalid utf-8 without any null bytes", "text/plain", "file.txt")
+    assert "not valid UTF-8" in str(exc.value)
+
+    # Content dominated by non-printable control characters is rejected
+    control_heavy = bytes([1, 2, 3, 4, 5, 6, 7]) * 20
+    with pytest.raises(ValidationError) as exc:
+        validate_mime_and_bytes(control_heavy, "text/plain", "file.txt")
+    assert "non-printable characters" in str(exc.value)
+
+    # Normal whitespace (newlines, tabs) is not flagged as non-printable
+    validate_mime_and_bytes(b"Line one.\nLine two.\tTabbed content.\r\n", "text/plain", "file.txt")
+
+    # Empty content is valid (no crash on empty decode)
+    validate_mime_and_bytes(b"", "text/plain", "file.txt")
+
+
+@pytest.mark.unit
+def test_txt_upload_validation_handles_truncated_utf8_prefix():
+    """A size-limited prefix that cuts a multi-byte UTF-8 character mid-sequence
+    must not be falsely rejected as invalid encoding."""
+    full_text = "Legal document with unicode: café, naïve, résumé. " * 50
+    full_bytes = full_text.encode("utf-8")
+
+    # Truncate at a byte offset that is very likely to land inside a
+    # multi-byte character (the "é" in café is a 2-byte UTF-8 sequence).
+    truncated_prefix = full_bytes[:4096]
+
+    # Should not raise, even if the prefix ends mid-character.
+    validate_mime_and_bytes(truncated_prefix, "text/plain", "file.txt")
+
+
 @pytest.mark.asyncio
 async def test_correlation_id_propagation():
     """Test that correlation ID is generated, propagated, and injected into headers"""
@@ -108,61 +153,52 @@ async def test_correlation_id_propagation():
 @pytest.mark.asyncio
 async def test_ai_service_stub_mode():
     """Test AI Service behaviors in Stub Mode"""
-    with patch.dict(os.environ, {"STUB_MODE": "true", "HEALTH_DEBUG": "true"}):
-        # Re-initialize service settings for stub mode
-        ai_service.__init__()
-        
-        # Test Chat Response in Stub Mode
-        chat_gen = ai_service.generate_chat_response(message="Hi", stream=False)
-        chat_res = ""
-        async for chunk in chat_gen:
-            chat_res += chunk
-        assert "[STUB CHAT RESPONSE]" in chat_res
-        
-        # Test Summarize Response in Stub Mode
-        summary = await ai_service.generate_summary(text="Summarize this text")
-        assert "[STUB SUMMARY RESPONSE]" in summary
-        
-        # Test Health status in Stub Mode
-        health = ai_service.check_health()
-        assert health["status"] == "ok"
-        assert health["details"]["stub_mode"] is True
-        
-        # Revert environment settings
-        with patch.dict(os.environ, {"STUB_MODE": "false", "HEALTH_DEBUG": "false"}):
-            ai_service.__init__()
+    # Re-initialize service settings for stub mode
+    ai_service.__init__()
+    
+    # Test Chat Response in Stub Mode
+    chat_gen = ai_service.generate_chat_response(message="Hi", stream=False)
+    chat_res = ""
+    async for chunk in chat_gen:
+        chat_res += chunk
+    assert "[STUB CHAT RESPONSE]" in chat_res
+    
+    # Test Summarize Response in Stub Mode
+    summary = await ai_service.generate_summary(text="Summarize this text")
+    assert "[STUB SUMMARY RESPONSE]" in summary
+    
+    # Test Health status in Stub Mode
+    health = ai_service.check_health()
+    assert health["status"] == "ok"
+    assert health["details"]["stub_mode"] is True
 
 
 @pytest.mark.asyncio
 async def test_ai_service_streaming_mode():
     """Test AI Service streaming responses chunk generator"""
-    with patch.dict(os.environ, {"STUB_MODE": "true"}):
-        ai_service.__init__()
+    ai_service.__init__()
+    
+    chat_gen = ai_service.generate_chat_response(message="This is a stream", stream=True)
+    chunks = []
+    async for chunk in chat_gen:
+        chunks.append(chunk)
         
-        chat_gen = ai_service.generate_chat_response(message="This is a stream", stream=True)
-        chunks = []
-        async for chunk in chat_gen:
-            chunks.append(chunk)
-            
-        assert len(chunks) > 1
-        
-        # Parse SSE format and extract response values
-        full_response = ""
-        for chunk in chunks:
-            # Extract JSON from "data: {...}" format
-            if chunk.startswith("data: ") and chunk != "data: [DONE]\n\n":
-                try:
-                    import json
-                    json_str = chunk.replace("data: ", "").strip()
-                    data = json.loads(json_str)
-                    full_response += data.get("response", "")
-                except (json.JSONDecodeError, ValueError):
-                    pass
-        
-        assert full_response.startswith("[STUB CHAT RESPONSE]")
-        
-        with patch.dict(os.environ, {"STUB_MODE": "false"}):
-            ai_service.__init__()
+    assert len(chunks) > 1
+    
+    # Parse SSE format and extract response values
+    full_response = ""
+    for chunk in chunks:
+        # Extract JSON from "data: {...}" format
+        if chunk.startswith("data: ") and chunk != "data: [DONE]\n\n":
+            try:
+                import json
+                json_str = chunk.replace("data: ", "").strip()
+                data = json.loads(json_str)
+                full_response += data.get("response", "")
+            except (json.JSONDecodeError, ValueError):
+                pass
+    
+    assert full_response.startswith("[STUB CHAT RESPONSE]")
 
 
 @pytest.mark.asyncio
