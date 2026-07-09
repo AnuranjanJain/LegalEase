@@ -31,14 +31,10 @@ export function FilePreview({ file, onRemove }: FilePreviewProps) {
   }, [file, isPdf, isText]);
 
   const getSafeIframeSrc = () => {
-    if (!objectUrl) return undefined;
-    try {
-      const url = new URL(objectUrl);
-      url.hash = 'toolbar=0&navpanes=0&scrollbar=0&view=FitH';
-      return url.toString();
-    } catch (e) {
-      return objectUrl;
+    if (typeof objectUrl === 'string' && objectUrl.startsWith('blob:')) {
+      return objectUrl + '#toolbar=0&navpanes=0&scrollbar=0&view=FitH';
     }
+    return undefined;
   };
 
   return (
