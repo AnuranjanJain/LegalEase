@@ -1,9 +1,10 @@
 import threading
 import time
 from typing import Dict, List
-import os
 import logging
 import redis
+
+from backend.config import get_settings
 
 logger = logging.getLogger(__name__)
 
@@ -252,6 +253,9 @@ class SimpleRateLimiter:
 
     This implementation defaults to an in-memory sliding-window backend, but
     automatically uses a Redis backend if REDIS_URL environment variable is set.
+    
+    In production environments, provides warnings and optional fail-fast behavior
+    when Redis is unavailable to prevent inconsistent rate limiting across distributed deployments.
     """
 
     def __init__(self, calls: int, period: int):
@@ -260,14 +264,63 @@ class SimpleRateLimiter:
         self._local_storage = InMemoryStorage()
         self._storage = LimiterStorageProxy(self)
 
-        redis_url = os.getenv("REDIS_URL")
+        settings = get_settings()
+        redis_url = settings.database.redis_url
+        environment = settings.environment.environment
+        rate_config = settings.rate_limit
+        
         self._redis_backend = None
+        self._using_redis = False
+        
         if redis_url:
             try:
                 self._redis_backend = RedisStorage(redis_url)
-                logger.info("Redis rate limiting storage backend initialized successfully.")
+                self._using_redis = True
+                logger.info(
+                    f"Redis rate limiting storage backend initialized successfully. "
+                    f"Environment: {environment}, Redis URL: {redis_url[:20]}..."
+                )
             except Exception as e:
-                logger.error(f"Failed to initialize Redis rate limiting backend: {e}")
+                if rate_config.redis_fail_fast:
+                    logger.error(
+                        f"REDIS_FAIL_FAST is enabled but Redis initialization failed: {e}. "
+                        f"Application cannot start without Redis. Please check REDIS_URL configuration."
+                    )
+                    raise RuntimeError(
+                        f"Redis initialization failed with REDIS_FAIL_FAST enabled: {e}. "
+                        f"Please verify REDIS_URL is correct and Redis is accessible."
+                    ) from e
+                else:
+                    logger.error(
+                        f"Failed to initialize Redis rate limiting backend: {e}. "
+                        f"Falling back to in-memory storage. Rate limiting will be process-local only."
+                    )
+        else:
+            # Redis URL not configured
+            if environment == "production" and rate_config.require_redis_in_production:
+                logger.error(
+                    "REQUIRE_REDIS_IN_PRODUCTION is enabled but REDIS_URL is not configured. "
+                    "Rate limiting will use in-memory storage, which is not suitable for distributed deployments. "
+                    "Set REDIS_URL or disable REQUIRE_REDIS_IN_PRODUCTION."
+                )
+            elif environment == "production":
+                logger.warning(
+                    "REDIS_URL is not configured in production environment. "
+                    "Rate limiting will use in-memory storage, which is not suitable for distributed deployments. "
+                    "Multiple workers or application instances will have independent rate limiters. "
+                    "Consider setting REDIS_URL for distributed rate limiting."
+                )
+            else:
+                logger.info(
+                    f"REDIS_URL not configured. Using in-memory rate limiting storage. "
+                    f"Environment: {environment}. This is appropriate for local development."
+                )
+        
+        # Log final backend selection
+        if self._using_redis:
+            logger.info("Rate limiter: Using Redis backend (distributed)")
+        else:
+            logger.warning("Rate limiter: Using in-memory backend (process-local only)")
 
     @property
     def storage(self) -> dict:

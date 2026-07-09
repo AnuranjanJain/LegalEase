@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { createPortal } from 'react-dom';
-import { X, Copy, Check, AlertTriangle, Sparkles, Loader2 } from 'lucide-react';
+import { X, Copy, Check, AlertTriangle, Sparkles, Loader2, Download } from 'lucide-react';
 import { api } from '../services/api';
 import { useToast } from '../contexts/ToastContext';
 
@@ -15,6 +15,7 @@ export function SimplifyModal({ clauseText, onClose }: SimplifyModalProps) {
   const [loading, setLoading] = useState<boolean>(false);
   const [error, setError] = useState<string>('');
   const [copied, setCopied] = useState<boolean>(false);
+  const [isExporting, setIsExporting] = useState<boolean>(false);
   const [isVisible, setIsVisible] = useState<boolean>(false);
   
   const closeButtonRef = useRef<HTMLButtonElement>(null);
@@ -126,6 +127,37 @@ export function SimplifyModal({ clauseText, onClose }: SimplifyModalProps) {
     }
   };
 
+  const handleExportRedline = async () => {
+    if (!clauseText || !simplifiedText) return;
+    setIsExporting(true);
+    showToast('Generating redlined document...', 'info');
+    try {
+      const blob = await api.postBlob('/api/export/redline-docx', {
+        original_text: clauseText,
+        suggested_text: simplifiedText,
+      });
+
+      const today = new Date().toISOString().split('T')[0];
+      const filename = `redline-clause-${today}.docx`;
+
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.setAttribute('download', filename);
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      URL.revokeObjectURL(url);
+
+      showToast('Redlined DOCX exported successfully!', 'success');
+    } catch (err) {
+      console.error('Failed to export redlined DOCX:', err);
+      showToast(err instanceof Error ? err.message : 'Failed to export redlined DOCX.', 'error');
+    } finally {
+      setIsExporting(false);
+    }
+  };
+
   return createPortal(
     <div
       className={`fixed inset-0 z-[9999] flex items-center justify-center p-4 transition-all duration-250
@@ -158,7 +190,7 @@ export function SimplifyModal({ clauseText, onClose }: SimplifyModalProps) {
               <h2 id="simplify-modal-title" className="text-sm font-bold text-gray-900 dark:text-white leading-tight">
                 AI Jargon Simplification
               </h2>
-              <p className="text-[10px] text-gray-500 dark:text-gray-400 mt-0.5">
+              <p className="text-[10px] text-gray-550 dark:text-gray-400 mt-0.5">
                 Translating legal clauses to plain English
               </p>
             </div>
@@ -178,10 +210,10 @@ export function SimplifyModal({ clauseText, onClose }: SimplifyModalProps) {
         <div className="p-6 overflow-y-auto flex-grow text-left space-y-5 scrollbar-thin scrollbar-thumb-gray-200 dark:scrollbar-thumb-gray-850">
           {/* Original Clause */}
           <div className="space-y-1.5">
-            <span className="text-[10px] font-extrabold uppercase tracking-wider text-gray-400 dark:text-gray-500">
+            <span className="text-[10px] font-extrabold uppercase tracking-wider text-gray-400 dark:text-gray-550">
               Original Legal Clause
             </span>
-            <div className="p-4 rounded-xl border border-gray-150 dark:border-gray-800 bg-gray-550/5 dark:bg-gray-950/20 font-mono text-[11px] text-gray-600 dark:text-gray-400 leading-relaxed max-h-40 overflow-y-auto">
+            <div className="p-4 rounded-xl border border-gray-150 dark:border-gray-800 bg-gray-550/5 dark:bg-gray-950/20 font-mono text-[11px] text-gray-650 dark:text-gray-405 leading-relaxed max-h-40 overflow-y-auto">
               {clauseText}
             </div>
           </div>
@@ -244,6 +276,14 @@ export function SimplifyModal({ clauseText, onClose }: SimplifyModalProps) {
             >
               {copied ? <Check size={14} /> : <Copy size={14} />}
               <span>{copied ? 'Copied!' : 'Copy Explanation'}</span>
+            </button>
+            <button
+              onClick={handleExportRedline}
+              disabled={loading || !!error || !simplifiedText || isExporting}
+              className="inline-flex items-center gap-1.5 px-4 py-2 text-xs font-bold rounded-xl border bg-white dark:bg-gray-900 border-gray-250 dark:border-gray-800 text-gray-750 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-850 disabled:opacity-40 disabled:hover:scale-100 disabled:cursor-not-allowed transition-all duration-200 hover:scale-[1.02] active:scale-[0.98]"
+            >
+              {isExporting ? <Loader2 size={14} className="animate-spin text-primary" /> : <Download size={14} />}
+              <span>Export Redline</span>
             </button>
             <button
               onClick={handleClose}

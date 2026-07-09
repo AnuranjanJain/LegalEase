@@ -5,10 +5,12 @@ This test suite validates the rate limiting controls for login, signup,
 and verification endpoints to prevent brute-force attacks, credential stuffing,
 signup abuse, and verification spam.
 """
+import os
 import pytest
 import time
 from unittest.mock import Mock, patch
 from fastapi import HTTPException, status
+import backend.config
 
 from backend.middleware.auth_rate_limit import (
     check_login_rate_limit,
@@ -25,6 +27,12 @@ from backend.middleware.auth_rate_limit import (
     verification_email_limiter,
     failed_login_limiter,
 )
+
+# Reset settings before any tests
+backend.config._settings = None
+
+# Set JWT_SECRET_KEY for tests
+os.environ["JWT_SECRET_KEY"] = "testing-secret-key-1234567890-abcdef"
 
 
 @pytest.fixture(autouse=True)
@@ -210,6 +218,7 @@ def test_rate_limit_time_window_reset(mock_request):
     import os
     original_period = os.getenv("AUTH_LOGIN_RATE_PERIOD")
     os.environ["AUTH_LOGIN_RATE_PERIOD"] = "1"
+    os.environ["JWT_SECRET_KEY"] = "testing-secret-key-1234567890-abcdef"
     
     # Re-import to pick up new environment variable
     from importlib import reload

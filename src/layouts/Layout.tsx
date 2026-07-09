@@ -3,9 +3,12 @@ import { MessageCircle } from 'lucide-react';
 import { Header } from '../components/Header';
 import { Footer } from '../components/Footer';
 import { ToastContainer } from '../components/ToastContainer';
+import { useGlobalShortcuts } from '../hooks/useGlobalShortcuts';
+import { ComplianceModal } from '../components/ComplianceModal';
 
 export function Layout() {
   const navigate = useNavigate();
+  useGlobalShortcuts();
 
   return (
     <div className="flex flex-col min-h-screen bg-background-light dark:bg-background-dark font-display text-gray-800 dark:text-gray-200">
@@ -26,6 +29,7 @@ export function Layout() {
 
       <Footer />
       <ToastContainer />
+      <ComplianceModal />
     </div>
   );
 }
