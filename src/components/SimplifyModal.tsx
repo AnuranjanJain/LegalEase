@@ -3,6 +3,7 @@ import { createPortal } from 'react-dom';
 import { X, Copy, Check, AlertTriangle, Sparkles, Loader2, Download } from 'lucide-react';
 import { api } from '../services/api';
 import { useToast } from '../contexts/ToastContext';
+import { FeedbackWidget } from './FeedbackWidget';
 
 interface SimplifyModalProps {
   clauseText: string | null;
@@ -249,8 +250,11 @@ export function SimplifyModal({ clauseText, onClose }: SimplifyModalProps) {
                   </div>
                 </div>
               ) : (
-                <div className="text-xs text-gray-800 dark:text-gray-250 leading-relaxed whitespace-pre-wrap select-text">
-                  {simplifiedText}
+                <div className="flex flex-col h-full space-y-4">
+                  <div className="text-xs text-gray-800 dark:text-gray-250 leading-relaxed whitespace-pre-wrap select-text">
+                    {simplifiedText}
+                  </div>
+                  <FeedbackWidget responseType="simplify" />
                 </div>
               )}
             </div>
