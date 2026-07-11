@@ -4,6 +4,7 @@ import { MemoryRouter } from 'react-router-dom';
 import { ChatbotPage } from '../../pages/ChatbotPage';
 import { ToastProvider } from '../../contexts/ToastContext';
 import { RedactionProvider } from '../../contexts/RedactionContext';
+import { ComplianceProvider } from '../../contexts/ComplianceContext';
 import { ChatStorageService } from '../../services/storage';
 import { api } from '../../services/api';
 
@@ -16,11 +17,13 @@ describe('ConflictChecker integration in ChatbotPage', () => {
   const renderWithProviders = () => {
     return render(
       <MemoryRouter>
-        <ToastProvider>
-          <RedactionProvider>
-            <ChatbotPage />
-          </RedactionProvider>
-        </ToastProvider>
+        <ComplianceProvider>
+          <ToastProvider>
+            <RedactionProvider>
+              <ChatbotPage />
+            </RedactionProvider>
+          </ToastProvider>
+        </ComplianceProvider>
       </MemoryRouter>
     );
   };

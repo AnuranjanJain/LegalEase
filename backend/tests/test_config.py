@@ -256,8 +256,14 @@ class TestAIConfig:
 
     def test_bytez_api_key_optional(self):
         """Test that BYTEZ_API_KEY is optional."""
-        config = AIConfig()
-        assert config.bytez_api_key is None
+        import os
+        old_key = os.environ.pop("BYTEZ_API_KEY", None)
+        try:
+            config = AIConfig()
+            assert config.bytez_api_key is None
+        finally:
+            if old_key is not None:
+                os.environ["BYTEZ_API_KEY"] = old_key
 
     def test_chat_model_default(self):
         """Test that CHAT_MODEL has default value."""

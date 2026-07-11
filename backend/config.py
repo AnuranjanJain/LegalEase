@@ -20,6 +20,9 @@ from pydantic import (
 )
 from pydantic_settings import BaseSettings
 import logging
+from dotenv import load_dotenv
+
+load_dotenv()
 
 logger = logging.getLogger(__name__)
 
