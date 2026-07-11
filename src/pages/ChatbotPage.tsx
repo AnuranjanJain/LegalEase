@@ -6,6 +6,7 @@ import { useToast } from '../contexts/ToastContext';
 import LegalMapping from '../components/LegalMapping';
 import { WebSearchSidebar } from '../components/WebSearchSidebar';
 import { useRedaction } from '../contexts/RedactionContext';
+import { useCompliance } from '../contexts/ComplianceContext';
 import { redact } from '../utils/redaction';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
@@ -102,6 +103,7 @@ export function ChatbotPage() {
 
   const { showToast } = useToast();
   const { isRedactionEnabled, redactionStyle } = useRedaction();
+  const { requireCompliance } = useCompliance();
   const fileInputRef = useRef<HTMLInputElement>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
@@ -330,10 +332,11 @@ export function ChatbotPage() {
     }
   };
 
-  const handleSend = async () => {
-    if (!input.trim()) return;
+  const handleSend = () => {
+    requireCompliance(async () => {
+      if (!input.trim()) return;
 
-    const userMessage: ChatMessage = {
+      const userMessage: ChatMessage = {
       id: crypto.randomUUID(),
       text: input,
       sender: 'user',
@@ -445,6 +448,7 @@ export function ChatbotPage() {
     } finally {
       setIsTyping(false);
     }
+    });
   };
 
   

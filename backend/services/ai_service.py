@@ -440,6 +440,82 @@ class AIService:
 
         return all_clauses
 
+    async def extract_deadlines(self, text: str) -> List[Dict[str, Any]]:
+        """
+        Extract key legal deadlines, renewal milestones, and dates from the document.
+        Returns a list of dictionaries with 'title', 'date' (YYYY-MM-DD), and 'description'.
+        """
+        if not text or not text.strip():
+            return []
+            
+        if self.stub_mode:
+            return [
+                {
+                    "title": "Contract Renewal Date",
+                    "date": "2026-12-01",
+                    "description": "Automatic renewal if not cancelled 30 days prior."
+                },
+                {
+                    "title": "Initial Payment Due",
+                    "date": "2024-08-15",
+                    "description": "Deadline for the first installment payment."
+                }
+            ]
+            
+        prompt = (
+            "You are a legal assistant analyzing a contract or legal document. "
+            "Extract all key deadlines, important dates, renewal milestones, and court filings mentioned in the text. "
+            "Respond ONLY with a valid JSON array of objects, where each object has these exact keys:\n"
+            "  - \"title\": a short name for the event or deadline\n"
+            "  - \"date\": the date in YYYY-MM-DD format (if exact date is unknown but relative, try to estimate based on context or leave as best effort YYYY-MM-DD)\n"
+            "  - \"description\": a brief explanation of the milestone\n\n"
+            "Do not include any other commentary or markdown formatting outside of the valid JSON structure.\n\n"
+            f"Text to analyze:\n{text[:self.max_model_input_chars - 1000]}"
+        )
+        
+        messages = [{"role": "user", "content": prompt}]
+        
+        try:
+            output = await self._execute_with_retry_and_timeout(self.chat_model_name, messages)
+            response_text = output.output if hasattr(output, 'output') else str(output)
+            
+            # Use generic JSON extraction instead of clause-specific parser
+            import json
+            import re
+            
+            cleaned = self._extract_from_markdown(response_text)
+            cleaned_json = self._clean_json_string(cleaned)
+            json_array = self._extract_json_array_balanced(cleaned_json) or cleaned_json
+            
+            try:
+                parsed = json.loads(json_array)
+            except json.JSONDecodeError:
+                array_match = re.search(r"\[\s*\{[\s\S]*\}\s*\]", cleaned)
+                if array_match:
+                    parsed = json.loads(array_match.group(0))
+                else:
+                    parsed = []
+                    
+            if not isinstance(parsed, list):
+                parsed = []
+            
+            # Validate output format
+            validated_deadlines = []
+            for item in parsed:
+                if isinstance(item, dict) and "title" in item and "date" in item:
+                    validated_deadlines.append({
+                        "title": str(item.get("title", "")).strip(),
+                        "date": str(item.get("date", "")).strip(),
+                        "description": str(item.get("description", "")).strip()
+                    })
+            return validated_deadlines
+            
+        except Exception as e:
+            logger.error(f"[{self._get_corr_id()}] Deadline extraction failed: {e}")
+            if self.graceful_degradation:
+                return []
+            raise
+
     def _extract_json_array_balanced(self, text: str) -> Optional[str]:
         """
         Extract the first valid JSON array using balanced bracket parsing.

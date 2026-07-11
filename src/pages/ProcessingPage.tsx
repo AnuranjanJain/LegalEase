@@ -9,9 +9,11 @@ import { StorageService } from '../services/storage';
 import { useToast } from '../contexts/ToastContext';
 import { useRedactedText } from '../hooks/useRedactedText';
 import { useRedaction } from '../contexts/RedactionContext';
+import { useCompliance } from '../contexts/ComplianceContext';
 import { RedactedText } from '../components/RedactedText';
 import { ReadabilityScore } from '../components/ReadabilityScore';
 import { FeedbackWidget } from '../components/FeedbackWidget';
+import { CalendarExportWidget } from '../components/CalendarExportWidget';
 
 // Word-based sliding window chunking algorithm
 function chunkText(text: string, windowSize: number = 2000, overlap: number = 200): string[] {
@@ -59,6 +61,7 @@ export function ProcessingPage() {
   // Apply PII redaction to the live preview (original summary kept in state)
   const redactedSummary = useRedactedText(finalSummary);
   const { isRedactionEnabled } = useRedaction();
+  const { requireCompliance } = useCompliance();
 
   // Run the document processing pipeline
   useEffect(() => {
@@ -197,8 +200,10 @@ export function ProcessingPage() {
       }
     };
 
-    executePipeline();
-  }, [docId, file, showToast]);
+    requireCompliance(() => {
+      executePipeline();
+    });
+  }, [docId, file, showToast, requireCompliance]);
 
   const handleExportPDF = async () => {
     if (!finalSummary) {
@@ -553,7 +558,8 @@ export function ProcessingPage() {
                   </div>
                 </div>
               )}
-              {/* Live Preview Panel (Only displayed when successfully finished) */}
+
+              {/* Live Preview Panel (Only displayed when successfully finished) */}
               {isPipelineCompleted && finalSummary && (
                 <>
                   <div className="bg-gray-50/50 dark:bg-gray-950/20 rounded-xl border border-gray-150 dark:border-gray-850 p-5 text-left space-y-3 animate-slide-up">
@@ -580,6 +586,7 @@ export function ProcessingPage() {
                     <FeedbackWidget responseType="summary" />
                   </div>
                   <ReadabilityScore originalText={originalText} summaryText={finalSummary} />
+                  <CalendarExportWidget documentText={originalText} />
                 </>
               )}
 
