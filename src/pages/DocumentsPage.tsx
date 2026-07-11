@@ -469,6 +469,7 @@ export function DocumentsPage() {
 
         {/* --- UPLOAD AREA WITH GLASSMORPHISM AND NEUMORPHIC GLOW --- */}
         <div
+          id="global-upload-trigger"
           onDragOver={handleDragOver}
           onDragLeave={handleDragLeave}
           onDrop={handleDrop}
@@ -515,6 +516,7 @@ export function DocumentsPage() {
           <div className="relative w-full md:w-80">
             <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 dark:text-gray-500" />
             <input 
+              id="global-search-input"
               type="text" 
               placeholder="Search documents..."
               value={searchQuery}
