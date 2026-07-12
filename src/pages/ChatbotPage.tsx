@@ -3,6 +3,7 @@ import { api } from '../services/api';
 import { ChatStorageService, ChatMessage, ChatSessionMetadata } from '../services/storage';
 import { useRef, useState, useEffect, useCallback } from 'react';
 import { useToast } from '../contexts/ToastContext';
+import { useDebounce } from '../hooks/useDebounce';
 import LegalMapping from '../components/LegalMapping';
 import { useRedaction } from '../contexts/RedactionContext';
 import { redact } from '../utils/redaction';
@@ -126,11 +127,35 @@ export function ChatbotPage() {
     setSessions(ChatStorageService.getSessions());
   }, []);
 
+  // Refs always hold the latest values so the unmount flush can access them
+  const latestMessagesRef = useRef(messages);
+  latestMessagesRef.current = messages;
+  const latestDocRef = useRef(uploadedDoc);
+  latestDocRef.current = uploadedDoc;
+  const latestSessionIdRef = useRef(activeSessionId);
+  latestSessionIdRef.current = activeSessionId;
+
+  // Debounce messages and document context so persistence doesn't
+  // fire on every stream chunk — localStorage writes are synchronous
+  // and block the main thread.
+  const debouncedMessages = useDebounce(messages, 1500);
+  const debouncedDoc = useDebounce(uploadedDoc, 1500);
+
   useEffect(() => {
     if (activeSessionId) {
-      persistSession(messages, uploadedDoc, activeSessionId);
+      persistSession(debouncedMessages, debouncedDoc, activeSessionId);
     }
-  }, [messages, uploadedDoc, activeSessionId, persistSession]);
+  }, [debouncedMessages, debouncedDoc, activeSessionId, persistSession]);
+
+  // Flush any pending persist on unmount so no data is lost
+  useEffect(() => {
+    return () => {
+      const sid = latestSessionIdRef.current;
+      if (sid) {
+        persistSession(latestMessagesRef.current, latestDocRef.current, sid);
+      }
+    };
+  }, []);
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
