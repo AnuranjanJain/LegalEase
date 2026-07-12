@@ -12,6 +12,7 @@ import { useRedaction } from '../contexts/RedactionContext';
 import { useCompliance } from '../contexts/ComplianceContext';
 import { RedactedText } from '../components/RedactedText';
 import { ReadabilityScore } from '../components/ReadabilityScore';
+import { FeedbackWidget } from '../components/FeedbackWidget';
 import { CalendarExportWidget } from '../components/CalendarExportWidget';
 
 // Word-based sliding window chunking algorithm
@@ -557,7 +558,8 @@ export function ProcessingPage() {
                   </div>
                 </div>
               )}
-              {/* Live Preview Panel (Only displayed when successfully finished) */}
+
+              {/* Live Preview Panel (Only displayed when successfully finished) */}
               {isPipelineCompleted && finalSummary && (
                 <>
                   <div className="bg-gray-50/50 dark:bg-gray-950/20 rounded-xl border border-gray-150 dark:border-gray-850 p-5 text-left space-y-3 animate-slide-up">
@@ -581,6 +583,7 @@ export function ProcessingPage() {
                         <RedactedText text={redactedSummary} />
                       </div>
                     </div>
+                    <FeedbackWidget responseType="summary" />
                   </div>
                   <ReadabilityScore originalText={originalText} summaryText={finalSummary} />
                   <CalendarExportWidget documentText={originalText} />
