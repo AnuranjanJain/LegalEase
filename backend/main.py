@@ -26,12 +26,7 @@ from backend.auth import validate_token_or_api_key, AuthIdentity
 from backend.utils.limiter import SimpleRateLimiter
 from backend.utils.cleanup import start_token_cleanup_task
 from backend.config import get_settings
-
-# ---------------------------------------------------------------------------
-# In-memory task store for async document processing (#365)
-# Structure: { task_id: {"status": str, "progress": int, "result": dict|None} }
-# ---------------------------------------------------------------------------
-_upload_tasks: dict[str, dict] = {}
+from backend.storage.upload_tasks import get_upload_task_storage
 
 # Optional imports (wrap in try/except so server can start without optional deps)
 try:
@@ -523,7 +518,8 @@ async def upload_document(
         raise HTTPException(status_code=500, detail="Failed to receive document")
 
     # Register the task as "queued" and launch the background worker
-    _upload_tasks[task_id] = {"status": "processing", "progress": 0, "result": None}
+    task_storage = get_upload_task_storage()
+    task_storage.create_task(task_id, status="processing", progress=0, result=None)
 
     background_tasks.add_task(
         _process_document_background,
@@ -548,8 +544,9 @@ async def _process_document_background(
     content_prefix: bytes,
 ):
     """Background worker: parse text, update progress, clean up temp file."""
+    task_storage = get_upload_task_storage()
     try:
-        _upload_tasks[task_id]["progress"] = 20
+        task_storage.update_progress(task_id, 20)
 
         extracted_text = ""
         if file_extension == ".pdf" or content_prefix.startswith(b"%PDF-"):
@@ -560,13 +557,12 @@ async def _process_document_background(
             with open(temp_path, "r", encoding="utf-8") as tf:
                 extracted_text = tf.read(10000)
 
-        _upload_tasks[task_id]["progress"] = 70
+        task_storage.update_progress(task_id, 70)
 
         extracted_text = extracted_text[:MAX_EXTRACTED_TEXT_CHARS]
 
-        _upload_tasks[task_id]["progress"] = 100
-        _upload_tasks[task_id]["status"] = "done"
-        _upload_tasks[task_id]["result"] = {"filename": filename, "text": extracted_text}
+        task_storage.update_progress(task_id, 100)
+        task_storage.mark_completed(task_id, {"filename": filename, "text": extracted_text})
         logger.info(f"Background processing complete for task {task_id} ({filename})")
     except Exception as e:
         logger.error(f"Background processing failed for task {task_id}: {e}", exc_info=True)
@@ -579,9 +575,7 @@ async def _process_document_background(
             error_message = str(e.detail)
         else:
             error_message = "Failed to process the uploaded document. Please try again or use a different file."
-        _upload_tasks[task_id]["status"] = "failed"
-        _upload_tasks[task_id]["progress"] = 0
-        _upload_tasks[task_id]["result"] = {"error": error_message}
+        task_storage.mark_failed(task_id, error_message)
     finally:
         if os.path.exists(temp_path):
             try:
@@ -628,7 +622,8 @@ async def edit_message(
 @app.get("/upload/status/{task_id}")
 async def upload_status(task_id: str, identity: AuthIdentity = Depends(validate_token_or_api_key)):
     """Poll the processing status of an async upload task (#365)."""
-    task = _upload_tasks.get(task_id)
+    task_storage = get_upload_task_storage()
+    task = task_storage.get_task(task_id)
     if not task:
         raise HTTPException(status_code=404, detail="Task not found")
     return {
