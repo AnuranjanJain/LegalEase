@@ -17,6 +17,7 @@ class User(Base):
     chat_sessions = relationship("ChatSession", back_populates="user", cascade="all, delete-orphan")
     documents = relationship("DocumentRecord", back_populates="user", cascade="all, delete-orphan")
     notifications = relationship("Notification", back_populates="user", cascade="all, delete-orphan")
+    obligations = relationship("Obligation", cascade="all, delete-orphan")
 
 
 class ChatSession(Base):
@@ -95,6 +96,31 @@ class Notification(Base):
     created_at = Column(DateTime, default=datetime.utcnow)
 
     user = relationship("User", back_populates="notifications")
+
+class Obligation(Base):
+    """
+    A single extracted deadline/obligation tied to a document, forming a
+    per-user ledger of upcoming legal deadlines across their portfolio.
+    Populated from /legal/extract-deadlines when a document_id is supplied.
+    """
+    __tablename__ = "obligations"
+
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
+    document_id = Column(Integer, ForeignKey("document_records.id"), nullable=False, index=True)
+    title = Column(String, nullable=False)
+    due_date = Column(DateTime, nullable=False, index=True)
+    description = Column(String, nullable=True)
+    # 'pending' (default) | 'completed' | 'dismissed'
+    status = Column(String, nullable=False, default="pending", index=True)
+    # Tracks which reminder thresholds (30/15/1 day) have already fired,
+    # so the reminder job never sends the same threshold twice.
+    # Stored as a comma-separated string of ints, e.g. "30,15".
+    reminder_sent_stage = Column(String, nullable=False, default="")
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+    user = relationship("User")
+    document = relationship("DocumentRecord")
 
 class Feedback(Base):
     __tablename__ = "feedback"
