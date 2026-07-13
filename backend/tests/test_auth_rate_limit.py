@@ -382,3 +382,150 @@ def test_verification_endpoint_rate_limit_enforcement():
     verification_email_limiter._storage.clear()
 
 
+@pytest.mark.unit
+def test_failed_login_counter_single_increment(mock_request):
+    """Test that each failed login increments the counter exactly once."""
+    key = f"{mock_request.client.host}:test@example.com"
+    
+    # First failed login should increment counter to 1
+    record_failed_login(mock_request, "test@example.com")
+    assert failed_login_limiter.get_attempt_count(key) == 1
+    
+    # Second failed login should increment counter to 2
+    record_failed_login(mock_request, "test@example.com")
+    assert failed_login_limiter.get_attempt_count(key) == 2
+    
+    # Third failed login should increment counter to 3
+    record_failed_login(mock_request, "test@example.com")
+    assert failed_login_limiter.get_attempt_count(key) == 3
+
+
+@pytest.mark.unit
+def test_lockout_check_does_not_increment_counter(mock_request):
+    """Test that check_failed_login_lockout does not increment the counter."""
+    key = f"{mock_request.client.host}:test@example.com"
+    
+    # Record one failed attempt
+    record_failed_login(mock_request, "test@example.com")
+    initial_count = failed_login_limiter.get_attempt_count(key)
+    assert initial_count == 1
+    
+    # Check lockout multiple times - should not increment counter
+    for i in range(5):
+        check_failed_login_lockout(mock_request, "test@example.com")
+    
+    # Counter should remain at 1
+    assert failed_login_limiter.get_attempt_count(key) == 1
+
+
+@pytest.mark.unit
+def test_peek_does_not_increment_counter(mock_request):
+    """Test that peek() does not increment the counter."""
+    key = f"{mock_request.client.host}:test@example.com"
+    
+    # Peek multiple times before any failed login
+    for i in range(5):
+        result = failed_login_limiter.peek(key)
+        assert result["allowed"] == True
+    
+    # Counter should still be 0
+    assert failed_login_limiter.get_attempt_count(key) == 0
+    
+    # Record one failed attempt
+    record_failed_login(mock_request, "test@example.com")
+    assert failed_login_limiter.get_attempt_count(key) == 1
+    
+    # Peek multiple times after failed login
+    for i in range(5):
+        result = failed_login_limiter.peek(key)
+        assert result["allowed"] == True
+    
+    # Counter should still be 1
+    assert failed_login_limiter.get_attempt_count(key) == 1
+
+
+@pytest.mark.unit
+def test_lockout_threshold_accuracy(mock_request):
+    """Test that lockout occurs exactly at the configured threshold."""
+    # Default limit is 10 failed attempts
+    key = f"{mock_request.client.host}:test@example.com"
+    
+    # Record 9 failed attempts - should not be locked out
+    for i in range(9):
+        record_failed_login(mock_request, "test@example.com")
+        check_failed_login_lockout(mock_request, "test@example.com")
+    
+    assert failed_login_limiter.get_attempt_count(key) == 9
+    
+    # Should still be allowed
+    check_failed_login_lockout(mock_request, "test@example.com")
+    
+    # 10th failed attempt should trigger lockout
+    record_failed_login(mock_request, "test@example.com")
+    assert failed_login_limiter.get_attempt_count(key) == 10
+    
+    # Now should be locked out
+    with pytest.raises(HTTPException) as exc_info:
+        check_failed_login_lockout(mock_request, "test@example.com")
+    
+    assert exc_info.value.status_code == status.HTTP_429_TOO_MANY_REQUESTS
+    assert "temporarily locked" in exc_info.value.detail
+
+
+@pytest.mark.unit
+def test_successful_login_resets_counter(mock_request):
+    """Test that successful login clears the failed attempt counter."""
+    key = f"{mock_request.client.host}:test@example.com"
+    
+    # Record multiple failed attempts
+    for i in range(5):
+        record_failed_login(mock_request, "test@example.com")
+    
+    assert failed_login_limiter.get_attempt_count(key) == 5
+    
+    # Clear failed attempts (simulating successful login)
+    clear_failed_login_attempts(mock_request, "test@example.com")
+    
+    # Counter should be reset
+    assert failed_login_limiter.get_attempt_count(key) == 0
+    assert key not in failed_login_limiter.storage
+
+
+@pytest.mark.unit
+def test_counter_accuracy_after_lockout_check(mock_request):
+    """Test that counter remains accurate after lockout check + failed login."""
+    key = f"{mock_request.client.host}:test@example.com"
+    
+    # Simulate the actual login flow: check lockout, then record failure
+    for i in range(3):
+        check_failed_login_lockout(mock_request, "test@example.com")
+        record_failed_login(mock_request, "test@example.com")
+    
+    # Counter should be exactly 3, not 6
+    assert failed_login_limiter.get_attempt_count(key) == 3
+
+
+@pytest.mark.unit
+def test_is_locked_out_helper(mock_request):
+    """Test the is_locked_out() helper method."""
+    key = f"{mock_request.client.host}:test@example.com"
+    
+    # Initially not locked out
+    assert failed_login_limiter.is_locked_out(key) == False
+    
+    # Record failed attempts up to threshold
+    for i in range(10):
+        record_failed_login(mock_request, "test@example.com")
+    
+    # Now should be locked out
+    assert failed_login_limiter.is_locked_out(key) == True
+    
+    # is_locked_out should not increment counter
+    initial_count = failed_login_limiter.get_attempt_count(key)
+    for i in range(5):
+        assert failed_login_limiter.is_locked_out(key) == True
+    
+    # Counter should remain unchanged
+    assert failed_login_limiter.get_attempt_count(key) == initial_count
+
+

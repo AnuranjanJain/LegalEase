@@ -15,6 +15,12 @@ class BaseStorage:
     def check(self, key: str, calls: int, period: int) -> dict:
         raise NotImplementedError
 
+    def peek(self, key: str, calls: int, period: int) -> dict:
+        raise NotImplementedError
+
+    def get_attempt_count(self, key: str, period: int) -> int:
+        raise NotImplementedError
+
     def cleanup(self, period: int) -> int:
         raise NotImplementedError
 
@@ -60,6 +66,40 @@ class InMemoryStorage(BaseStorage):
                 "remaining": max(0, calls - len(timestamps)),
                 "retry_after": 0,
             }
+
+    def peek(self, key: str, calls: int, period: int) -> dict:
+        """Check rate limit without incrementing the counter."""
+        now = time.time()
+        window = now - period
+
+        with self._lock:
+            timestamps = self.storage.get(key, [])
+            timestamps = [t for t in timestamps if t > window]
+            remaining = calls - len(timestamps)
+
+            if remaining <= 0:
+                retry_after = max(1, int(timestamps[0] + period - now) + 1) if timestamps else 1
+                return {
+                    "allowed": False,
+                    "remaining": 0,
+                    "retry_after": retry_after,
+                }
+
+            return {
+                "allowed": True,
+                "remaining": remaining,
+                "retry_after": 0,
+            }
+
+    def get_attempt_count(self, key: str, period: int) -> int:
+        """Get the current attempt count without incrementing."""
+        now = time.time()
+        window = now - period
+
+        with self._lock:
+            timestamps = self.storage.get(key, [])
+            timestamps = [t for t in timestamps if t > window]
+            return len(timestamps)
 
     def cleanup(self, period: int) -> int:
         now = time.time()
@@ -128,6 +168,42 @@ class RedisStorage(BaseStorage):
             "remaining": remaining,
             "retry_after": 0,
         }
+
+    def peek(self, key: str, calls: int, period: int) -> dict:
+        """Check rate limit without incrementing the counter."""
+        now = time.time()
+        window_id = int(now / period)
+        redis_key = f"rate_limit:{key}:{window_id}"
+
+        # Get current value without incrementing
+        val = self.client.get(redis_key)
+        current_count = int(val) if val else 0
+
+        remaining = calls - current_count
+        if remaining <= 0:
+            retry_after = int(period - (now % period))
+            if retry_after <= 0:
+                retry_after = 1
+            return {
+                "allowed": False,
+                "remaining": 0,
+                "retry_after": retry_after,
+            }
+
+        return {
+            "allowed": True,
+            "remaining": remaining,
+            "retry_after": 0,
+        }
+
+    def get_attempt_count(self, key: str, period: int) -> int:
+        """Get the current attempt count without incrementing."""
+        now = time.time()
+        window_id = int(now / period)
+        redis_key = f"rate_limit:{key}:{window_id}"
+
+        val = self.client.get(redis_key)
+        return int(val) if val else 0
 
     def cleanup(self, period: int) -> int:
         # Redis expires keys automatically, cleanup is a no-op
@@ -337,8 +413,34 @@ class SimpleRateLimiter:
 
         return self._local_storage.check(key, self.calls, self.period)
 
+    def peek(self, key: str) -> dict:
+        """Check rate limit without incrementing the counter."""
+        if self._redis_backend:
+            try:
+                return self._redis_backend.peek(key, self.calls, self.period)
+            except Exception as e:
+                logger.error(f"Redis rate limiter peek failed, falling back to local storage: {e}")
+                return self._local_storage.peek(key, self.calls, self.period)
+
+        return self._local_storage.peek(key, self.calls, self.period)
+
+    def get_attempt_count(self, key: str) -> int:
+        """Get the current attempt count without incrementing."""
+        if self._redis_backend:
+            try:
+                return self._redis_backend.get_attempt_count(key, self.period)
+            except Exception as e:
+                logger.error(f"Redis rate limiter get_attempt_count failed, falling back to local storage: {e}")
+                return self._local_storage.get_attempt_count(key, self.period)
+
+        return self._local_storage.get_attempt_count(key, self.period)
+
     def is_allowed(self, key: str) -> bool:
         return self.check(key)["allowed"]
+
+    def is_locked_out(self, key: str) -> bool:
+        """Check if the key is currently locked out without incrementing."""
+        return not self.peek(key)["allowed"]
 
     def cleanup(self) -> int:
         """Remove stale keys that have no timestamps in the current window.
