@@ -17,6 +17,7 @@ from backend.database import engine, Base, SessionLocal
 from backend.routers import auth_routes
 from backend.routers import legal_routes
 from backend.routers import history_routes
+from backend.routers import obligations_routes
 from backend.routers.notifications import router as notifications_router
 from backend.routers.compare_routes import router as compare_router
 from backend.routers import export_routes
@@ -25,7 +26,9 @@ from backend.routers import feedback_routes
 from backend.auth import validate_token_or_api_key, AuthIdentity
 from backend.utils.limiter import SimpleRateLimiter
 from backend.utils.cleanup import start_token_cleanup_task
+from backend.services.reminder_service import run_obligation_reminders
 from backend.config import get_settings
+from apscheduler.schedulers.asyncio import AsyncIOScheduler
 
 # ---------------------------------------------------------------------------
 # In-memory task store for async document processing (#365)
@@ -80,9 +83,16 @@ async def lifespan(app: FastAPI):
     # Start the token blacklist cleanup worker in the background
     cleanup_interval = file_config.token_cleanup_interval_seconds
     cleanup_task = asyncio.create_task(start_token_cleanup_task(interval_seconds=cleanup_interval))
+
+    # Daily obligation-reminder job (30/15/1-day-out thresholds).
+    scheduler = AsyncIOScheduler()
+    scheduler.add_job(run_obligation_reminders, "interval", hours=24, id="obligation_reminders")
+    scheduler.start()
+
     try:
         yield
     finally:
+        scheduler.shutdown(wait=False)
         cleanup_task.cancel()
         try:
             await cleanup_task
@@ -179,6 +189,8 @@ app.include_router(auth_routes.router)
 app.include_router(legal_routes.router)
 # Include notifications router
 app.include_router(notifications_router)
+# Include obligations router
+app.include_router(obligations_routes.router)
 # Include history router
 app.include_router(history_routes.router)
 # Include multi-document comparison router
@@ -522,8 +534,15 @@ async def upload_document(
         logger.error(f"Upload error: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail="Failed to receive document")
 
-    # Register the task as "queued" and launch the background worker
-    _upload_tasks[task_id] = {"status": "processing", "progress": 0, "result": None}
+    # Register the task as "queued" and launch the background worker.
+    # `owner` is set to the identity's rate-limit key (user:{email} or
+    # api_key:{hash}) so /upload/status can 404 for any other caller.
+    _upload_tasks[task_id] = {
+        "owner": identity.get_rate_limit_key(),
+        "status": "processing",
+        "progress": 0,
+        "result": None,
+    }
 
     background_tasks.add_task(
         _process_document_background,
@@ -627,16 +646,27 @@ async def edit_message(
 
 @app.get("/upload/status/{task_id}")
 async def upload_status(task_id: str, identity: AuthIdentity = Depends(validate_token_or_api_key)):
-    """Poll the processing status of an async upload task (#365)."""
+    """Poll the processing status of an async upload task (#365).
+
+    Only the identity that registered the task can read it. Mismatches
+    return 404 (not 403) so callers cannot probe for another user's
+    task ids by watching status-code differences.
+    """
     task = _upload_tasks.get(task_id)
-    if not task:
+    if not task or task.get("owner") != identity.get_rate_limit_key():
         raise HTTPException(status_code=404, detail="Task not found")
-    return {
+    response = {
         "task_id": task_id,
         "status": task["status"],
         "progress": task["progress"],
         "result": task["result"],
     }
+    # Drop terminal-state tasks from the in-memory store on the first
+    # successful read so the extracted text (up to MAX_EXTRACTED_TEXT_CHARS)
+    # doesn't sit in RAM for the lifetime of the worker.
+    if task["status"] in ("done", "failed"):
+        _upload_tasks.pop(task_id, None)
+    return response
 
 
 
