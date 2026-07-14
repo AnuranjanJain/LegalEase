@@ -522,8 +522,15 @@ async def upload_document(
         logger.error(f"Upload error: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail="Failed to receive document")
 
-    # Register the task as "queued" and launch the background worker
-    _upload_tasks[task_id] = {"status": "processing", "progress": 0, "result": None}
+    # Register the task as "queued" and launch the background worker.
+    # `owner` is set to the identity's rate-limit key (user:{email} or
+    # api_key:{hash}) so /upload/status can 404 for any other caller.
+    _upload_tasks[task_id] = {
+        "owner": identity.get_rate_limit_key(),
+        "status": "processing",
+        "progress": 0,
+        "result": None,
+    }
 
     background_tasks.add_task(
         _process_document_background,
@@ -627,16 +634,27 @@ async def edit_message(
 
 @app.get("/upload/status/{task_id}")
 async def upload_status(task_id: str, identity: AuthIdentity = Depends(validate_token_or_api_key)):
-    """Poll the processing status of an async upload task (#365)."""
+    """Poll the processing status of an async upload task (#365).
+
+    Only the identity that registered the task can read it. Mismatches
+    return 404 (not 403) so callers cannot probe for another user's
+    task ids by watching status-code differences.
+    """
     task = _upload_tasks.get(task_id)
-    if not task:
+    if not task or task.get("owner") != identity.get_rate_limit_key():
         raise HTTPException(status_code=404, detail="Task not found")
-    return {
+    response = {
         "task_id": task_id,
         "status": task["status"],
         "progress": task["progress"],
         "result": task["result"],
     }
+    # Drop terminal-state tasks from the in-memory store on the first
+    # successful read so the extracted text (up to MAX_EXTRACTED_TEXT_CHARS)
+    # doesn't sit in RAM for the lifetime of the worker.
+    if task["status"] in ("done", "failed"):
+        _upload_tasks.pop(task_id, None)
+    return response
 
 
 
