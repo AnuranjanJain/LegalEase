@@ -220,6 +220,10 @@ def check_failed_login_lockout(request: Request, email: str) -> None:
     Implements progressive backoff by checking if the number of failed attempts
     exceeds the threshold, triggering a temporary lockout.
     
+    This function uses peek() to check the lockout status without incrementing
+    the failed attempt counter. The counter is only incremented by record_failed_login()
+    after an actual authentication failure.
+    
     Args:
         request: FastAPI request object
         email: User email attempting to login
@@ -231,7 +235,8 @@ def check_failed_login_lockout(request: Request, email: str) -> None:
     email_lower = email.lower()
     key = f"{ip}:{email_lower}"
     
-    result = failed_login_limiter.check(key)
+    # Use peek() to check lockout status without incrementing counter
+    result = failed_login_limiter.peek(key)
     
     # If not allowed, it means we've exceeded the failed attempt limit
     if not result["allowed"]:
