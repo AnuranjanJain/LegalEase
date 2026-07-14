@@ -68,6 +68,7 @@ class ClauseAnalysisResponse(BaseModel):
 
 class DeadlineExtractionRequest(BaseModel):
     text: str
+    document_id: Optional[int] = None
 
 
 class DeadlineItem(BaseModel):
@@ -160,20 +161,71 @@ async def analyze_clauses(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=str(e),
         )
+    
+    
+def _parse_deadline_date(date_str: Optional[str]) -> Optional[datetime]:
+    """Parse the AI-extracted 'YYYY-MM-DD' date string into a datetime.
+
+    Returns None if the value is missing or not a valid date, so a single
+    malformed deadline never breaks persistence of the rest.
+    """
+    if not date_str:
+        return None
+    try:
+        return datetime.strptime(date_str, "%Y-%m-%d")
+    except (ValueError, TypeError):
+        return None
+    
 
 @router.post("/extract-deadlines", response_model=DeadlineExtractionResponse)
 async def extract_deadlines(
     request: DeadlineExtractionRequest,
-    current_user: AuthIdentity = Depends(validate_token_or_api_key)
+    current_user: AuthIdentity = Depends(validate_token_or_api_key),
+    db: Session = Depends(get_db),
 ):
     try:
         deadlines = await ai_service.extract_deadlines(request.text)
+
+        # Optionally persist each extracted deadline against the given
+        # document, same pattern as /analyze-clauses caching to
+        # DocumentRecord.clause_analysis.
+        user_id = current_user.get_user_id()
+        if request.document_id and user_id:
+            doc = (
+                db.query(models.DocumentRecord)
+                .filter(
+                    models.DocumentRecord.id == request.document_id,
+                    models.DocumentRecord.user_id == user_id,
+                )
+                .first()
+            )
+            if doc:
+                for item in deadlines:
+                    parsed_date = _parse_deadline_date(item.get("date"))
+                    if parsed_date is None:
+                        # Skip unparseable dates rather than failing the
+                        # whole extraction; the deadline is still returned
+                        # to the caller in the response.
+                        continue
+                    db.add(
+                        models.Obligation(
+                            user_id=user_id,
+                            document_id=doc.id,
+                            title=item.get("title", "Untitled deadline"),
+                            due_date=parsed_date,
+                            description=item.get("description"),
+                            status="pending",
+                        )
+                    )
+                db.commit()
+
         return {"deadlines": deadlines}
     except Exception as e:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=str(e),
         )
+    
 
 @router.get("/documents/{document_id}/clauses", response_model=ClauseAnalysisResponse)
 def get_cached_clauses(
