@@ -129,12 +129,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       const token = localStorage.getItem('access_token');
       if (token) {
         // Fire-and-forget: we always clear the local session regardless of server response.
-        fetch(`${import.meta.env.VITE_API_URL ?? ''}/auth/logout`, {
+        fetch(`${API_BASE_URL}/auth/logout`, {
           method: 'POST',
           headers: { Authorization: `Bearer ${token}` },
         }).catch((err) => console.warn('Server-side logout failed:', err));
       }
 
+      // Always clear local state immediately, regardless of server response
       localStorage.removeItem('access_token');
       sessionStorage.clear();
 
@@ -144,6 +145,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       return true;
     } catch (error) {
       console.error('Logout failed:', error);
+      // Ensure local state is cleared even on error
+      localStorage.removeItem('access_token');
+      sessionStorage.clear();
+      setIsAuthenticated(false);
+      setUserEmail(null);
       return false;
     }
   };

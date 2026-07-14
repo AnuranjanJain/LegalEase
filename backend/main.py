@@ -17,6 +17,7 @@ from backend.database import engine, Base, SessionLocal
 from backend.routers import auth_routes
 from backend.routers import legal_routes
 from backend.routers import history_routes
+from backend.routers import obligations_routes
 from backend.routers.notifications import router as notifications_router
 from backend.routers.compare_routes import router as compare_router
 from backend.routers import export_routes
@@ -25,6 +26,7 @@ from backend.routers import feedback_routes
 from backend.auth import validate_token_or_api_key, AuthIdentity
 from backend.utils.limiter import SimpleRateLimiter
 from backend.utils.cleanup import start_token_cleanup_task
+from backend.services.reminder_service import run_obligation_reminders
 from backend.config import get_settings
 from backend.storage.upload_tasks import get_upload_task_storage
 
@@ -75,9 +77,16 @@ async def lifespan(app: FastAPI):
     # Start the token blacklist cleanup worker in the background
     cleanup_interval = file_config.token_cleanup_interval_seconds
     cleanup_task = asyncio.create_task(start_token_cleanup_task(interval_seconds=cleanup_interval))
+
+    # Daily obligation-reminder job (30/15/1-day-out thresholds).
+    scheduler = AsyncIOScheduler()
+    scheduler.add_job(run_obligation_reminders, "interval", hours=24, id="obligation_reminders")
+    scheduler.start()
+
     try:
         yield
     finally:
+        scheduler.shutdown(wait=False)
         cleanup_task.cancel()
         try:
             await cleanup_task
@@ -174,6 +183,8 @@ app.include_router(auth_routes.router)
 app.include_router(legal_routes.router)
 # Include notifications router
 app.include_router(notifications_router)
+# Include obligations router
+app.include_router(obligations_routes.router)
 # Include history router
 app.include_router(history_routes.router)
 # Include multi-document comparison router
@@ -626,12 +637,13 @@ async def upload_status(task_id: str, identity: AuthIdentity = Depends(validate_
     task = task_storage.get_task(task_id)
     if not task:
         raise HTTPException(status_code=404, detail="Task not found")
-    return {
+    response = {
         "task_id": task_id,
         "status": task["status"],
         "progress": task["progress"],
         "result": task["result"],
     }
+    return response
 
 
 
