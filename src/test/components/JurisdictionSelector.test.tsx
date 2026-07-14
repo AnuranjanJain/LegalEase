@@ -25,15 +25,19 @@ vi.mock('html2pdf.js', () => ({
   })
 }));
 
+import { MemoryRouter } from 'react-router-dom';
+
 const renderChatbot = () => {
   return render(
-    <ToastProvider>
-      <RedactionProvider>
-        <ComplianceProvider>
-          <ChatbotPage />
-        </ComplianceProvider>
-      </RedactionProvider>
-    </ToastProvider>
+    <MemoryRouter>
+      <ComplianceProvider>
+        <ToastProvider>
+          <RedactionProvider>
+            <ChatbotPage />
+          </RedactionProvider>
+        </ToastProvider>
+      </ComplianceProvider>
+    </MemoryRouter>
   );
 };
 

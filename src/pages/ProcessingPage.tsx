@@ -559,7 +559,8 @@ export function ProcessingPage() {
                   </div>
                 </div>
               )}
-              {/* Live Preview Panel (Only displayed when successfully finished) */}
+
+              {/* Live Preview Panel (Only displayed when successfully finished) */}
               {isPipelineCompleted && finalSummary && (
                 <>
                   <div className="bg-gray-50/50 dark:bg-gray-950/20 rounded-xl border border-gray-150 dark:border-gray-850 p-5 text-left space-y-3 animate-slide-up">

@@ -17,13 +17,13 @@ describe('ConflictChecker integration in ChatbotPage', () => {
   const renderWithProviders = () => {
     return render(
       <MemoryRouter>
-        <ToastProvider>
-          <RedactionProvider>
-            <ComplianceProvider>
+        <ComplianceProvider>
+          <ToastProvider>
+            <RedactionProvider>
               <ChatbotPage />
-            </ComplianceProvider>
-          </RedactionProvider>
-        </ToastProvider>
+            </RedactionProvider>
+          </ToastProvider>
+        </ComplianceProvider>
       </MemoryRouter>
     );
   };

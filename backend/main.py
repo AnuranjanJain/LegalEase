@@ -380,7 +380,8 @@ async def chat(request: Request, payload: ChatRequest, identity: AuthIdentity = 
     validate_jurisdiction(payload.jurisdiction)
 
     cache_key = f"{sanitized_message} || {sanitized_context}" if sanitized_context else sanitized_message
-    cached_response = semantic_cache.get(cache_key)
+    cache_namespace = identity.get_rate_limit_key()
+    cached_response = semantic_cache.get(cache_key, namespace=cache_namespace)
 
     if cached_response:
         logger.info(f"[{correlation_id_var.get()}] Serving response from semantic cache")
@@ -439,7 +440,7 @@ async def chat(request: Request, payload: ChatRequest, identity: AuthIdentity = 
                 
                 # Re-calculate the cache key using the post-RAG context
                 final_cache_key = f"{sanitized_message} || {sanitized_context}" if sanitized_context else sanitized_message
-                semantic_cache.set(final_cache_key, full_response)
+                semantic_cache.set(final_cache_key, full_response, namespace=cache_namespace)
             except Exception as e:
                 logger.error(f"[{correlation_id_var.get()}] Stream generation error: {e}")
                 yield "\n[Error: Inference stream failed]"
@@ -460,7 +461,7 @@ async def chat(request: Request, payload: ChatRequest, identity: AuthIdentity = 
         response_text = ""
         async for chunk in response_gen:
             response_text += chunk
-        semantic_cache.set(cache_key, response_text)
+        semantic_cache.set(cache_key, response_text, namespace=cache_namespace)
         return {"response": response_text, "citations": citations}
 
 
@@ -719,3 +720,4 @@ if __name__ == "__main__":
     import uvicorn
 
     uvicorn.run(app, host="0.0.0.0", port=8000)
+ 
