@@ -15,6 +15,7 @@ import { ReadabilityScore } from '../components/ReadabilityScore';
 import { FeedbackWidget } from '../components/FeedbackWidget';
 import { CalendarExportWidget } from '../components/CalendarExportWidget';
 
+
 // Word-based sliding window chunking algorithm
 function chunkText(text: string, windowSize: number = 2000, overlap: number = 200): string[] {
   const words = text.trim().split(/\s+/);

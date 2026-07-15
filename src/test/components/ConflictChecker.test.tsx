@@ -28,6 +28,7 @@ describe('ConflictChecker integration in ChatbotPage', () => {
     );
   };
 
+
   it('renders tab selector and handles switching to Conflict Checker view', async () => {
     // Setup a comparison session in Storage
     const session = ChatStorageService.createSession('Compare Session');
