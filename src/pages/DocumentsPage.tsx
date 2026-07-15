@@ -128,6 +128,7 @@ export function DocumentsPage() {
   const [shareDoc, setShareDoc] = useState<Document | null>(null);
   const [selectedAuditDoc, setSelectedAuditDoc] = useState<Document | null>(null);
   const [auditTab, setAuditTab] = useState<'overview' | 'heatmap'>('overview');
+  const [fileObjects, setFileObjects] = useState<Map<string, File>>(new Map());
 
   useEffect(() => {
     setAuditTab('overview');
@@ -195,6 +196,51 @@ export function DocumentsPage() {
     setDocuments(StorageService.getDocuments());
   }, []);
 
+  const processBatchFile = async (docId: string, file: File) => {
+    try {
+      const formData = new FormData();
+      formData.append('file', file);
+      const uploadData = await api.upload<{ task_id?: string; filename?: string; text?: string; status?: string }>('/upload', formData);
+      
+      let extractedText = uploadData.text || '';
+      if (uploadData.task_id) {
+        let isComplete = false;
+        let pollResult: any = null;
+        while (!isComplete) {
+          await new Promise(resolve => setTimeout(resolve, 1000));
+          pollResult = await api.get<{ status: string; progress: number; result: any }>(`/upload/status/${uploadData.task_id}`);
+          if (pollResult.status === 'done' || pollResult.status === 'failed') {
+            isComplete = true;
+          }
+        }
+        if (pollResult.status === 'failed') {
+          throw new Error(pollResult.result?.error || 'Document processing failed on server.');
+        }
+        extractedText = pollResult.result?.text || '';
+      }
+
+      if (!extractedText) throw new Error('No text extracted from document.');
+
+      const summaryRes = await api.post<{ summary: string }>('/summarize', { text: extractedText.substring(0, 4000) }).catch(() => ({ summary: 'Batch processed summary.' }));
+      const compiledBrief = summaryRes.summary;
+
+      const jurisdiction = localStorage.getItem('le_selected_jurisdiction') || 'General / Not Specified';
+      let analyzedClauses: any[] = [];
+      try {
+        const response = await api.post<{ clauses: any[] }>('/legal/analyze-clauses', { text: extractedText, jurisdiction });
+        analyzedClauses = response.clauses;
+      } catch (e) {}
+
+      StorageService.updateDocumentStatus(docId, 'processed', compiledBrief, extractedText, analyzedClauses);
+      setDocuments(StorageService.getDocuments());
+      showToast(`"${file.name}" analyzed successfully!`, 'success');
+    } catch (err) {
+      StorageService.updateDocumentStatus(docId, 'failed');
+      setDocuments(StorageService.getDocuments());
+      showToast(`Audit failed for "${file.name}".`, 'error');
+    }
+  };
+
   /** Stage files for preview before uploading */
   const stageFiles = (files: FileList | File[]) => {
     const newFiles = Array.from(files);
@@ -206,28 +252,70 @@ export function DocumentsPage() {
   const confirmUpload = () => {
     if (stagedFiles.length === 0) return;
     
-    // Process the first file and navigate to /processing (current behavior)
-    // In a full implementation, we'd process all files in batch.
-    const file = stagedFiles[0];
-    const fileExtension = file.name.split('.').pop()?.toLowerCase() || 'txt';
-    
-    const newDoc: Document = {
-      id: `doc_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
-      name: file.name,
-      type: fileExtension,
-      size: file.size,
-      uploadDate: new Date().toISOString(),
-      status: 'processing'
-    };
+    if (stagedFiles.length === 1) {
+      // Keep existing single-file upload flow working
+      const file = stagedFiles[0];
+      const fileExtension = file.name.split('.').pop()?.toLowerCase() || 'txt';
+      
+      const newDoc: Document = {
+        id: `doc_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+        name: file.name,
+        type: fileExtension,
+        size: file.size,
+        uploadDate: new Date().toISOString(),
+        status: 'processing'
+      };
 
-    // Save to StorageService and update state
-    StorageService.saveDocument(newDoc);
+      // Save to StorageService and update state
+      StorageService.saveDocument(newDoc);
+      setDocuments(StorageService.getDocuments());
+      setStagedFiles([]);
+      showToast(`Initializing processing pipeline for "${file.name}"...`, 'info');
+
+      // Navigate to processing page, passing the document details and the real File object
+      navigate('/processing', { state: { docId: newDoc.id, file } });
+    } else {
+      // Batch document upload with processing queue
+      const newDocs: { doc: Document, file: File }[] = [];
+      const newFileObjects = new Map(fileObjects);
+      
+      stagedFiles.forEach((file, index) => {
+        const fileExtension = file.name.split('.').pop()?.toLowerCase() || 'txt';
+        const newDoc: Document = {
+          id: `doc_${Date.now()}_${index}_${Math.random().toString(36).substr(2, 9)}`,
+          name: file.name,
+          type: fileExtension,
+          size: file.size,
+          uploadDate: new Date().toISOString(),
+          status: 'processing'
+        };
+        StorageService.saveDocument(newDoc);
+        newDocs.push({ doc: newDoc, file });
+        newFileObjects.set(newDoc.id, file);
+      });
+      
+      setFileObjects(newFileObjects);
+      setDocuments(StorageService.getDocuments());
+      setStagedFiles([]);
+      showToast(`Added ${stagedFiles.length} documents to batch processing queue...`, 'info');
+      
+      // Start processing them in background
+      newDocs.forEach(({ doc, file }) => {
+        processBatchFile(doc.id, file);
+      });
+    }
+  };
+
+  const handleRetry = (docId: string, name: string) => {
+    const file = fileObjects.get(docId);
+    if (!file) {
+      showToast('Cannot retry. File data is lost. Please re-upload.', 'error');
+      return;
+    }
+    StorageService.updateDocumentStatus(docId, 'processing');
     setDocuments(StorageService.getDocuments());
-    setStagedFiles([]);
-    showToast(`Initializing processing pipeline for "${file.name}"...`, 'info');
-
-    // Navigate to processing page, passing the document details and the real File object
-    navigate('/processing', { state: { docId: newDoc.id, file } });
+    showToast(`Retrying audit for "${name}"...`, 'info');
+    processBatchFile(docId, file);
   };
 
   const handleDragOver = (e: React.DragEvent<HTMLDivElement>) => {
@@ -715,22 +803,32 @@ export function DocumentsPage() {
                         />
                       </div>
 
-                      <button
-                        onClick={() => handleReviewDetails(doc)}
-                        className={`inline-flex items-center gap-1.5 px-4 py-2 text-xs font-bold rounded-lg border border-gray-250 dark:border-gray-800 hover:border-primary-500 hover:bg-primary-500 hover:text-white transition-all`}
-                      >
-                        {doc.status === 'processing' ? (
-                          <>
-                            <span>View Progress</span>
-                            <ArrowRight size={12} className="animate-pulse" />
-                          </>
-                        ) : (
-                          <>
-                            <Eye size={12} />
-                            <span>Audit Analysis</span>
-                          </>
-                        )}
-                      </button>
+                      {(doc.status === 'error' || doc.status === 'failed') ? (
+                        <button
+                          onClick={() => handleRetry(doc.id, doc.name)}
+                          className={`inline-flex items-center gap-1.5 px-4 py-2 text-xs font-bold rounded-lg border border-red-250 dark:border-red-800 text-red-500 hover:bg-red-50 hover:dark:bg-red-900/20 transition-all`}
+                        >
+                          <RefreshCcw size={12} />
+                          <span>Retry</span>
+                        </button>
+                      ) : (
+                        <button
+                          onClick={() => handleReviewDetails(doc)}
+                          className={`inline-flex items-center gap-1.5 px-4 py-2 text-xs font-bold rounded-lg border border-gray-250 dark:border-gray-800 hover:border-primary-500 hover:bg-primary-500 hover:text-white transition-all`}
+                        >
+                          {doc.status === 'processing' ? (
+                            <>
+                              <span>View Progress</span>
+                              <ArrowRight size={12} className="animate-pulse" />
+                            </>
+                          ) : (
+                            <>
+                              <Eye size={12} />
+                              <span>Audit Analysis</span>
+                            </>
+                          )}
+                        </button>
+                      )}
                     </div>
 
                   </div>
@@ -815,13 +913,23 @@ export function DocumentsPage() {
                           </td>
                           <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-semibold">
                             <div className="flex items-center justify-end gap-1">
-                              <button
-                                onClick={() => handleReviewDetails(doc)}
-                                className="p-2 text-gray-400 hover:text-primary-500 dark:hover:text-white hover:bg-primary-500/10 rounded-lg transition-colors"
-                                title="View Details"
-                              >
-                                <Eye size={16} />
-                              </button>
+                              {(doc.status === 'error' || doc.status === 'failed') ? (
+                                <button
+                                  onClick={() => handleRetry(doc.id, doc.name)}
+                                  className="p-2 text-red-400 hover:text-red-500 hover:bg-red-500/10 rounded-lg transition-colors"
+                                  title="Retry"
+                                >
+                                  <RefreshCcw size={16} />
+                                </button>
+                              ) : (
+                                <button
+                                  onClick={() => handleReviewDetails(doc)}
+                                  className="p-2 text-gray-400 hover:text-primary-500 dark:hover:text-white hover:bg-primary-500/10 rounded-lg transition-colors"
+                                  title="View Details"
+                                >
+                                  <Eye size={16} />
+                                </button>
+                              )}
                               {/* WhatsApp Share button — list view */}
                               <ShareButton
                                 document={doc}
