@@ -3,6 +3,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { ChatbotPage } from '../../pages/ChatbotPage';
 import { ToastProvider } from '../../contexts/ToastContext';
 import { RedactionProvider } from '../../contexts/RedactionContext';
+import { ComplianceProvider } from '../../contexts/ComplianceContext';
 
 // Mock api client to prevent hitting real network
 vi.mock('../../services/api', () => ({
@@ -25,7 +26,6 @@ vi.mock('html2pdf.js', () => ({
 }));
 
 import { MemoryRouter } from 'react-router-dom';
-import { ComplianceProvider } from '../../contexts/ComplianceContext';
 
 const renderChatbot = () => {
   return render(
@@ -40,6 +40,7 @@ const renderChatbot = () => {
     </MemoryRouter>
   );
 };
+
 
 describe('Jurisdiction Selector Component', () => {
   beforeEach(() => {
