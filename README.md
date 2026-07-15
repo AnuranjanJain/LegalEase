@@ -15,6 +15,12 @@
   <img src="https://img.shields.io/github/license/AnuranjanJain/LegalEase?style=for-the-badge" />
 </p>
 
+<p align="center">
+  <a href="https://github.com/AnuranjanJain/LegalEase" target="_blank">
+    <img src="https://img.shields.io/badge/⭐_Star_this_Repo-black?style=for-the-badge&logo=github" alt="Star the Repo" />
+  </a>
+</p>
+
 ## 🎯 Why LegalEase?
 
 Legal documents are often difficult for ordinary users to understand because of legal jargon and lengthy clauses.
@@ -60,6 +66,9 @@ Explore the LegalEase platform to upload documents,view summaries,and interact w
 
 ### 🏠 Homepage
 ![Homepage](assets/homepage.png)
+
+### 🎬 Live Demo Walkthrough
+![Homepage Demo](assets/demo-homepage.gif)
 
 ### 🤖 AI Chatbot
 ![AI Chatbot](assets/aichatbot.png)
