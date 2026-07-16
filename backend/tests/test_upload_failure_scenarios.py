@@ -19,6 +19,7 @@ from backend.storage.upload_tasks import (
     InMemoryTaskStorage,
     RedisTaskStorage,
     UploadTaskStorage,
+    get_upload_task_storage,
     reset_upload_task_storage,
 )
 from backend.main import app
@@ -42,7 +43,7 @@ def client():
 @pytest.fixture
 def auth_headers():
     """Create authentication headers for testing."""
-    return {"Authorization": "Bearer dev-token"}
+    return {"X-API-Key": "dev-token"}
 
 
 class TestRedisUnavailable:

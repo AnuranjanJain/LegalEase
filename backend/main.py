@@ -31,16 +31,18 @@ from backend.config import get_settings
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from backend.storage.upload_tasks import get_upload_task_storage
 
+# Optional imports (wrap in try/except so server can start without optional deps)
 try:
-    import fitz
+    import fitz  # PyMuPDF
 except Exception:
     fitz = None
 
 try:
-    from docx import Document as DocxDocument
+    from docx import Document as DocxDocument  # type: ignore[import-untyped]
 except Exception:
-    DocxDocument = None
+    DocxDocument = None  # type: ignore[assignment,misc]
 
+# Import pipeline exceptions, validations, and service
 from backend.core.exceptions import (
     AIError, ValidationError, ProviderError, TimeoutError, ServiceUnavailableError
 )
@@ -52,58 +54,32 @@ from backend.services.ai_service import ai_service, correlation_id_var
 from backend.services.rag_service import rag_service
 from backend.services.cache_service import semantic_cache
 
+#Middleware import 
 from backend.middleware.rate_limit import RateLimitMiddleware
 from backend.middleware.correlation_id import validate_or_generate_correlation_id
-
+# Configure logging
 logging.basicConfig(
     level=logging.INFO,
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
 )
 logger = logging.getLogger(__name__)
 
+# Get configuration from centralized settings
 settings = get_settings()
 file_config = settings.file_upload
 rate_config = settings.rate_limit
 cors_config = settings.cors
 
+# Track application start time for uptime calculation
 _app_start_time = time.monotonic()
-
-def _check_database_persistence():
-    """
-    Warn if database is not configured for persistence.
-    SQLite and missing DATABASE_URL silently destroy data on serverless restarts.
-    """
-    import warnings
-    database_url = os.getenv("DATABASE_URL", "").strip()
-    
-    if not database_url:
-        warnings.warn(
-            "DATABASE_URL not set. LegalEase will use temporary SQLite storage "
-            "that does not persist between serverless invocations. "
-            "Set DATABASE_URL to a PostgreSQL connection string for production.",
-            RuntimeWarning,
-            stacklevel=2
-        )
-        return False
-    
-    if database_url.startswith("sqlite"):
-        warnings.warn(
-            "SQLite database configured. Data will not persist between serverless invocations. "
-            "Set DATABASE_URL to a PostgreSQL connection string for production.",
-            RuntimeWarning,
-            stacklevel=2
-        )
-        return False
-    
-    return True
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    _check_database_persistence()
-    
+    # Start the token blacklist cleanup worker in the background
     cleanup_interval = file_config.token_cleanup_interval_seconds
     cleanup_task = asyncio.create_task(start_token_cleanup_task(interval_seconds=cleanup_interval))
 
+    # Daily obligation-reminder job (30/15/1-day-out thresholds).
     scheduler = AsyncIOScheduler()
     scheduler.add_job(run_obligation_reminders, "interval", hours=24, id="obligation_reminders")
     scheduler.start()
@@ -116,7 +92,6 @@ async def lifespan(app: FastAPI):
         try:
             await cleanup_task
         except asyncio.CancelledError:
-            pass
             pass
 
 app = FastAPI(lifespan=lifespan)
@@ -749,4 +724,8 @@ async def health():
     return response
 
 
+if __name__ == "__main__":
+    import uvicorn
 
+    uvicorn.run(app, host="0.0.0.0", port=8000)
+ 

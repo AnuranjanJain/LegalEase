@@ -66,6 +66,22 @@ class UploadTaskStorageBackend(ABC):
         """Check if a task exists."""
         pass
 
+    def mark_completed(self, task_id: str, result: Dict[str, Any]) -> bool:
+        """Mark task as completed with result."""
+        return (
+            self.set_result(task_id, result) and
+            self.update_status(task_id, "done") and
+            self.update_progress(task_id, 100)
+        )
+
+    def mark_failed(self, task_id: str, error_message: str) -> bool:
+        """Mark task as failed with error message."""
+        return (
+            self.set_result(task_id, {"error": error_message}) and
+            self.update_status(task_id, "failed") and
+            self.update_progress(task_id, 0)
+        )
+
 
 class InMemoryTaskStorage(UploadTaskStorageBackend):
     """In-memory storage backend for development/testing.
@@ -375,7 +391,11 @@ class UploadTaskStorage:
 
     def mark_completed(self, task_id: str, result: Dict[str, Any]) -> bool:
         """Mark task as completed with result."""
-        return self._backend.set_result(task_id, result) and self._backend.update_status(task_id, "done")
+        return (
+            self._backend.set_result(task_id, result) and
+            self._backend.update_status(task_id, "done") and
+            self._backend.update_progress(task_id, 100)
+        )
 
     def mark_failed(self, task_id: str, error_message: str) -> bool:
         """Mark task as failed with error message."""
