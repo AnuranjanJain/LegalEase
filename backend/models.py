@@ -162,3 +162,21 @@ class DocumentComment(Base):
         "DocumentComment",
         backref=__import__('sqlalchemy.orm', fromlist=['backref']).backref("parent", remote_side=[id]),
     )
+class SavedClause(Base):
+    """
+    A user's personal library of previously reviewed/approved clauses,
+    saved for semantic reuse via /legal/clauses/search.
+    """
+    __tablename__ = "saved_clauses"
+
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
+    document_id = Column(Integer, ForeignKey("document_records.id"), nullable=True, index=True)
+    clause_text = Column(EncryptedText, nullable=False)
+    clause_type = Column(String, nullable=True, index=True)
+    risk_level = Column(String, nullable=True)
+    embedding = Column(Text, nullable=True)  # JSON-encoded float list
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+    user = relationship("User")
+    document = relationship("DocumentRecord")
