@@ -64,6 +64,7 @@ class DocumentRecord(Base):
     clause_analysis = Column(EncryptedText, nullable=True)
     analyzed_at = Column(DateTime, nullable=True) 
     uploaded_at = Column(DateTime, default=datetime.utcnow)
+    locked = Column(Integer, nullable=False, default=0)
 
     user = relationship("User", back_populates="documents")
 
@@ -153,3 +154,47 @@ class SavedClause(Base):
 
     user = relationship("User")
     document = relationship("DocumentRecord")
+
+class SignatureRequest(Base):
+    """
+    Represents a single e-signature workflow attached to one document,
+    covering a defined ordered list of signatories.
+    """
+    __tablename__ = "signature_requests"
+
+    id = Column(Integer, primary_key=True, index=True)
+    document_id = Column(Integer, ForeignKey("document_records.id"), nullable=False, index=True)
+    initiator_id = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
+    status = Column(String, nullable=False, default="pending", index=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+    document = relationship("DocumentRecord")
+    initiator = relationship("User")
+    signatories = relationship(
+        "Signatory",
+        back_populates="signature_request",
+        cascade="all, delete-orphan",
+        order_by="Signatory.order_index",
+    )
+
+
+class Signatory(Base):
+    """
+    A single signer on a SignatureRequest, identified only by a unique,
+    unguessable token (not a JWT) so the signer never needs an account.
+    """
+    __tablename__ = "signatories"
+
+    id = Column(Integer, primary_key=True, index=True)
+    signature_request_id = Column(Integer, ForeignKey("signature_requests.id"), nullable=False, index=True)
+    name = Column(EncryptedText, nullable=False)
+    email = Column(EncryptedText, nullable=False)
+    order_index = Column(Integer, nullable=False, default=0)
+    status = Column(String, nullable=False, default="pending", index=True)
+    signed_at = Column(DateTime, nullable=True)
+    ip_address = Column(String, nullable=True)
+    signature_image_or_typed_name = Column(String, nullable=True)
+    token = Column(String, nullable=False, unique=True, index=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+    signature_request = relationship("SignatureRequest", back_populates="signatories")

@@ -21,6 +21,7 @@ DOCUMENT_ENCRYPTION_KEY is strongly recommended in production.
 import base64
 import hashlib
 import logging
+import secrets
 from typing import Optional
 
 from cryptography.fernet import Fernet, InvalidToken
@@ -105,3 +106,11 @@ class EncryptedText(TypeDecorator):
 
     def process_result_value(self, value, dialect):
         return decrypt_text(value)
+    
+def generate_secure_token(n_bytes: int = 32) -> str:
+    """
+    Generate a cryptographically secure, URL-safe token for a one-time
+    e-signature signing link. Uses `secrets`, not `random`, and isn't
+    derived from user input, so it can't be guessed or enumerated.
+    """
+    return secrets.token_urlsafe(n_bytes)
