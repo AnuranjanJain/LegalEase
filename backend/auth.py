@@ -417,3 +417,36 @@ def get_optional_user(request: Request, db: Session = Depends(get_db)) -> Option
 # Aliases for test suite backward compatibility
 extract_jwt_from_authorization = _extract_jwt_token
 extract_api_key = _extract_api_key
+
+def _validate_dev_api_key_security():
+    """
+    Prevent deployment with default dev API key enabled.
+    This check ensures developers don't accidentally ship with trivial authentication.
+    Note: Skipped during testing to allow test suite to run with default credentials.
+    """
+    environment = os.getenv("ENVIRONMENT", "").lower()
+    is_testing = environment == "testing" or os.getenv("PYTEST_CURRENT_TEST") is not None
+    
+    if is_testing:
+        return
+    
+    allow_dev = os.getenv("ALLOW_DEV", "false").lower() in ("true", "1", "yes")
+    dev_api_key = os.getenv("DEV_API_KEY", "dev-token").strip()
+    
+    if allow_dev and dev_api_key == "dev-token":
+        raise RuntimeError(
+            "SECURITY: DEV_API_KEY is still the default 'dev-token' value and ALLOW_DEV=true. "
+            "This configuration must NOT be used in any deployment. "
+            "Either set ALLOW_DEV=false or generate a secure DEV_API_KEY using: "
+            "python -c \"import secrets; print(secrets.token_urlsafe(32))\""
+        )
+    
+    if allow_dev and (not dev_api_key or dev_api_key.isspace()):
+        raise RuntimeError(
+            "SECURITY: ALLOW_DEV=true but DEV_API_KEY is empty or not set. "
+            "This violates security principle of not allowing empty credentials. "
+            "Either set ALLOW_DEV=false or generate a secure non-empty DEV_API_KEY."
+        )
+
+
+_validate_dev_api_key_security()
