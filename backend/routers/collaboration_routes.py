@@ -19,6 +19,10 @@ logger = logging.getLogger(__name__)
 
 router = APIRouter(tags=["collaboration"])
 
+# Note: persisted, threaded comments (comment_added / comment_resolved events)
+# are handled in comments_routes.py, which imports `manager` from this module
+# to broadcast into the same room. This file only owns ephemeral state
+# (cursors, live edits, presence)
 
 class ConnectionManager:
     """Manages WebSocket connections for real-time document collaboration rooms."""
