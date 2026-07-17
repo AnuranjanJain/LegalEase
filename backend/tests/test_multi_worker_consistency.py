@@ -18,46 +18,63 @@ from backend.storage.upload_tasks import (
 )
 
 
+@pytest.fixture
+def shared_redis_client():
+    """Create a shared mock Redis client to simulate distributed storage."""
+    client = MagicMock()
+    client.ping.return_value = True
+
+    # Simulate shared storage using a dict, with TTL-based expiry
+    shared_storage = {}
+    expiry = {}
+    client.storage = shared_storage
+
+    def _is_expired(key):
+        deadline = expiry.get(key)
+        return deadline is not None and time.time() >= deadline
+
+    def _evict_if_expired(key):
+        if _is_expired(key):
+            shared_storage.pop(key, None)
+            expiry.pop(key, None)
+
+    def mock_setex(key, ttl, value):
+        shared_storage[key] = value
+        expiry[key] = time.time() + ttl
+
+    def mock_get(key):
+        _evict_if_expired(key)
+        return shared_storage.get(key)
+
+    def mock_ttl(key):
+        _evict_if_expired(key)
+        return 3600 if key in shared_storage else -2
+
+    def mock_exists(key):
+        _evict_if_expired(key)
+        return 1 if key in shared_storage else 0
+
+    def mock_delete(*keys):
+        for key in keys:
+            shared_storage.pop(key, None)
+            expiry.pop(key, None)
+
+    def mock_keys(pattern):
+        return [k for k in shared_storage.keys() if pattern.replace("*", "") in k]
+
+    client.setex = mock_setex
+    client.get = mock_get
+    client.ttl = mock_ttl
+    client.exists = mock_exists
+    client.delete = mock_delete
+    client.keys = mock_keys
+
+    return client
+
+
 class TestMultiWorkerConsistency:
     """Test suite for multi-worker consistency scenarios."""
 
-    @pytest.fixture
-    def shared_redis_client(self):
-        """Create a shared mock Redis client to simulate distributed storage."""
-        client = MagicMock()
-        client.ping.return_value = True
-
-        # Simulate shared storage using a dict
-        shared_storage = {}
-        client.storage = shared_storage
-
-        def mock_setex(key, ttl, value):
-            shared_storage[key] = value
-
-        def mock_get(key):
-            return shared_storage.get(key)
-
-        def mock_ttl(key):
-            return 3600 if key in shared_storage else -2
-
-        def mock_exists(key):
-            return 1 if key in shared_storage else 0
-
-        def mock_delete(*keys):
-            for key in keys:
-                shared_storage.pop(key, None)
-
-        def mock_keys(pattern):
-            return [k for k in shared_storage.keys() if pattern.replace("*", "") in k]
-
-        client.setex = mock_setex
-        client.get = mock_get
-        client.ttl = mock_ttl
-        client.exists = mock_exists
-        client.delete = mock_delete
-        client.keys = mock_keys
-
-        return client
 
     def test_worker_a_creates_worker_b_reads(self, shared_redis_client):
         """Test Worker A creates task, Worker B reads it successfully."""
