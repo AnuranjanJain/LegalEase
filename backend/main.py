@@ -29,6 +29,7 @@ from backend.utils.limiter import SimpleRateLimiter
 from backend.utils.cleanup import start_token_cleanup_task
 from backend.services.reminder_service import run_obligation_reminders
 from backend.config import get_settings
+from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from backend.storage.upload_tasks import get_upload_task_storage
 
 # Optional imports (wrap in try/except so server can start without optional deps)
