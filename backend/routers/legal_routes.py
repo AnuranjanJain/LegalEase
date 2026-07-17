@@ -16,7 +16,7 @@ from backend.services.ai_service import ai_service
 from backend.services.entity_extraction import extract_entities
 from backend.services.search_service import perform_web_search
 from backend.services.langgraph_service import run_agent
-from backend.services.hybrid_search import get_hybrid_results
+from backend.services.hybrid_search import get_hybrid_results, embed_text, search_saved_clauses
 from backend.utils.limiter import SimpleRateLimiter
 from backend.config import get_settings
 
@@ -103,6 +103,40 @@ class HybridSearchRequest(BaseModel):
     documents: List[str]
     top_k: int = 3
 
+class SaveClauseRequest(BaseModel):
+    clause_text: str = Field(..., min_length=1, max_length=20_000)
+    document_id: Optional[int] = None
+    clause_type: Optional[str] = None
+    risk_level: Optional[str] = None
+
+
+class SavedClauseItem(BaseModel):
+    id: int
+    clause_text: str
+    clause_type: Optional[str] = None
+    risk_level: Optional[str] = None
+    document_id: Optional[int] = None
+
+
+class SaveClauseResponse(BaseModel):
+    clause: SavedClauseItem
+
+
+class SavedClauseSearchRequest(BaseModel):
+    query: str = Field(..., min_length=1)
+    top_k: int = 5
+
+
+class SavedClauseSearchResult(BaseModel):
+    id: int
+    content: str
+    score: float
+    bm25_score: float
+    dense_score: float
+
+
+class SavedClauseSearchResponse(BaseModel):
+    results: List[SavedClauseSearchResult]
 
 @router.post("/map", response_model=MappingResponse)
 async def map_problem(
@@ -386,3 +420,114 @@ async def suggest_redline(
             status_code=status.HTTP_502_BAD_GATEWAY,
             detail="The AI redline suggestion service encountered an error. Please try again.",
         )
+
+@router.post("/clauses/save", response_model=SaveClauseResponse)
+async def save_clause(
+    request: SaveClauseRequest,
+    identity: AuthIdentity = Depends(validate_token_or_api_key),
+    db: Session = Depends(get_db),
+):
+    user_id = identity.get_user_id()
+    if not user_id:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Not authenticated")
+
+    if request.document_id:
+        doc = (
+            db.query(models.DocumentRecord)
+            .filter(
+                models.DocumentRecord.id == request.document_id,
+                models.DocumentRecord.user_id == user_id,
+            )
+            .first()
+        )
+        if not doc:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Document not found")
+
+    try:
+        embedding = embed_text(request.clause_text)
+    except Exception:
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail="Failed to embed clause text. Please try again.",
+        )
+
+    clause = models.SavedClause(
+        user_id=user_id,
+        document_id=request.document_id,
+        clause_text=request.clause_text,
+        clause_type=request.clause_type,
+        risk_level=request.risk_level,
+        embedding=json.dumps(embedding),
+    )
+    db.add(clause)
+    db.commit()
+    db.refresh(clause)
+
+    return SaveClauseResponse(
+        clause=SavedClauseItem(
+            id=clause.id,
+            clause_text=clause.clause_text,
+            clause_type=clause.clause_type,
+            risk_level=clause.risk_level,
+            document_id=clause.document_id,
+        )
+    )
+
+
+@router.get("/clauses", response_model=List[SavedClauseItem])
+async def list_saved_clauses(
+    clause_type: Optional[str] = None,
+    identity: AuthIdentity = Depends(validate_token_or_api_key),
+    db: Session = Depends(get_db),
+):
+    user_id = identity.get_user_id()
+    if not user_id:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Not authenticated")
+
+    query = db.query(models.SavedClause).filter(models.SavedClause.user_id == user_id)
+    if clause_type:
+        query = query.filter(models.SavedClause.clause_type == clause_type)
+
+    clauses = query.order_by(models.SavedClause.created_at.desc()).all()
+    return [
+        SavedClauseItem(
+            id=c.id,
+            clause_text=c.clause_text,
+            clause_type=c.clause_type,
+            risk_level=c.risk_level,
+            document_id=c.document_id,
+        )
+        for c in clauses
+    ]
+
+
+@router.post("/clauses/search", response_model=SavedClauseSearchResponse)
+async def search_clauses(
+    request: SavedClauseSearchRequest,
+    identity: AuthIdentity = Depends(validate_token_or_api_key),
+    db: Session = Depends(get_db),
+):
+    user_id = identity.get_user_id()
+    if not user_id:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Not authenticated")
+
+    saved = (
+        db.query(models.SavedClause)
+        .filter(models.SavedClause.user_id == user_id)
+        .all()
+    )
+    if not saved:
+        return SavedClauseSearchResponse(results=[])
+
+    clause_dicts = []
+    for c in saved:
+        if not c.embedding:
+            continue
+        clause_dicts.append({
+            "id": c.id,
+            "content": c.clause_text,
+            "embedding": json.loads(c.embedding),
+        })
+
+    results = search_saved_clauses(request.query, clause_dicts, request.top_k)
+    return SavedClauseSearchResponse(results=[SavedClauseSearchResult(**r) for r in results])
