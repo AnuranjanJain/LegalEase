@@ -135,6 +135,33 @@ class Feedback(Base):
 
     user = relationship("User")
 
+class DocumentComment(Base):
+    """
+    A threaded comment anchored to a specific clause/offset within a document.
+    Unlike collaboration_routes.py's in-memory cursor/edit state (which is
+    lost the moment all sockets in a room disconnect), comments here are
+    persisted so they survive reloads and reconnects.
+    """
+    __tablename__ = "document_comments"
+
+    id = Column(Integer, primary_key=True, index=True)
+    document_id = Column(Integer, ForeignKey("document_records.id"), nullable=False, index=True)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
+    clause_anchor = Column(String, nullable=True)  # text offset or clause id within the document
+    content = Column(EncryptedText, nullable=False)
+    resolved = Column(Integer, default=0)  # 0 = open, 1 = resolved
+
+    # Self-referential threading, same pattern as ChatMessage.parent_id
+    parent_comment_id = Column(Integer, ForeignKey("document_comments.id"), nullable=True, index=True)
+
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+    document = relationship("DocumentRecord")
+    user = relationship("User")
+    replies = relationship(
+        "DocumentComment",
+        backref=__import__('sqlalchemy.orm', fromlist=['backref']).backref("parent", remote_side=[id]),
+    )
 class SavedClause(Base):
     """
     A user's personal library of previously reviewed/approved clauses,
