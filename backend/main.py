@@ -23,12 +23,14 @@ from backend.routers.compare_routes import router as compare_router
 from backend.routers import export_routes
 from backend.routers.collaboration_routes import router as collaboration_router
 from backend.routers.signature_routes import router as signature_router
+from backend.routers.comments_routes import router as comments_router
 from backend.routers import feedback_routes
 from backend.auth import validate_token_or_api_key, AuthIdentity
 from backend.utils.limiter import SimpleRateLimiter
 from backend.utils.cleanup import start_token_cleanup_task
 from backend.services.reminder_service import run_obligation_reminders
 from backend.config import get_settings
+from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from backend.storage.upload_tasks import get_upload_task_storage
 
 # Optional imports (wrap in try/except so server can start without optional deps)
@@ -194,6 +196,7 @@ app.include_router(compare_router)
 app.include_router(export_routes.router)
 app.include_router(collaboration_router)
 app.include_router(signature_router)
+app.include_router(comments_router)
 app.include_router(feedback_routes.router)
 
 

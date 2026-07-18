@@ -39,7 +39,7 @@ def client():
 @pytest.fixture
 def auth_headers():
     """Create authentication headers for testing."""
-    return {"Authorization": "Bearer dev-token"}
+    return {"X-API-Key": "dev-token"}
 
 
 class TestUploadEndpointIntegration:
@@ -64,12 +64,12 @@ class TestUploadEndpointIntegration:
         assert data["status"] == "processing"
         assert "filename" in data
 
-        # Verify task exists in storage
+        # Verify task exists in storage. Background processing runs
+        # synchronously under TestClient, so the task may already be done.
         task_storage = get_upload_task_storage()
         task = task_storage.get_task(data["task_id"])
         assert task is not None
-        assert task["status"] == "processing"
-        assert task["progress"] == 0
+        assert task["status"] in ("processing", "done")
 
     def test_upload_status_retrieves_task(self, client, auth_headers):
         """Test that status endpoint retrieves task from shared storage."""
@@ -155,22 +155,13 @@ class TestUploadEndpointIntegration:
 
             task_id = response.json()["task_id"]
 
-            # Verify initial state
+            # Background processing runs synchronously under TestClient,
+            # so the task is already complete by the time we check.
             task_storage = get_upload_task_storage()
-            task = task_storage.get_task(task_id)
-            assert task["status"] == "processing"
-
-            # Simulate background task execution
-            # (In real scenario, this would happen asynchronously)
-            # For testing, we manually update to verify storage works
-            task_storage.update_progress(task_id, 100)
-            task_storage.mark_completed(task_id, {"filename": "test.txt", "text": "processed"})
-
-            # Verify final state
             task = task_storage.get_task(task_id)
             assert task["status"] == "done"
             assert task["progress"] == 100
-            assert task["result"]["text"] == "processed"
+            assert task["result"]["filename"] == "test.txt"
 
     def test_failed_task_updates_storage(self, client, auth_headers):
         """Test that failed tasks are correctly stored."""
@@ -206,11 +197,12 @@ class TestUploadEndpointIntegration:
 
             task_ids.append(response.json()["task_id"])
 
-        # Verify all tasks exist
+        # Verify all tasks exist. Background processing runs synchronously
+        # under TestClient, so tasks may already be done.
         for task_id in task_ids:
             task = task_storage.get_task(task_id)
             assert task is not None
-            assert task["status"] == "processing"
+            assert task["status"] in ("processing", "done")
 
     def test_task_progress_updates(self, client, auth_headers):
         """Test that task progress can be updated multiple times."""
@@ -280,9 +272,15 @@ class TestUploadWithRedisStorage:
 
     @pytest.fixture
     def mock_redis_client(self):
-        """Create a mock Redis client."""
+        """Create a mock Redis client backed by an in-memory dict so
+        setex/get round-trip like real Redis."""
+        store = {}
         client = MagicMock()
         client.ping.return_value = True
+        client.setex.side_effect = lambda key, ttl, value: store.__setitem__(key, value)
+        client.get.side_effect = lambda key: store.get(key)
+        client.delete.side_effect = lambda key: store.pop(key, None)
+        client.exists.side_effect = lambda key: key in store
         return client
 
     def test_upload_with_redis_backend(self, client, auth_headers, mock_redis_client):
@@ -291,9 +289,11 @@ class TestUploadWithRedisStorage:
             'JWT_SECRET_KEY': 'test-secret',
             'REDIS_URL': 'redis://localhost:6379/0',
             'ENVIRONMENT': 'production',
+            'ALLOW_DEV': 'true',
+            'DEV_API_KEY': 'dev-token',
         }, clear=True):
             with patch('backend.storage.upload_tasks.redis.from_url', return_value=mock_redis_client):
-                with patch('backend.config.get_settings') as mock_settings:
+                with patch('backend.storage.upload_tasks.get_settings') as mock_settings:
                     # Mock settings to return Redis URL
                     settings = MagicMock()
                     settings.database.redis_url = "redis://localhost:6379/0"
@@ -325,9 +325,11 @@ class TestUploadWithRedisStorage:
             'JWT_SECRET_KEY': 'test-secret',
             'REDIS_URL': 'redis://localhost:6379/0',
             'ENVIRONMENT': 'production',
+            'ALLOW_DEV': 'true',
+            'DEV_API_KEY': 'dev-token',
         }, clear=True):
             with patch('backend.storage.upload_tasks.redis.from_url', return_value=mock_redis_client):
-                with patch('backend.config.get_settings') as mock_settings:
+                with patch('backend.storage.upload_tasks.get_settings') as mock_settings:
                     settings = MagicMock()
                     settings.database.redis_url = "redis://localhost:6379/0"
                     settings.environment.environment = "production"

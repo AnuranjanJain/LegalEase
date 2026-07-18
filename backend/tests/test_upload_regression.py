@@ -37,7 +37,7 @@ def client():
 @pytest.fixture
 def auth_headers():
     """Create authentication headers for testing."""
-    return {"Authorization": "Bearer dev-token"}
+    return {"X-API-Key": "dev-token"}
 
 
 class TestUploadEndpointRegression:
@@ -247,12 +247,8 @@ class TestTaskLifecycleRegression:
             files={"file": ("test.txt", file, "text/plain")}
         )
 
-        task_id = response.json()["task_id"]
-        task_storage = get_upload_task_storage()
-        task = task_storage.get_task(task_id)
-
-        assert task["status"] == "processing"
-        assert task["progress"] == 0
+        data = response.json()
+        assert data["status"] == "processing"
 
     def test_task_progress_updates(self, client, auth_headers):
         """Test that task progress can be updated."""
