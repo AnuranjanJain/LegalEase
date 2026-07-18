@@ -11,17 +11,17 @@ jobs:
     
     steps:
     - name: Checkout code
-      uses: actions/checkout@v4
+      uses: actions/checkout@v6
     
     - name: Set up Python
-      uses: actions/setup-python@v4
+      uses: actions/setup-python@v6
       with:
         python-version: '3.10'
     
     - name: Set up Node.js
-      uses: actions/setup-node@v4
+      uses: actions/setup-node@v6
       with:
-        node-version: '18'
+        node-version: '20'
         cache: 'npm'
     
     - name: Install backend dependencies
@@ -36,7 +36,14 @@ jobs:
     - name: Run backend tests
       run: |
         cd backend
-        pytest -v
+        pytest -v --timeout=120
+      env:
+        JWT_SECRET_KEY: testing-secret-key-1234567890-abcdef
+        ALLOW_DEV: true
+        STUB_MODE: true
+        MAX_MODEL_INPUT_CHARS: 15000
+        DATABASE_URL: sqlite:///./test_legalease.db
+        ENVIRONMENT: testing
     
     - name: Run frontend tests
       run: npm test -- --run

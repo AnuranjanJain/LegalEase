@@ -36,9 +36,15 @@ __pycache__/
 *.so
 .Python
 backend/__pycache__/
+backend/.venv/
+.venv/
+venv/
 # Coverage reports
+.coverage
 coverage/
 backend/.coverage
 backend/coverage.xml
 backend/.flake8
 *.db
+pnpm-lock.yaml
+venv_test/  

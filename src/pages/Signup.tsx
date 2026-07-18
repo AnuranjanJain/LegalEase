@@ -1,8 +1,7 @@
 import { useState, FormEvent } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { Eye, EyeOff, Mail, Lock, UserPlus } from 'lucide-react';
-
-const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000';
+import { api } from '../services/api';
 
 export function SignupPage() {
   const [email, setEmail] = useState('');
@@ -30,25 +29,23 @@ export function SignupPage() {
       return;
     }
 
+    // Normalize email so casing variations don't create duplicate accounts
+    const normalizedEmail = email.trim().toLowerCase();
+
     setIsLoading(true);
     try {
-      const response = await fetch(`${API_BASE_URL}/auth/signup`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email, password }),
-      });
+      await api.post('/auth/signup', { email: normalizedEmail, password });
 
-      const data = await response.json();
-
-      if (!response.ok) {
-        setError(data.detail || 'Signup failed. Please try again.');
-        return;
+      // Signup successful — redirect to verify-email
+      navigate(`/verify-email?email=${encodeURIComponent(normalizedEmail)}`);
+    } catch (err: any) {
+      console.error('Signup request failed:', err);
+      const isNetworkError = err instanceof TypeError || (err && err.message && err.message.toLowerCase().includes('fetch'));
+      if (isNetworkError) {
+        setError('Server is unavailable. Please verify the backend server is running.');
+      } else {
+        setError(err.message || 'Unable to connect to the server. Please try again later.');
       }
-
-      // Signup successful — redirect to login
-      navigate('/login');
-    } catch {
-      setError('Unable to connect to the server. Please try again.');
     } finally {
       setIsLoading(false);
     }
@@ -77,9 +74,17 @@ export function SignupPage() {
 
         {/* Card */}
         <div className="bg-white/70 dark:bg-gray-950/40 backdrop-blur-md rounded-2xl border border-gray-150 dark:border-gray-850 p-8 shadow-sm">
-          <div className="mb-6">
+          <div className="mb-6 flex flex-col gap-5 justify-center items-start">
+            <Link
+            to="/"
+            className='transition-transform duration-300 hover:-translate-x-2'
+          >
+           ← Back to home
+          </Link>
+          <div>
             <h2 className="text-2xl font-extrabold tracking-tight text-gray-900 dark:text-white">Create an account</h2>
             <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">Get started with LegalEase today</p>
+          </div>
           </div>
 
           {error && (

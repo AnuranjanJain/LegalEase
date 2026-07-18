@@ -1,0 +1,13 @@
+fastapi
+bytez
+pydantic
+pymupdf
+python-docx
+python-multipart
+python-dotenv
+sqlalchemy
+psycopg2-binary
+bcrypt
+python-jose[cryptography]
+email-validator
+redis
