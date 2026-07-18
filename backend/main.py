@@ -24,6 +24,7 @@ from backend.routers import export_routes
 from backend.routers.collaboration_routes import router as collaboration_router
 from backend.routers.comments_routes import router as comments_router
 from backend.routers import feedback_routes
+from backend.routers.developer_routes import router as developer_router
 from backend.auth import validate_token_or_api_key, AuthIdentity
 from backend.utils.limiter import SimpleRateLimiter
 from backend.utils.cleanup import start_token_cleanup_task
@@ -196,6 +197,7 @@ app.include_router(export_routes.router)
 app.include_router(collaboration_router)
 app.include_router(comments_router)
 app.include_router(feedback_routes.router)
+app.include_router(developer_router)
 
 
 # Environment configuration - defaults to production for security
