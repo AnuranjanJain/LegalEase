@@ -2,6 +2,8 @@ import logging
 import os
 import hashlib
 import uuid
+import secrets
+import json
 from datetime import datetime, timedelta
 from typing import Optional, Union, Literal
 from fastapi import Depends, HTTPException, Request, status
@@ -42,11 +44,18 @@ class AuthIdentity:
         self,
         identity_type: Literal["user", "api_key"],
         identifier: str,
-        user: Optional[models.User] = None
+        user: Optional[models.User] = None,
+        scopes: Optional[list] =None,
     ):
         self.type = identity_type
         self.identifier = identifier
         self.user = user
+        self.scopes = scopes 
+
+    def has_scope(self, scope: str) -> bool:
+        if self.scopes is None:
+            return True  # JWT users and the static/global key remain unrestricted
+        return scope in self.scopes
 
     def is_user(self) -> bool:
         """Check if this identity represents a user account."""
@@ -109,6 +118,15 @@ def get_password_hash(password: str) -> str:
     hashed = bcrypt.hashpw(password.encode("utf-8"), salt)
     return hashed.decode("utf-8")
 
+def generate_api_key() -> str:
+    """Generate a new plaintext API key. Shown to the user exactly once."""
+    return f"legalease_{secrets.token_urlsafe(32)}"
+
+
+def hash_api_key(key: str) -> str:
+    """Hash a key for storage/lookup — same SHA-256 scheme already used
+    for static API key identifiers in _validate_api_key_token."""
+    return hashlib.sha256(key.encode()).hexdigest()
 
 def create_access_token(data: dict, expires_delta: Optional[timedelta] = None) -> str:
     secret_key = _require_secret_key()
@@ -253,7 +271,7 @@ def validate_token_or_api_key(request: Request, db: Session = Depends(get_db)) -
     if auth_mode == "jwt":
         return _validate_jwt_token(request, db)
     elif auth_mode == "api_key":
-        return _validate_api_key_token(request)
+        return _validate_api_key_token(request, db)
     else:
         # This should never be reached due to the check above
         raise HTTPException(
@@ -322,34 +340,42 @@ def _validate_jwt_token(request: Request, db: Session) -> AuthIdentity:
         )
 
 
-def _validate_api_key_token(request: Request) -> AuthIdentity:
-    """Validate API key from X-API-Key header.
-    
-    This function only processes API keys and never attempts JWT validation.
-    """
+def _validate_api_key_token(request: Request, db: Optional[Session] = None) -> AuthIdentity:
+    """Validate API key from X-API-Key header: checks the static/dev key
+    list first (unchanged), then falls back to per-user hashed keys in
+    the database if a db session is provided."""
     token = _extract_api_key(request)
     if not token:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Missing API key"
         )
-    
-    if not _is_valid_api_key(token):
-        logger.warning("API key validation failed")
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Invalid API key"
+
+    if _is_valid_api_key(token):
+        key_hash = hashlib.sha256(token.encode()).hexdigest()
+        logger.info(f"Static API key authentication successful (key_hash={key_hash})")
+        return AuthIdentity(identity_type="api_key", identifier=key_hash, user=None)
+
+    if db is not None:
+        key_hash = hash_api_key(token)
+        row = (
+            db.query(models.ApiKey)
+            .filter(models.ApiKey.hashed_key == key_hash, models.ApiKey.revoked_at.is_(None))
+            .first()
         )
-    
-    # Hash the API key to avoid storing the secret in memory
-    # Use full SHA-256 hash as identifier for strong collision resistance
-    key_hash = hashlib.sha256(token.encode()).hexdigest()
-    logger.info(f"API key authentication successful (key_hash={key_hash})")
-    return AuthIdentity(
-        identity_type="api_key",
-        identifier=key_hash,
-        user=None
-    )
+        if row:
+            logger.info(f"Per-user API key authentication successful (key_id={row.id})")
+            return AuthIdentity(
+                identity_type="api_key",
+                identifier=key_hash,
+                user=row.user,
+                scopes=json.loads(row.scopes or "[]"),
+            )
+
+    logger.warning("API key validation failed")
+    raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Invalid API key")
+
+
 
 
 def _validate_api_key(request: Request) -> str:

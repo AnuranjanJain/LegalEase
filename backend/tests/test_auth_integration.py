@@ -65,6 +65,7 @@ def test_jwt_authentication_flow_expired_token():
     request.headers = {"authorization": "Bearer expired-jwt-token"}
     
     mock_db = Mock()
+    mock_db.query.return_value.filter.return_value.first.return_value = None  
     
     # Mock JWT decode to raise JWTError (expired)
     with patch('backend.auth.jwt.decode', side_effect=jwt.JWTError("Token expired")):
@@ -268,6 +269,7 @@ def test_jwt_token_in_x_api_key_header_rejected():
     request.headers = {"x-api-key": "Bearer jwt-token"}
     
     mock_db = Mock()
+    mock_db.query.return_value.filter.return_value.first.return_value = None
     
     # This should attempt API key validation, not JWT validation
     with patch.dict(os.environ, {"API_KEYS": "", "ALLOW_DEV": "false", "JWT_SECRET_KEY": "testing-secret-key-1234567890-abcdef"}):

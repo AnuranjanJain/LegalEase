@@ -6,7 +6,8 @@ from pydantic import BaseModel, Field
 from typing import List, Dict, Any, Optional
 from sqlalchemy.orm import Session
 
-from backend.auth import validate_token_or_api_key, AuthIdentity
+from backend.services.webhooks import fire_webhook
+from backend.auth import validate_token_or_api_key, get_current_user, AuthIdentity
 from backend.database import get_db
 from backend import models
 from backend.core.validation import validate_jurisdiction
@@ -206,6 +207,14 @@ async def analyze_clauses(
                 )
                 doc.analyzed_at = datetime.utcnow()
                 db.commit()
+
+                try:
+                    await fire_webhook(
+                        db, user_id, "analysis.completed",
+                        {"document_id": doc.id, "clause_count": len(clauses)},
+                    )
+                except Exception:
+                    pass  # delivery failures are already logged inside fire_webhook; never fail the request
 
         return {"clauses": clauses}
     except Exception as e:
