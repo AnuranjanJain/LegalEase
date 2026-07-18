@@ -180,3 +180,40 @@ class SavedClause(Base):
 
     user = relationship("User")
     document = relationship("DocumentRecord")
+
+class ApiKey(Base):
+    """
+    A user-scoped API key, additive to the static API_KEYS env value.
+    Only the SHA-256 hash is stored — same pattern as User.hashed_password —
+    so a leaked database dump doesn't leak usable keys.
+    """
+    __tablename__ = "api_keys"
+
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
+    hashed_key = Column(String, nullable=False, unique=True, index=True)
+    key_suffix = Column(String(4), nullable=False)  # last 4 chars, for the owner to tell keys apart in the UI
+    label = Column(String, nullable=False)
+    scopes = Column(Text, nullable=False, default="[]")  # JSON-encoded list, e.g. ["documents:read"]
+    created_at = Column(DateTime, default=datetime.utcnow)
+    revoked_at = Column(DateTime, nullable=True)
+
+    user = relationship("User")
+
+
+class WebhookSubscription(Base):
+    """
+    A callback URL a user has registered for a given event type.
+    The secret is used to HMAC-sign delivered payloads (see
+    backend/services/webhooks.py) so the receiver can verify authenticity.
+    """
+    __tablename__ = "webhook_subscriptions"
+
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
+    url = Column(String, nullable=False)
+    event_type = Column(String, nullable=False, index=True)
+    secret = Column(String, nullable=False)
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+    user = relationship("User")

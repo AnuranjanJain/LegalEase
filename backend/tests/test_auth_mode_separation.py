@@ -35,8 +35,25 @@ def mock_request():
 
 @pytest.fixture
 def mock_db():
-    """Create a mock database session."""
+    """Create a mock database session.
+
+    Queries for models.ApiKey default to "no key found" (matching real DB
+    behavior for the per-user API key lookup in _validate_api_key_token).
+    Queries for every other model keep the original bare-Mock behavior,
+    since several tests in this file rely on that shape for their JWT/
+    user-lookup assertions.
+    """
+    from backend import models
+
     db = Mock()
+
+    def query_side_effect(model, *args, **kwargs):
+        mock_query = Mock()
+        if model is models.ApiKey:
+            mock_query.filter.return_value.first.return_value = None
+        return mock_query
+
+    db.query.side_effect = query_side_effect
     return db
 
 
