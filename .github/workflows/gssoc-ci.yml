@@ -20,7 +20,7 @@ jobs:
     steps:
       - name: Check for GSSoC'26 label in linked issues or PR
         id: check
-        uses: actions/github-script@v7
+        uses: actions/github-script@v9
         with:
           script: |
             const prLabels = context.payload.pull_request.labels.map(l => l.name);
@@ -63,12 +63,12 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout Code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
-      - name: Use Node.js 18.x
-        uses: actions/setup-node@v4
+      - name: Use Node.js 20
+        uses: actions/setup-node@v6
         with:
-          node-version: '18.x'
+          node-version: '20'
           cache: 'npm'
 
       - name: Install Dependencies
@@ -82,7 +82,7 @@ jobs:
 
       - name: Wait for Vercel Deployment
         id: wait-vercel
-        uses: actions/github-script@v7
+        uses: actions/github-script@v9
         with:
           script: |
             const { owner, repo } = context.repo;
@@ -109,6 +109,20 @@ jobs:
                   deploymentUrl = vercelStatus.target_url;
                   break;
                 } else if (status === 'error' || status === 'failure') {
+                  const description = vercelStatus.description || '';
+                  const targetUrl = vercelStatus.target_url || '';
+                  const approvalRequired =
+                    description.toLowerCase().includes('authorization required') ||
+                    targetUrl.includes('/git/authorize');
+
+                  if (approvalRequired) {
+                    core.warning('Vercel preview requires manual authorization.');
+                    core.setOutput('approval_required', 'true');
+                    core.setOutput('approval_url', targetUrl);
+                    core.setOutput('deployment_url', 'Not available');
+                    return;
+                  }
+
                   core.setFailed('Vercel deployment failed');
                   return;
                 }
@@ -121,8 +135,23 @@ jobs:
             
             core.setOutput('deployment_url', deploymentUrl || 'Not available');
 
+      - name: Report manual preview approval
+        if: steps.wait-vercel.outputs.approval_required == 'true'
+        uses: actions/github-script@v9
+        env:
+          VERCEL_APPROVAL_URL: ${{ steps.wait-vercel.outputs.approval_url }}
+        with:
+          script: |
+            const approvalUrl = process.env.VERCEL_APPROVAL_URL;
+            await core.summary
+              .addHeading('Vercel preview approval required')
+              .addRaw('All repository checks passed. The preview deployment still needs maintainer authorization.')
+              .addLink('Approve the Vercel preview', approvalUrl)
+              .write();
+
       - name: Auto Merge and Comment
-        uses: actions/github-script@v7
+        if: steps.wait-vercel.outputs.deployment_url != 'Not available'
+        uses: actions/github-script@v9
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
           script: |

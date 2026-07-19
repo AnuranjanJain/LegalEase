@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { 
   ArrowRight, FileText, Shield, Zap, Scale, MessageSquare, 
   AlertTriangle, Lock, Globe, FileSearch, CheckCircle2, ChevronDown,
-  Briefcase, Rocket, UserCheck
+  Briefcase, Rocket, UserCheck , Star
 } from 'lucide-react';
 import { NavLink } from 'react-router-dom';
 
@@ -42,6 +42,37 @@ const DEMO_CLAUSES: Readonly<Record<'term' | 'indem' | 'ip', DemoClause>> = Obje
   }
 });
 
+interface Review {
+  name: string;
+  role: string;
+  review: string;
+  rating: number;
+}
+
+const REVIEWS: Review[] = [
+  {
+    name: "Sarah Johnson",
+    role: "Startup Founder",
+    review:
+      "LegalEase helped us identify risky clauses in investor agreements within seconds. It saved our team hours of manual review.",
+    rating: 5,
+  },
+  {
+    name: "Michael Chen",
+    role: "Legal Consultant",
+    review:
+      "The AI clause analysis is surprisingly accurate. The plain-English explanations make legal documents much easier to understand.",
+    rating: 5,
+  },
+  {
+    name: "Emily Davis",
+    role: "Freelancer",
+    review:
+      "I use LegalEase before signing client contracts. The risk alerts have helped me avoid several unfavorable agreements.",
+    rating: 4,
+  },
+];
+
 interface FaqItem {
   q: string;
   a: string;
@@ -69,6 +100,12 @@ const FAQS: ReadonlyArray<FaqItem> = Object.freeze([
 export function HomePage() {
   const [activeDemoClause, setActiveDemoClause] = useState<'term' | 'indem' | 'ip'>('term');
   const [expandedFaq, setExpandedFaq] = useState<number | null>(null);
+  const btnPrimary = "inline-flex items-center justify-center px-8 py-3.5 text-base font-semibold rounded-xl text-white bg-primary-600 hover:bg-blue-700 shadow-[0_0_20px_rgba(37,99,235,0.2)] transition-all duration-300";
+  const btnSecondary = "inline-flex items-center justify-center px-8 py-3.5 border border-gray-300 dark:border-gray-700 text-base font-semibold rounded-xl text-gray-700 dark:text-gray-200 bg-white dark:bg-gray-800/40 hover:bg-gray-100 dark:hover:bg-gray-800 backdrop-blur-sm transition-all duration-300";
+  const btnTab = (isActive: boolean) => 
+  `py-1.5 px-2 text-xs font-semibold rounded-md transition-all ${
+    isActive ? 'bg-primary-600 text-white shadow-sm' : 'text-gray-600 hover:text-gray-900 dark:text-gray-400 dark:hover:text-white'
+  }`;
 
   return (
     <div className="overflow-hidden bg-background-light dark:bg-background-dark text-gray-800 dark:text-gray-200">
@@ -106,17 +143,11 @@ export function HomePage() {
               </p>
 
               <div className="flex flex-col sm:flex-row justify-center lg:justify-start gap-4">
-                <NavLink
-                  to="/documents"
-                  className="inline-flex items-center justify-center px-8 py-3.5 text-base font-semibold rounded-xl text-white bg-primary-600 hover:bg-primary-500 shadow-[0_0_20px_rgba(37,99,235,0.2)] dark:shadow-[0_0_20px_rgba(37,99,235,0.4)] hover:shadow-[0_0_30px_rgba(37,99,235,0.4)] dark:hover:shadow-[0_0_30px_rgba(37,99,235,0.6)] transition-all duration-300"
-                >
+                <NavLink to="/documents" className={btnPrimary}>
                   Get Started Free
                   <ArrowRight className="ml-2 h-5 w-5 animate-pulse" />
                 </NavLink>
-                <NavLink
-                  to="/chatbot"
-                  className="inline-flex items-center justify-center px-8 py-3.5 border border-gray-300 dark:border-gray-700 text-base font-semibold rounded-xl text-gray-700 dark:text-gray-200 bg-white dark:bg-gray-800/40 hover:bg-gray-50 dark:hover:bg-gray-800/80 backdrop-blur-sm transition-all duration-300"
-                >
+                <NavLink to="/chatbot" className={btnSecondary}>
                   <MessageSquare size={18} className="mr-2 text-primary-600 dark:text-primary-400" />
                   Try Live Chatbot
                 </NavLink>
@@ -151,26 +182,24 @@ export function HomePage() {
                 </div>
 
                 {/* Demo Tab Toggles */}
-                <div className="grid grid-cols-3 gap-1 p-2 bg-gray-100/80 dark:bg-gray-900/50 rounded-lg m-2 border border-gray-200 dark:border-gray-850">
-                  <button 
-                    onClick={() => setActiveDemoClause('term')}
-                    className={`py-1.5 px-2 text-xs font-semibold rounded-md transition-all ${activeDemoClause === 'term' ? 'bg-primary-600 text-white shadow-sm' : 'text-gray-600 hover:text-gray-900 dark:text-gray-400 dark:hover:text-white'}`}
-                  >
-                    Termination
+                <button 
+                onClick={() => setActiveDemoClause('term')}
+                className={btnTab(activeDemoClause === 'term')}
+                >
+                  Termination
                   </button>
                   <button 
-                    onClick={() => setActiveDemoClause('indem')}
-                    className={`py-1.5 px-2 text-xs font-semibold rounded-md transition-all ${activeDemoClause === 'indem' ? 'bg-primary-600 text-white shadow-sm' : 'text-gray-600 hover:text-gray-900 dark:text-gray-400 dark:hover:text-white'}`}
+                  onClick={() => setActiveDemoClause('indem')}
+                  className={btnTab(activeDemoClause === 'indem')}
                   >
                     Indemnity
-                  </button>
-                  <button 
+                    </button>
+                    <button 
                     onClick={() => setActiveDemoClause('ip')}
-                    className={`py-1.5 px-2 text-xs font-semibold rounded-md transition-all ${activeDemoClause === 'ip' ? 'bg-primary-600 text-white shadow-sm' : 'text-gray-600 hover:text-gray-900 dark:text-gray-400 dark:hover:text-white'}`}
-                  >
-                    IP Assignment
-                  </button>
-                </div>
+                    className={btnTab(activeDemoClause === 'ip')}
+                    >
+                      IP Assignment
+                      </button>
 
                 {/* Document Display Panel */}
                 <div className="p-4 space-y-4 text-left">
@@ -235,6 +264,82 @@ export function HomePage() {
             <div className="p-4 bg-white dark:bg-gray-800 rounded-2xl border border-gray-150 dark:border-gray-700 shadow-sm hover:scale-105 transition-all">
               <span className="text-3xl font-extrabold text-blue-600 dark:text-blue-400 block">SOC-2</span>
               <span className="text-xs font-semibold text-gray-400 dark:text-gray-400 uppercase tracking-wider">Certified Secure</span>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {/* How It Works Section */}
+      <section className="py-24 px-4 sm:px-6 lg:px-8 bg-white dark:bg-gray-950 border-b border-gray-150 dark:border-gray-900">
+        <div className="app-container">
+          <div className="text-center mb-16">
+            <span className="text-xs font-extrabold uppercase tracking-widest text-primary-600 dark:text-primary-400 block mb-3">
+              How It Works
+            </span>
+            <h2 className="text-3xl sm:text-4xl font-extrabold text-gray-900 dark:text-white tracking-tight mb-4">
+              Legal Help In Four Clear Steps
+            </h2>
+            <div className="h-1.5 w-20 bg-primary-600 mx-auto rounded-full mb-6"></div>
+            <p className="text-gray-650 dark:text-gray-450 max-w-2xl mx-auto text-base">
+              Choose what you need, share the details, and get practical legal guidance without losing time to confusing paperwork.
+            </p>
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+            <div className="group relative p-7 rounded-2xl bg-white dark:bg-gray-900 border border-gray-150 dark:border-gray-800 shadow-sm hover:shadow-xl hover:-translate-y-1.5 transition-all duration-300 text-left overflow-hidden">
+              <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-blue-500 to-indigo-500 opacity-0 group-hover:opacity-100 transition-opacity"></div>
+              <div className="flex items-center justify-between mb-6">
+                <div className="w-12 h-12 bg-blue-100 dark:bg-blue-900/30 rounded-xl flex items-center justify-center text-blue-600 dark:text-blue-400 group-hover:scale-110 transition-transform">
+                  <Scale size={22} />
+                </div>
+                <span className="text-xs font-extrabold tracking-widest text-gray-350 dark:text-gray-600">01</span>
+              </div>
+              <h3 className="text-lg font-bold mb-3 text-gray-900 dark:text-white">Pick a service</h3>
+              <p className="text-sm leading-relaxed text-gray-650 dark:text-gray-400">
+                Select the legal category, document type, or issue that best matches your situation.
+              </p>
+            </div>
+
+            <div className="group relative p-7 rounded-2xl bg-white dark:bg-gray-900 border border-gray-150 dark:border-gray-800 shadow-sm hover:shadow-xl hover:-translate-y-1.5 transition-all duration-300 text-left overflow-hidden">
+              <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-emerald-500 to-teal-500 opacity-0 group-hover:opacity-100 transition-opacity"></div>
+              <div className="flex items-center justify-between mb-6">
+                <div className="w-12 h-12 bg-emerald-100 dark:bg-emerald-900/30 rounded-xl flex items-center justify-center text-emerald-600 dark:text-emerald-400 group-hover:scale-110 transition-transform">
+                  <FileText size={22} />
+                </div>
+                <span className="text-xs font-extrabold tracking-widest text-gray-350 dark:text-gray-600">02</span>
+              </div>
+              <h3 className="text-lg font-bold mb-3 text-gray-900 dark:text-white">Submit your query</h3>
+              <p className="text-sm leading-relaxed text-gray-650 dark:text-gray-400">
+                Upload a document or describe your request so LegalEase can understand the context.
+              </p>
+            </div>
+
+            <div className="group relative p-7 rounded-2xl bg-white dark:bg-gray-900 border border-gray-150 dark:border-gray-800 shadow-sm hover:shadow-xl hover:-translate-y-1.5 transition-all duration-300 text-left overflow-hidden">
+              <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-purple-500 to-pink-500 opacity-0 group-hover:opacity-100 transition-opacity"></div>
+              <div className="flex items-center justify-between mb-6">
+                <div className="w-12 h-12 bg-purple-100 dark:bg-purple-900/30 rounded-xl flex items-center justify-center text-purple-600 dark:text-purple-400 group-hover:scale-110 transition-transform">
+                  <MessageSquare size={22} />
+                </div>
+                <span className="text-xs font-extrabold tracking-widest text-gray-350 dark:text-gray-600">03</span>
+              </div>
+              <h3 className="text-lg font-bold mb-3 text-gray-900 dark:text-white">Get matched</h3>
+              <p className="text-sm leading-relaxed text-gray-650 dark:text-gray-400">
+                Connect with relevant resources, AI insights, or legal professionals for your next step.
+              </p>
+            </div>
+
+            <div className="group relative p-7 rounded-2xl bg-white dark:bg-gray-900 border border-gray-150 dark:border-gray-800 shadow-sm hover:shadow-xl hover:-translate-y-1.5 transition-all duration-300 text-left overflow-hidden">
+              <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-amber-500 to-orange-500 opacity-0 group-hover:opacity-100 transition-opacity"></div>
+              <div className="flex items-center justify-between mb-6">
+                <div className="w-12 h-12 bg-amber-100 dark:bg-amber-900/30 rounded-xl flex items-center justify-center text-amber-600 dark:text-amber-400 group-hover:scale-110 transition-transform">
+                  <CheckCircle2 size={22} />
+                </div>
+                <span className="text-xs font-extrabold tracking-widest text-gray-350 dark:text-gray-600">04</span>
+              </div>
+              <h3 className="text-lg font-bold mb-3 text-gray-900 dark:text-white">Track guidance</h3>
+              <p className="text-sm leading-relaxed text-gray-650 dark:text-gray-400">
+                Review recommendations, monitor request progress, and return whenever you need updates.
+              </p>
             </div>
           </div>
         </div>
@@ -421,7 +526,84 @@ export function HomePage() {
         </div>
       </section>
 
-      {/* Security Focus Section */}
+      
+      
+      {/* Reviews & Feedback Section */}
+<section className="py-24 px-4 sm:px-6 lg:px-8 bg-gray-50 dark:bg-gray-900 border-t border-gray-200 dark:border-gray-800">
+  <div className="app-container">
+    <div className="text-center mb-16">
+      <span className="text-xs font-extrabold uppercase tracking-widest text-primary-600 dark:text-primary-400 block mb-3">
+        Reviews & Feedback
+      </span>
+
+      <h2 className="text-3xl sm:text-4xl font-extrabold text-gray-900 dark:text-white tracking-tight mb-4">
+        Trusted By Professionals Worldwide
+      </h2>
+
+      <div className="h-1.5 w-20 bg-primary-600 mx-auto rounded-full mb-6"></div>
+
+      <p className="text-gray-600 dark:text-gray-400 max-w-2xl mx-auto">
+        See how LegalEase is helping businesses, freelancers, and legal
+        professionals simplify complex contracts and reduce risk.
+      </p>
+    </div>
+
+    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
+      {REVIEWS.map((review, index) => (
+        <div
+          key={index}
+          className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-2xl p-8 shadow-sm hover:shadow-xl hover:-translate-y-1 transition-all duration-300"
+        >
+          {/* Rating */}
+          <div className="flex gap-1 mb-4">
+            {[...Array(review.rating)].map((_, i) => (
+              <Star
+                key={i}
+                size={18}
+                className="fill-yellow-400 text-yellow-400"
+              />
+            ))}
+          </div>
+
+          {/* Review Text */}
+          <p className="text-gray-600 dark:text-gray-300 leading-relaxed mb-6">
+            "{review.review}"
+          </p>
+
+          {/* User Info */}
+          <div className="flex items-center gap-4">
+            <div className="w-12 h-12 rounded-full bg-primary-600 text-white flex items-center justify-center font-bold">
+              {review.name
+                .split(" ")
+                .map((word) => word[0])
+                .join("")}
+            </div>
+
+            <div>
+              <h4 className="font-semibold text-gray-900 dark:text-white">
+                {review.name}
+              </h4>
+              <p className="text-sm text-gray-500 dark:text-gray-400">
+                {review.role}
+              </p>
+            </div>
+          </div>
+        </div>
+      ))}
+    </div>
+
+    {/* Trust Summary */}
+    <div className="mt-16 text-center">
+      <div className="inline-flex items-center gap-3 px-6 py-3 rounded-full bg-primary-50 dark:bg-primary-900/20 border border-primary-200 dark:border-primary-800">
+        <Star className="fill-yellow-400 text-yellow-400" size={20} />
+        <span className="font-semibold text-gray-800 dark:text-white">
+          Rated 4.9/5 by 1,000+ professionals
+        </span>
+      </div>
+    </div>
+  </div>
+</section>
+{/* Security Focus Section */}
       <section className="py-20 px-4 sm:px-6 lg:px-8 bg-gray-50 dark:bg-gray-950 text-gray-900 dark:text-white border-t border-gray-200 dark:border-gray-800/80">
         <div className="app-container">
           <div className="grid grid-cols-1 lg:grid-cols-12 gap-12 items-center">

@@ -13,6 +13,17 @@
   body {
     @apply antialiased bg-background-light dark:bg-background-dark text-gray-900 dark:text-gray-100;
   }
+
+  /* Global Accessibility Focus Ring (Issue #503) */
+  a:focus-visible,
+  button:focus-visible,
+  input:focus-visible,
+  textarea:focus-visible,
+  select:focus-visible,
+  [role="button"]:focus-visible,
+  [tabindex]:focus-visible {
+    @apply outline-none ring-2 ring-primary-500 ring-offset-2 dark:ring-offset-gray-900;
+  }
 }
 
 @layer components {
@@ -87,4 +98,22 @@ body,
   overflow-y: auto;
   height: auto;
   min-height: 100%;
+}
+
+/* Accessibility: Respect prefers-reduced-motion
+   Disables animations and reduces transitions for users who prefer less motion.
+   Fixes #183 */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+
+  html {
+    scroll-behavior: auto;
+  }
 }

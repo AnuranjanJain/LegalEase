@@ -13,15 +13,15 @@ jobs:
     
     steps:
     - name: Checkout code
-      uses: actions/checkout@v4
+      uses: actions/checkout@v6
     
     - name: Set up Python
-      uses: actions/setup-python@v4
+      uses: actions/setup-python@v6
       with:
         python-version: '3.10'
     
     - name: Cache pip dependencies
-      uses: actions/cache@v3
+      uses: actions/cache@v5
       with:
         path: ~/.cache/pip
         key: ${{ runner.os }}-pip-${{ hashFiles('backend/requirements.txt') }}
@@ -37,10 +37,17 @@ jobs:
     - name: Run backend tests
       run: |
         cd backend
-        pytest --cov=. --cov-report=xml --cov-report=term-missing -v
+        pytest --cov=. --cov-report=xml --cov-report=term-missing -v --timeout=120
+      env:
+        JWT_SECRET_KEY: testing-secret-key-1234567890-abcdef
+        ALLOW_DEV: true
+        STUB_MODE: true
+        MAX_MODEL_INPUT_CHARS: 15000
+        DATABASE_URL: sqlite:///./test_legalease.db
+        ENVIRONMENT: testing
     
     - name: Upload coverage to Codecov
-      uses: codecov/codecov-action@v3
+      uses: codecov/codecov-action@v7
       with:
         file: ./backend/coverage.xml
         flags: backend
@@ -52,12 +59,12 @@ jobs:
     
     steps:
     - name: Checkout code
-      uses: actions/checkout@v4
+      uses: actions/checkout@v6
     
     - name: Set up Node.js
-      uses: actions/setup-node@v4
+      uses: actions/setup-node@v6
       with:
-        node-version: '18'
+        node-version: '20'
         cache: 'npm'
     
     - name: Install dependencies
@@ -67,7 +74,7 @@ jobs:
       run: npm test -- --coverage --reporter=verbose
     
     - name: Upload coverage to Codecov
-      uses: codecov/codecov-action@v3
+      uses: codecov/codecov-action@v7
       with:
         file: ./coverage/coverage-final.json
         flags: frontend
@@ -79,17 +86,17 @@ jobs:
     
     steps:
     - name: Checkout code
-      uses: actions/checkout@v4
+      uses: actions/checkout@v6
     
     - name: Set up Python
-      uses: actions/setup-python@v4
+      uses: actions/setup-python@v6
       with:
         python-version: '3.10'
     
     - name: Set up Node.js
-      uses: actions/setup-node@v4
+      uses: actions/setup-node@v6
       with:
-        node-version: '18'
+        node-version: '20'
         cache: 'npm'
     
     - name: Install Python dependencies

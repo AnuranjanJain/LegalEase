@@ -1,3 +1,10 @@
+export interface ClauseAnalysis {
+  clause: string;
+  riskLevel: 'Low' | 'Medium' | 'High';
+  riskReason: string;
+  liability_score?: number;
+}
+
 export interface Document {
   id: string;
   name: string;
@@ -5,8 +12,11 @@ export interface Document {
   size: number;
   uploadDate: string;
   processedDate?: string;
-  status: 'processed' | 'processing' | 'error';
+  status: 'processed' | 'processing' | 'failed' | 'error';
+  text?: string;
   extractedText?: string;
+  summary?: string;
+  clauses?: ClauseAnalysis[];
 }
 
 export interface UserProfile {
@@ -52,10 +62,25 @@ export interface ChatSessionData {
   id: string;
   title: string;
   messages: ChatMessage[];
+  jurisdiction?: string;
   documentContext?: {
     name: string;
     text: string;
   };
+  /**
+   * Multi-document comparison context.
+   * Populated when the user launches a cross-document comparison session
+   * from the Document Vault. Each entry carries the document's display name
+   * and its extracted text so the AI can analyse all of them together.
+   *
+   * Mutually exclusive with `documentContext` — a session uses either a
+   * single-document context OR a multi-document comparison context, never both.
+   */
+  multiDocContext?: Array<{
+    id: string;
+    name: string;
+    text: string;
+  }>;
 }
 
 const STORAGE_KEYS = {
@@ -96,13 +121,22 @@ export const StorageService = {
     return StorageService.getDocuments().find(d => d.id === id);
   },
 
-  updateDocumentStatus: (id: string, status: 'processed' | 'processing') => {
+  updateDocumentStatus: (id: string, status: 'processed' | 'processing' | 'failed', summary?: string, text?: string, clauses?: ClauseAnalysis[]) => {
     const docs = StorageService.getDocuments();
     const docIndex = docs.findIndex(d => d.id === id);
     if (docIndex !== -1) {
       docs[docIndex].status = status;
       if (status === 'processed') {
         docs[docIndex].processedDate = new Date().toISOString();
+      }
+      if (summary !== undefined) {
+        docs[docIndex].summary = summary;
+      }
+      if (text !== undefined) {
+        docs[docIndex].text = text;
+      }
+      if (clauses !== undefined) {
+        docs[docIndex].clauses = clauses;
       }
       localStorage.setItem(STORAGE_KEYS.DOCUMENTS, JSON.stringify(docs));
     }
@@ -163,7 +197,24 @@ export const StorageService = {
           size: 2400000,
           uploadDate: new Date(Date.now() - 7200000).toISOString(),
           status: 'processed',
-          processedDate: new Date(Date.now() - 3600000).toISOString()
+          processedDate: new Date(Date.now() - 3600000).toISOString(),
+          clauses: [
+            {
+              clause: "The company may terminate this agreement at any time without notice.",
+              riskLevel: "High",
+              riskReason: "Allows one party to terminate the agreement without notice."
+            },
+            {
+              clause: "Subscriber shall indemnify and hold harmless Provider against any and all claims.",
+              riskLevel: "Medium",
+              riskReason: "Broad indemnification clauses can lead to unexpected liabilities."
+            },
+            {
+              clause: "This Agreement shall be governed by the laws of the State of Delaware.",
+              riskLevel: "Low",
+              riskReason: "Standard governing law clause, standard jurisdiction choice."
+            }
+          ]
         },
         {
           id: 'doc_2',
@@ -180,7 +231,19 @@ export const StorageService = {
           size: 952000,
           uploadDate: new Date(Date.now() - 259200000).toISOString(),
           status: 'processed',
-          processedDate: new Date(Date.now() - 172800000).toISOString()
+          processedDate: new Date(Date.now() - 172800000).toISOString(),
+          clauses: [
+            {
+              clause: "We retain user data for 5 years after account deletion to comply with internal compliance guidelines.",
+              riskLevel: "Medium",
+              riskReason: "GDPR retention rules generally request deleting PII as soon as the service relationship ends."
+            },
+            {
+              clause: "By using the app, you agree to receive promotional materials and third-party tracking cookies automatically (opt-out).",
+              riskLevel: "Medium",
+              riskReason: "European regulations heavily penalize automatic opt-in profiling of cookies."
+            }
+          ]
         }
       ];
       localStorage.setItem(STORAGE_KEYS.DOCUMENTS, JSON.stringify(sampleDocs));
@@ -238,10 +301,12 @@ export const ChatStorageService = {
 
   createSession: (title: string = 'New Conversation'): ChatSessionData => {
     const id = crypto.randomUUID();
+    const defaultJurisdiction = localStorage.getItem('le_selected_jurisdiction') || 'General / Not Specified';
     const sessionData: ChatSessionData = {
       id,
       messages: [],
-      title
+      title,
+      jurisdiction: defaultJurisdiction
     };
     ChatStorageService.saveSession(sessionData);
     ChatStorageService.setActiveSessionId(id);

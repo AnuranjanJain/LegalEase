@@ -1,0 +1,106 @@
+name: Auto Update PR Branches
+
+on:
+  push:
+    branches: [main]
+  pull_request_target:
+    types: [opened, reopened, ready_for_review]
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  issues: write
+  pull-requests: write
+
+jobs:
+  update-pr-branches:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Update PR branches with latest main
+        uses: actions/github-script@v9
+        with:
+          script: |
+            const { owner, repo } = context.repo;
+
+            async function getTargetPullRequests() {
+              if (context.eventName === 'pull_request_target') {
+                const pull = context.payload.pull_request;
+                if (pull.state === 'open' && pull.base.ref === 'main') {
+                  return [pull];
+                }
+                return [];
+              }
+
+              const pulls = await github.paginate(github.rest.pulls.list, {
+                owner,
+                repo,
+                state: 'open',
+                base: 'main',
+                per_page: 100,
+              });
+
+              return pulls;
+            }
+
+            async function updatePullRequestBranch(pull) {
+              const number = pull.number;
+              const headSha = pull.head.sha;
+
+              if (pull.draft) {
+                console.log(`#${number}: skipped draft PR.`);
+                return;
+              }
+
+              try {
+                await github.rest.pulls.updateBranch({
+                  owner,
+                  repo,
+                  pull_number: number,
+                  expected_head_sha: headSha,
+                });
+                console.log(`#${number}: queued update from main.`);
+              } catch (error) {
+                const message = String(error.message || '');
+                const alreadyCurrent =
+                  error.status === 422 &&
+                  (
+                    message.toLowerCase().includes('not behind') ||
+                    message.toLowerCase().includes('up-to-date') ||
+                    message.toLowerCase().includes('no commits between')
+                  );
+
+                if (alreadyCurrent) {
+                  console.log(`#${number}: already up to date.`);
+                  return;
+                }
+
+                const cannotUpdateFork =
+                  error.status === 403 ||
+                  (
+                    error.status === 422 &&
+                    (
+                      message.toLowerCase().includes('maintainer') ||
+                      message.toLowerCase().includes('permission') ||
+                      message.toLowerCase().includes('protected')
+                    )
+                  );
+
+                if (cannotUpdateFork) {
+                  console.log(`#${number}: GitHub could not update this branch automatically: ${message}`);
+                  return;
+                }
+
+                throw error;
+              }
+            }
+
+            const pulls = await getTargetPullRequests();
+            if (!pulls.length) {
+              console.log('No open main-targeted PRs to update.');
+              return;
+            }
+
+            for (const pull of pulls) {
+              await updatePullRequestBranch(pull);
+            }
