@@ -302,6 +302,7 @@ class TestConfigurationHardening:
             settings = Settings(
                 security={"jwt_secret_key": "test_secret_key_12345678"},
                 environment={"environment": "production"},
+                encryption={"document_encryption_key": "test_encryption_key_12345678"},
                 _env_file=None
             )
             # Check secure defaults

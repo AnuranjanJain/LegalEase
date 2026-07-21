@@ -566,12 +566,29 @@ class EncryptionConfig(BaseSettings):
         default=None,
         description=(
             "Secret used to derive the key that encrypts contract content at "
-            "rest (document summaries, clause analysis, chat messages). If "
-            "unset, a key is derived from JWT_SECRET_KEY instead so the app "
-            "still runs, but a dedicated key is strongly recommended in "
-            "production."
+            "rest (document summaries, clause analysis, chat messages). "
+            "Required in production to ensure cryptographic key separation. "
+            "In non-production environments (development, testing, local), "
+            "falls back to JWT_SECRET_KEY if not set."
         ),
     )
+
+    @model_validator(mode='after')
+    def validate_encryption_key_in_production(self):
+        """Ensure DOCUMENT_ENCRYPTION_KEY is set in production environment."""
+        environment = os.getenv("ENVIRONMENT", "production")
+        
+        if environment == "production" and not self.document_encryption_key:
+            logger.error(
+                "DOCUMENT_ENCRYPTION_KEY is required in production. "
+                "Using JWT_SECRET_KEY for document encryption is prohibited."
+            )
+            raise ValueError(
+                "DOCUMENT_ENCRYPTION_KEY is required in production. "
+                "Using JWT_SECRET_KEY for document encryption is prohibited."
+            )
+        
+        return self
 
 
 class Settings(BaseSettings):

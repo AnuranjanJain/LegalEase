@@ -308,7 +308,7 @@ def test_redis_url_environment_variable():
 @pytest.mark.integration
 def test_no_redis_url_uses_in_memory():
     """Test that absence of REDIS_URL uses in-memory storage."""
-    with patch.dict(os.environ, {"JWT_SECRET_KEY": "test-secret-key"}, clear=True):
+    with patch.dict(os.environ, {"JWT_SECRET_KEY": "test-secret-key", "DOCUMENT_ENCRYPTION_KEY": "test-encryption-key"}, clear=True):
         import backend.config as config
         old_settings = config._settings
         config._settings = None

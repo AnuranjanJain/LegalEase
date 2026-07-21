@@ -67,7 +67,8 @@ def test_cors_production_does_not_inject_localhost():
     """Test that production environment does NOT add localhost origins"""
     with patch.dict(os.environ, {
         "ENVIRONMENT": "production",
-        "ALLOWED_ORIGINS": "https://example.com"
+        "ALLOWED_ORIGINS": "https://example.com",
+        "DOCUMENT_ENCRYPTION_KEY": "test-encryption-key"
     }):
         from importlib import reload
         import backend.main as main_module
@@ -86,7 +87,8 @@ def test_cors_staging_does_not_inject_localhost():
     """Test that staging environment does NOT add localhost origins"""
     with patch.dict(os.environ, {
         "ENVIRONMENT": "staging",
-        "ALLOWED_ORIGINS": "https://staging.example.com"
+        "ALLOWED_ORIGINS": "https://staging.example.com",
+        "DOCUMENT_ENCRYPTION_KEY": "test-encryption-key"
     }):
         from importlib import reload
         import backend.main as main_module
@@ -104,7 +106,8 @@ def test_cors_default_environment_is_production():
     with patch.dict(os.environ, {}, clear=True):
         with patch.dict(os.environ, {
             "ALLOWED_ORIGINS": "https://example.com",
-            "JWT_SECRET_KEY": "test-secret-key"
+            "JWT_SECRET_KEY": "test-secret-key",
+            "DOCUMENT_ENCRYPTION_KEY": "test-encryption-key"
         }):
             from importlib import reload
             import backend.main as main_module
@@ -139,7 +142,8 @@ def test_cors_empty_allowed_origins_in_production():
             "ENVIRONMENT": "production",
             "ALLOWED_ORIGINS": "",
             "FRONTEND_URL": "",
-            "JWT_SECRET_KEY": "test-secret-key"
+            "JWT_SECRET_KEY": "test-secret-key",
+            "DOCUMENT_ENCRYPTION_KEY": "test-encryption-key"
         }):
             from importlib import reload
             import backend.main as main_module
@@ -173,7 +177,8 @@ def test_cors_multiple_origins_in_production():
     """Test that multiple configured origins are preserved in production without localhost"""
     with patch.dict(os.environ, {
         "ENVIRONMENT": "production",
-        "ALLOWED_ORIGINS": "https://example.com,https://app.example.com,https://api.example.com"
+        "ALLOWED_ORIGINS": "https://example.com,https://app.example.com,https://api.example.com",
+        "DOCUMENT_ENCRYPTION_KEY": "test-encryption-key"
     }):
         from importlib import reload
         import backend.main as main_module
@@ -248,7 +253,8 @@ def test_cors_whitespace_handling():
     """Test that whitespace in origins is properly handled"""
     with patch.dict(os.environ, {
         "ENVIRONMENT": "production",
-        "ALLOWED_ORIGINS": " https://example.com , https://app.example.com "
+        "ALLOWED_ORIGINS": " https://example.com , https://app.example.com ",
+        "DOCUMENT_ENCRYPTION_KEY": "test-encryption-key"
     }):
         from importlib import reload
         import backend.main as main_module
@@ -274,6 +280,7 @@ def test_cors_security_production_no_localhost():
     for config in test_configs:
         with patch.dict(os.environ, {}, clear=True):
             config["JWT_SECRET_KEY"] = "test-secret-key"
+            config["DOCUMENT_ENCRYPTION_KEY"] = "test-encryption-key"
             with patch.dict(os.environ, config):
                 from importlib import reload
                 import backend.main as main_module
@@ -293,7 +300,8 @@ def test_cors_security_configured_origins_only_in_production():
     
     with patch.dict(os.environ, {
         "ENVIRONMENT": "production",
-        "ALLOWED_ORIGINS": configured_origins
+        "ALLOWED_ORIGINS": configured_origins,
+        "DOCUMENT_ENCRYPTION_KEY": "test-encryption-key"
     }):
         from importlib import reload
         import backend.main as main_module
@@ -328,7 +336,8 @@ def test_cors_regression_default_behavior():
     with patch.dict(os.environ, {}, clear=True):
         with patch.dict(os.environ, {
             "ALLOWED_ORIGINS": "https://example.com",
-            "JWT_SECRET_KEY": "test-secret-key"
+            "JWT_SECRET_KEY": "test-secret-key",
+            "DOCUMENT_ENCRYPTION_KEY": "test-encryption-key"
         }):
             from importlib import reload
             import backend.main as main_module
