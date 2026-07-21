@@ -54,11 +54,12 @@ def test_decrypt_falls_back_to_raw_value_for_non_fernet_input():
 
 @pytest.mark.unit
 def test_key_derives_from_jwt_secret_when_no_dedicated_key_set(monkeypatch):
-    """Without DOCUMENT_ENCRYPTION_KEY, encryption still works via the JWT_SECRET_KEY fallback."""
+    """Without DOCUMENT_ENCRYPTION_KEY in non-production, encryption works via JWT_SECRET_KEY fallback."""
     import backend.config as config
     from backend.core import encryption
 
     monkeypatch.delenv("DOCUMENT_ENCRYPTION_KEY", raising=False)
+    monkeypatch.setenv("ENVIRONMENT", "development")
     config._settings = None
     encryption.reset_fernet_cache()
 
@@ -68,6 +69,7 @@ def test_key_derives_from_jwt_secret_when_no_dedicated_key_set(monkeypatch):
 
     config._settings = None
     encryption.reset_fernet_cache()
+    monkeypatch.delenv("ENVIRONMENT", raising=False)
 
 
 @pytest.mark.unit
@@ -99,6 +101,114 @@ def test_dedicated_encryption_key_is_used_when_set(monkeypatch):
 
     config._settings = None
     encryption.reset_fernet_cache()
+
+
+@pytest.mark.unit
+def test_production_requires_dedicated_encryption_key(monkeypatch):
+    """In production, missing DOCUMENT_ENCRYPTION_KEY raises ConfigurationError at startup."""
+    import backend.config as config
+    from backend.core import encryption
+    from backend.core.encryption import ConfigurationError
+    from pydantic import ValidationError
+
+    monkeypatch.delenv("DOCUMENT_ENCRYPTION_KEY", raising=False)
+    monkeypatch.setenv("ENVIRONMENT", "production")
+    config._settings = None
+    encryption.reset_fernet_cache()
+
+    # Config validation happens first at startup, before encryption is used
+    with pytest.raises(ValidationError) as exc_info:
+        config.get_settings()
+    assert "DOCUMENT_ENCRYPTION_KEY is required in production" in str(exc_info.value)
+
+    config._settings = None
+    encryption.reset_fernet_cache()
+    monkeypatch.delenv("ENVIRONMENT", raising=False)
+
+
+@pytest.mark.unit
+def test_production_with_dedicated_encryption_key_succeeds(monkeypatch):
+    """In production, with DOCUMENT_ENCRYPTION_KEY set, encryption works correctly."""
+    import backend.config as config
+    from backend.core import encryption
+
+    monkeypatch.setenv("DOCUMENT_ENCRYPTION_KEY", "production-encryption-key-1234567890")
+    monkeypatch.setenv("ENVIRONMENT", "production")
+    config._settings = None
+    encryption.reset_fernet_cache()
+
+    plaintext = "Production encryption with dedicated key."
+    ciphertext = encryption.encrypt_text(plaintext)
+    assert encryption.decrypt_text(ciphertext) == plaintext
+
+    config._settings = None
+    encryption.reset_fernet_cache()
+    monkeypatch.delenv("DOCUMENT_ENCRYPTION_KEY", raising=False)
+    monkeypatch.delenv("ENVIRONMENT", raising=False)
+
+
+@pytest.mark.unit
+def test_development_fallback_logs_warning(monkeypatch, caplog):
+    """In development, fallback to JWT_SECRET_KEY logs a warning."""
+    import backend.config as config
+    from backend.core import encryption
+
+    monkeypatch.delenv("DOCUMENT_ENCRYPTION_KEY", raising=False)
+    monkeypatch.setenv("ENVIRONMENT", "development")
+    config._settings = None
+    encryption.reset_fernet_cache()
+
+    with caplog.at_level("WARNING"):
+        plaintext = "Development fallback test."
+        ciphertext = encryption.encrypt_text(plaintext)
+        assert encryption.decrypt_text(ciphertext) == plaintext
+
+    assert "DOCUMENT_ENCRYPTION_KEY is not configured" in caplog.text
+    assert "non-production environment" in caplog.text
+
+    config._settings = None
+    encryption.reset_fernet_cache()
+    monkeypatch.delenv("ENVIRONMENT", raising=False)
+
+
+@pytest.mark.unit
+def test_testing_environment_fallback_allowed(monkeypatch):
+    """In testing environment, fallback to JWT_SECRET_KEY is allowed."""
+    import backend.config as config
+    from backend.core import encryption
+
+    monkeypatch.delenv("DOCUMENT_ENCRYPTION_KEY", raising=False)
+    monkeypatch.setenv("ENVIRONMENT", "testing")
+    config._settings = None
+    encryption.reset_fernet_cache()
+
+    plaintext = "Testing environment fallback test."
+    ciphertext = encryption.encrypt_text(plaintext)
+    assert encryption.decrypt_text(ciphertext) == plaintext
+
+    config._settings = None
+    encryption.reset_fernet_cache()
+    monkeypatch.delenv("ENVIRONMENT", raising=False)
+
+
+@pytest.mark.unit
+def test_local_environment_fallback_allowed(monkeypatch):
+    """In local environment, fallback to JWT_SECRET_KEY is allowed."""
+    import backend.config as config
+    from backend.core import encryption
+
+    monkeypatch.delenv("DOCUMENT_ENCRYPTION_KEY", raising=False)
+    monkeypatch.setenv("ENVIRONMENT", "local")
+    config._settings = None
+    encryption.reset_fernet_cache()
+
+    plaintext = "Local environment fallback test."
+    ciphertext = encryption.encrypt_text(plaintext)
+    assert encryption.decrypt_text(ciphertext) == plaintext
+
+    config._settings = None
+    encryption.reset_fernet_cache()
+    monkeypatch.delenv("ENVIRONMENT", raising=False)
 
 
 @pytest.fixture

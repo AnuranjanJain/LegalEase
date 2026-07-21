@@ -20,6 +20,7 @@ from backend.config import (
     AIConfig,
     ComparisonConfig,
     CORSConfig,
+    EncryptionConfig,
     get_settings,
     validate_config,
 )
@@ -360,6 +361,56 @@ class TestCORSConfig:
         """Test that FRONTEND_URL has default value."""
         config = CORSConfig()
         assert config.frontend_url == "http://localhost:5173"
+
+
+class TestEncryptionConfig:
+    """Test encryption configuration validation."""
+
+    def test_document_encryption_key_optional(self):
+        """Test that DOCUMENT_ENCRYPTION_KEY is optional."""
+        config = EncryptionConfig()
+        assert config.document_encryption_key is None
+
+    def test_document_encryption_key_can_be_set(self):
+        """Test that DOCUMENT_ENCRYPTION_KEY can be set."""
+        config = EncryptionConfig(document_encryption_key="test-encryption-key")
+        assert config.document_encryption_key == "test-encryption-key"
+
+    def test_production_requires_document_encryption_key(self, monkeypatch):
+        """Test that production requires DOCUMENT_ENCRYPTION_KEY."""
+        monkeypatch.setenv("ENVIRONMENT", "production")
+        monkeypatch.setenv("JWT_SECRET_KEY", "test_secret")
+        try:
+            with pytest.raises(ValidationError) as exc_info:
+                EncryptionConfig(_env_file=None)
+            assert "DOCUMENT_ENCRYPTION_KEY is required in production" in str(exc_info.value)
+        finally:
+            monkeypatch.delenv("ENVIRONMENT", raising=False)
+            monkeypatch.delenv("JWT_SECRET_KEY", raising=False)
+
+    def test_non_production_allows_missing_document_encryption_key(self, monkeypatch):
+        """Test that non-production environments allow missing DOCUMENT_ENCRYPTION_KEY."""
+        monkeypatch.setenv("ENVIRONMENT", "development")
+        monkeypatch.setenv("JWT_SECRET_KEY", "test_secret")
+        try:
+            config = EncryptionConfig(_env_file=None)
+            assert config.document_encryption_key is None
+        finally:
+            monkeypatch.delenv("ENVIRONMENT", raising=False)
+            monkeypatch.delenv("JWT_SECRET_KEY", raising=False)
+
+    def test_production_with_document_encryption_key_succeeds(self, monkeypatch):
+        """Test that production with DOCUMENT_ENCRYPTION_KEY succeeds."""
+        monkeypatch.setenv("ENVIRONMENT", "production")
+        monkeypatch.setenv("JWT_SECRET_KEY", "test_secret")
+        monkeypatch.setenv("DOCUMENT_ENCRYPTION_KEY", "production-key")
+        try:
+            config = EncryptionConfig(_env_file=None)
+            assert config.document_encryption_key == "production-key"
+        finally:
+            monkeypatch.delenv("ENVIRONMENT", raising=False)
+            monkeypatch.delenv("JWT_SECRET_KEY", raising=False)
+            monkeypatch.delenv("DOCUMENT_ENCRYPTION_KEY", raising=False)
 
 
 class TestSettingsIntegration:
