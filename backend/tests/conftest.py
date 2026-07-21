@@ -78,3 +78,10 @@ def clear_rate_limiters():
     except Exception:
         pass
 
+    # Clear legal AI limiter
+    try:
+        from backend.routers import legal_routes
+        legal_routes._legal_ai_limiter.storage.clear()
+    except Exception:
+        pass
+

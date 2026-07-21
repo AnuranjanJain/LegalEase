@@ -10,12 +10,11 @@ and other metadata are left as plain text since they are not the contract
 content itself and encrypting them would break ordering/searching for no
 real confidentiality benefit.
 
-The Fernet key is derived from DOCUMENT_ENCRYPTION_KEY if set, otherwise
-from JWT_SECRET_KEY, so the app still runs out of the box without a new
-required environment variable, while still protecting stored contract
-content if the database is compromised independently of the application
-(a stolen backup, an over-privileged read replica, etc). A dedicated
-DOCUMENT_ENCRYPTION_KEY is strongly recommended in production.
+The Fernet key is derived from DOCUMENT_ENCRYPTION_KEY if set. In non-production
+environments (development, testing, local), it falls back to JWT_SECRET_KEY for
+convenience. In production, DOCUMENT_ENCRYPTION_KEY is mandatory to ensure
+cryptographic key separation - using the same secret for JWT signing and
+document encryption is prohibited in production for security reasons.
 """
 
 import base64
@@ -27,6 +26,11 @@ from cryptography.fernet import Fernet, InvalidToken
 from sqlalchemy.types import Text as SAText, TypeDecorator
 
 from backend.config import get_settings
+
+
+class ConfigurationError(Exception):
+    """Raised when application configuration is invalid for the current environment."""
+    pass
 
 logger = logging.getLogger(__name__)
 
@@ -46,13 +50,27 @@ def _get_fernet() -> Fernet:
 
     settings = get_settings()
     key_source = settings.encryption.document_encryption_key
+    environment = settings.environment.environment
+
     if not key_source:
-        logger.warning(
-            "DOCUMENT_ENCRYPTION_KEY is not set; deriving the document "
-            "encryption key from JWT_SECRET_KEY instead. Set a dedicated "
-            "DOCUMENT_ENCRYPTION_KEY in production."
-        )
-        key_source = settings.security.jwt_secret_key
+        if environment == "production":
+            logger.error(
+                "DOCUMENT_ENCRYPTION_KEY is required in production. "
+                "Using JWT_SECRET_KEY for document encryption is prohibited."
+            )
+            raise ConfigurationError(
+                "DOCUMENT_ENCRYPTION_KEY is required in production. "
+                "Using JWT_SECRET_KEY for document encryption is prohibited."
+            )
+        else:
+            logger.warning(
+                "DOCUMENT_ENCRYPTION_KEY is not configured. "
+                "Using JWT_SECRET_KEY as a fallback because the application is "
+                "running in a non-production environment (%s). "
+                "Configure a dedicated DOCUMENT_ENCRYPTION_KEY before deploying to production.",
+                environment,
+            )
+            key_source = settings.security.jwt_secret_key
 
     _fernet = Fernet(_derive_fernet_key(key_source))
     return _fernet

@@ -44,6 +44,7 @@ def test_production_no_redis_warning():
     with patch.dict(os.environ, {
         "JWT_SECRET_KEY": "test-secret-key",
         "ENVIRONMENT": "production",
+        "DOCUMENT_ENCRYPTION_KEY": "test-encryption-key",
         # REDIS_URL not set
     }):
         limiter = SimpleRateLimiter(calls=5, period=60)
@@ -59,6 +60,7 @@ def test_production_require_redis_no_redis_error():
     with patch.dict(os.environ, {
         "JWT_SECRET_KEY": "test-secret-key",
         "ENVIRONMENT": "production",
+        "DOCUMENT_ENCRYPTION_KEY": "test-encryption-key",
         "REQUIRE_REDIS_IN_PRODUCTION": "true",
         # REDIS_URL not set
     }):
@@ -81,6 +83,7 @@ def test_redis_success_logs_info():
         "JWT_SECRET_KEY": "test-secret-key",
         "ENVIRONMENT": "production",
         "REDIS_URL": "redis://localhost:6379/0",
+        "DOCUMENT_ENCRYPTION_KEY": "test-encryption-key",
     }):
         with patch('backend.utils.limiter.redis.from_url', return_value=mock_redis_client):
             limiter = SimpleRateLimiter(calls=5, period=60)
@@ -100,6 +103,7 @@ def test_redis_fail_fast_disabled_fallback():
         "ENVIRONMENT": "production",
         "REDIS_URL": "redis://localhost:6379/0",
         "REDIS_FAIL_FAST": "false",
+        "DOCUMENT_ENCRYPTION_KEY": "test-encryption-key",
     }):
         with patch('backend.utils.limiter.redis.from_url', return_value=mock_redis_client) as mock_from_url:
             # Make Redis initialization fail
@@ -122,6 +126,7 @@ def test_redis_fail_fast_enabled_raises_error():
         "ENVIRONMENT": "production",
         "REDIS_URL": "redis://localhost:6379/0",
         "REDIS_FAIL_FAST": "true",
+        "DOCUMENT_ENCRYPTION_KEY": "test-encryption-key",
     }):
         with patch('backend.utils.limiter.redis.from_url', return_value=mock_redis_client) as mock_from_url:
             # Make Redis initialization fail
@@ -210,6 +215,7 @@ def test_backend_selection_redis():
         "JWT_SECRET_KEY": "test-secret-key",
         "ENVIRONMENT": "production",
         "REDIS_URL": "redis://localhost:6379/0",
+        "DOCUMENT_ENCRYPTION_KEY": "test-encryption-key",
     }):
         with patch('backend.utils.limiter.redis.from_url', return_value=mock_redis_client):
             limiter = SimpleRateLimiter(calls=5, period=60)
@@ -230,6 +236,7 @@ def test_redis_url_truncated_in_logs():
         "JWT_SECRET_KEY": "test-secret-key",
         "ENVIRONMENT": "production",
         "REDIS_URL": long_redis_url,
+        "DOCUMENT_ENCRYPTION_KEY": "test-encryption-key",
     }):
         with patch('backend.utils.limiter.redis.from_url', return_value=mock_redis_client):
             limiter = SimpleRateLimiter(calls=5, period=60)
@@ -258,6 +265,7 @@ def test_rate_limiter_functionality_unchanged_with_redis():
         "JWT_SECRET_KEY": "test-secret-key",
         "ENVIRONMENT": "production",
         "REDIS_URL": "redis://localhost:6379/0",
+        "DOCUMENT_ENCRYPTION_KEY": "test-encryption-key",
     }):
         with patch('backend.utils.limiter.redis.from_url', return_value=mock_redis_client):
             limiter = SimpleRateLimiter(calls=2, period=60)
@@ -293,6 +301,7 @@ def test_config_validator_require_redis_in_production():
     with patch.dict(os.environ, {
         "JWT_SECRET_KEY": "test-secret-key",
         "ENVIRONMENT": "production",
+        "DOCUMENT_ENCRYPTION_KEY": "test-encryption-key",
         "REQUIRE_REDIS_IN_PRODUCTION": "true",
         # REDIS_URL not set
     }):
@@ -325,6 +334,7 @@ def test_multiple_limiters_independent_redis_state():
         "JWT_SECRET_KEY": "test-secret-key",
         "ENVIRONMENT": "production",
         "REDIS_URL": "redis://localhost:6379/0",
+        "DOCUMENT_ENCRYPTION_KEY": "test-encryption-key",
     }):
         with patch('backend.utils.limiter.redis.from_url', return_value=mock_redis_client):
             limiter1 = SimpleRateLimiter(calls=2, period=60)
