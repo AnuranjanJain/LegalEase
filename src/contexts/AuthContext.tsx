@@ -1,11 +1,14 @@
 import { createContext, useContext, useState, useEffect, ReactNode } from 'react';
 import { API_BASE_URL } from '../config/api';
+import { setAccessToken as setTokenInRegistry, clearAccessToken as clearTokenFromRegistry } from '../services/authTokenRegistry';
 
 interface AuthContextType {
   isAuthenticated: boolean;
   isVerifying: boolean;
   /** Email of the authenticated user, decoded from the JWT `sub` claim. */
   userEmail: string | null;
+  /** Current access token stored in memory (not persisted to localStorage). */
+  accessToken: string | null;
   login: (token: string) => Promise<void>;
   logout: () => boolean;
 }
@@ -72,51 +75,32 @@ function getEmailFromToken(token: string | null): string | null {
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [isAuthenticated, setIsAuthenticated] = useState<boolean>(false);
   const [isVerifying, setIsVerifying] = useState<boolean>(true);
-  const [userEmail, setUserEmail] = useState<string | null>(() =>
-    getEmailFromToken(localStorage.getItem('access_token'))
-  );
+  const [userEmail, setUserEmail] = useState<string | null>(null);
+  const [accessToken, setAccessToken] = useState<string | null>(null);
 
   useEffect(() => {
-    // Verify token with backend on app startup.
-    const verifyStoredToken = async () => {
-      const token = localStorage.getItem('access_token');
-
-      if (!token) {
-        setIsVerifying(false);
-        setIsAuthenticated(false);
-        setUserEmail(null);
-        return;
-      }
-
-      const isValid = await verifyTokenWithBackend(token);
-
-      if (isValid) {
-        setIsAuthenticated(true);
-        setUserEmail(getEmailFromToken(token));
-      } else {
-        localStorage.removeItem('access_token');
-        sessionStorage.clear();
-        setIsAuthenticated(false);
-        setUserEmail(null);
-      }
-
-      setIsVerifying(false);
-    };
-
-    verifyStoredToken();
+    // Clear any existing localStorage tokens on app load for security migration
+    const existingToken = localStorage.getItem('access_token');
+    if (existingToken) {
+      localStorage.removeItem('access_token');
+      console.log('Security: Removed legacy localStorage token for XSS protection');
+    }
+    sessionStorage.clear();
+    
+    setIsVerifying(false);
   }, []);
 
   const login = async (token: string) => {
-    localStorage.setItem('access_token', token);
-
     const isValid = await verifyTokenWithBackend(token);
 
     if (isValid) {
+      setAccessToken(token);
+      setTokenInRegistry(token);
       setIsAuthenticated(true);
       setUserEmail(getEmailFromToken(token));
     } else {
-      localStorage.removeItem('access_token');
-      sessionStorage.clear();
+      setAccessToken(null);
+      setTokenInRegistry(null);
       setIsAuthenticated(false);
       setUserEmail(null);
       throw new Error('Invalid token received from server');
@@ -126,7 +110,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const logout = (): boolean => {
     try {
       // Revoke the token server-side so it cannot be reused even within its expiry window.
-      const token = localStorage.getItem('access_token');
+      const token = accessToken;
       if (token) {
         // Fire-and-forget: we always clear the local session regardless of server response.
         fetch(`${API_BASE_URL}/auth/logout`, {
@@ -136,7 +120,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       }
 
       // Always clear local state immediately, regardless of server response
-      localStorage.removeItem('access_token');
+      setAccessToken(null);
+      clearTokenFromRegistry();
       sessionStorage.clear();
 
       setIsAuthenticated(false);
@@ -146,7 +131,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     } catch (error) {
       console.error('Logout failed:', error);
       // Ensure local state is cleared even on error
-      localStorage.removeItem('access_token');
+      setAccessToken(null);
+      clearTokenFromRegistry();
       sessionStorage.clear();
       setIsAuthenticated(false);
       setUserEmail(null);
@@ -155,7 +141,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
   return (
-    <AuthContext.Provider value={{ isAuthenticated, isVerifying, userEmail, login, logout }}>
+    <AuthContext.Provider value={{ isAuthenticated, isVerifying, userEmail, accessToken, login, logout }}>
       {children}
     </AuthContext.Provider>
   );

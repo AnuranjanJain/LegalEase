@@ -91,6 +91,20 @@ const STORAGE_KEYS = {
   CHAT_SESSION_PREFIX: 'le_chat_session_',
 };
 
+/**
+ * Security: Clear any legacy authentication tokens from localStorage.
+ * This is called on app initialization to ensure tokens are not persisted.
+ */
+export function clearLegacyAuthTokens(): void {
+  const legacyKeys = ['access_token', 'refresh_token', 'auth_token'];
+  legacyKeys.forEach(key => {
+    if (localStorage.getItem(key)) {
+      localStorage.removeItem(key);
+      console.log(`Security: Removed legacy ${key} from localStorage`);
+    }
+  });
+}
+
 export const StorageService = {
   getDocuments: (): Document[] => {
     try {
