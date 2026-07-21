@@ -244,6 +244,7 @@ async def extract_deadlines(
     current_user: AuthIdentity = Depends(validate_token_or_api_key),
     db: Session = Depends(get_db),
 ):
+    _check_rate_limit(current_user)
     try:
         deadlines = await ai_service.extract_deadlines(request.text)
 
