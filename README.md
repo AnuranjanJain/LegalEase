@@ -534,10 +534,13 @@ cp .env.example .env
   From `.env.example`:
   - `BYTEZ_API_KEY` — required by the backend to access the Bytez SDK. Keep this secret.
   - `FRONTEND_URL` — frontend origin used for CORS (default: `http://localhost:5173`).
+  - `JWT_SECRET_KEY` — secret key for JWT token signing. Required in all environments.
+  - `DOCUMENT_ENCRYPTION_KEY` — dedicated key for encrypting stored contract content at rest. **Required in production** to ensure cryptographic key separation. Must be different from `JWT_SECRET_KEY`. In non-production environments (development, testing, local), falls back to `JWT_SECRET_KEY` if not set for convenience. Generate using: `python -c "import secrets; print(secrets.token_urlsafe(32))"`
 
   Vercel deployment:
   - The frontend calls same-origin API routes at `/api` in production, so `VITE_API_URL` is usually not required on Vercel.
   - Add `JWT_SECRET_KEY` to Vercel environment variables before testing login/signup.
+  - Add `DOCUMENT_ENCRYPTION_KEY` to Vercel environment variables for production deployments to ensure cryptographic key separation.
   - Add `BYTEZ_API_KEY` to enable AI-backed features; otherwise `/api/health` reports degraded.
   - Add `DATABASE_URL` for persistent accounts. Without it, Vercel uses temporary SQLite storage that can reset between serverless instances.
   - If using a separate backend host instead, set frontend `VITE_API_URL` to that backend URL and backend `FRONTEND_URL` to the Vercel frontend URL.

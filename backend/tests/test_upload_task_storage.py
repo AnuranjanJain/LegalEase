@@ -276,9 +276,12 @@ class TestUploadTaskStorage:
         with patch.dict('os.environ', {
             'JWT_SECRET_KEY': 'test-secret',
             'REDIS_URL': 'redis://localhost:6379/0',
-            'ENVIRONMENT': 'production',
+            'ENVIRONMENT': 'development',
         }, clear=True):
             with patch('backend.storage.upload_tasks.redis.from_url', return_value=mock_redis_client):
+                # Reset both storage and settings cache
+                import backend.config
+                backend.config._settings = None
                 reset_upload_task_storage()
                 storage = UploadTaskStorage()
                 assert storage.using_redis is True
@@ -289,12 +292,15 @@ class TestUploadTaskStorage:
         with patch.dict('os.environ', {
             'JWT_SECRET_KEY': 'test-secret',
             'REDIS_URL': 'redis://localhost:6379/0',
-            'ENVIRONMENT': 'production',
+            'ENVIRONMENT': 'development',
         }, clear=True):
             with patch('backend.storage.upload_tasks.redis.from_url') as mock_from_url:
                 mock_client = MagicMock()
                 mock_client.ping.side_effect = Exception("Connection failed")
                 mock_from_url.return_value = mock_client
+                # Reset both storage and settings cache
+                import backend.config
+                backend.config._settings = None
                 reset_upload_task_storage()
                 storage = UploadTaskStorage()
                 assert storage.using_redis is False

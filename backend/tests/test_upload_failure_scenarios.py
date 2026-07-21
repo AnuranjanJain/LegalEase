@@ -55,6 +55,7 @@ class TestRedisUnavailable:
             'JWT_SECRET_KEY': 'test-secret',
             'REDIS_URL': 'redis://localhost:6379/0',
             'ENVIRONMENT': 'production',
+            'DOCUMENT_ENCRYPTION_KEY': 'test-encryption-key',
         }, clear=True):
             with patch('backend.storage.upload_tasks.redis.from_url') as mock_from_url:
                 mock_client = MagicMock()
@@ -414,6 +415,7 @@ class TestGracefulDegradation:
             'JWT_SECRET_KEY': 'test-secret',
             'REDIS_URL': 'redis://localhost:6379/0',
             'ENVIRONMENT': 'production',
+            'DOCUMENT_ENCRYPTION_KEY': 'test-encryption-key',
         }, clear=True):
             with patch('backend.storage.upload_tasks.redis.from_url') as mock_from_url:
                 mock_client = MagicMock()
