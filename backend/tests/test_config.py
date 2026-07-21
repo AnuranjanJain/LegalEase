@@ -420,6 +420,7 @@ class TestSettingsIntegration:
         """Test that Settings can be initialized with all defaults except required."""
         # Set required environment variable
         os.environ["JWT_SECRET_KEY"] = "test_secret_key_12345678"
+        os.environ["DOCUMENT_ENCRYPTION_KEY"] = "test_encryption_key_12345678"
         old_env = os.environ.pop("ENVIRONMENT", None)
         try:
             settings = Settings()
@@ -428,6 +429,7 @@ class TestSettingsIntegration:
             assert settings.file_upload.max_upload_size == 25 * 1024 * 1024
         finally:
             os.environ.pop("JWT_SECRET_KEY", None)
+            os.environ.pop("DOCUMENT_ENCRYPTION_KEY", None)
             if old_env is not None:
                 os.environ["ENVIRONMENT"] = old_env
 
