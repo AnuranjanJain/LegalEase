@@ -228,4 +228,25 @@ describe('API Service', () => {
       );
     });
   });
+
+  describe('refreshSession', () => {
+    it('should call refresh endpoint with credentials included', async () => {
+      const mockFetch = vi.fn().mockResolvedValue({
+        ok: true,
+        json: async () => ({ access_token: 'new-token' }),
+      });
+      global.fetch = mockFetch;
+
+      const result = await api.refreshSession<{ access_token: string }>();
+
+      expect(result).toEqual({ access_token: 'new-token' });
+      expect(mockFetch).toHaveBeenCalledWith(
+        expect.stringContaining('/auth/refresh'),
+        expect.objectContaining({
+          method: 'GET',
+          credentials: 'include',
+        })
+      );
+    });
+  });
 });
