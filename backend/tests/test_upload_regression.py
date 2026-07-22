@@ -90,8 +90,8 @@ class TestUploadEndpointRegression:
         assert "filename" in data
         assert data["filename"] == "test.txt"
 
-    def test_upload_response_status_is_processing(self, client, auth_headers):
-        """Test that upload response status is 'processing'."""
+    def test_upload_response_status_is_queued(self, client, auth_headers):
+        """Test that upload response status is 'queued'."""
         file_content = b"Sample document content"
         file = io.BytesIO(file_content)
         file.name = "test.txt"
@@ -104,7 +104,7 @@ class TestUploadEndpointRegression:
 
         data = response.json()
         assert "status" in data
-        assert data["status"] == "processing"
+        assert data["status"] == "queued"
 
     def test_upload_accepts_txt_files(self, client, auth_headers):
         """Test that upload endpoint accepts TXT files."""
@@ -235,8 +235,8 @@ class TestStatusEndpointRegression:
 class TestTaskLifecycleRegression:
     """Regression tests for task lifecycle."""
 
-    def test_task_initial_state_is_processing(self, client, auth_headers):
-        """Test that task initial state is 'processing'."""
+    def test_task_initial_state_is_queued(self, client, auth_headers):
+        """Test that task initial state is 'queued'."""
         file_content = b"Sample document content"
         file = io.BytesIO(file_content)
         file.name = "test.txt"
@@ -248,7 +248,7 @@ class TestTaskLifecycleRegression:
         )
 
         data = response.json()
-        assert data["status"] == "processing"
+        assert data["status"] == "queued"
 
     def test_task_progress_updates(self, client, auth_headers):
         """Test that task progress can be updated."""
