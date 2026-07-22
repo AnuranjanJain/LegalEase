@@ -2,31 +2,186 @@ import { useState, useRef, useEffect, useMemo } from 'react';
 import { 
   UploadCloud, FileText, Trash2, Eye, Search, 
   Grid, List, CheckCircle, ArrowRight, RefreshCcw,
-  X, MessageSquare, Download, AlertCircle, ShieldCheck
+  X, MessageSquare, Download, AlertCircle, ShieldCheck, GitCompare
 } from 'lucide-react';
 import { StorageService, Document, ChatStorageService } from '../services/storage';
 import { useToast } from '../contexts/ToastContext';
 import { useNavigate } from 'react-router-dom';
+import { api } from '../services/api';
 import { ShareButton } from '../components/ShareButton';
 import { WhatsAppShareModal } from '../components/WhatsAppShareModal';
 import { ClauseAnalysisSection } from '../components/ClauseAnalysisSection';
+import { EntityGraph } from '../components/EntityGraph';
 import { ReadabilityScore } from '../components/ReadabilityScore';
 import { useRedaction } from '../contexts/RedactionContext';
 import { redact } from '../utils/redaction';
 import { RedactedText } from '../components/RedactedText';
+import { DocumentCompareSelector } from '../components/DocumentCompareSelector';
+import { FilePreview } from '../components/FilePreview';
+
+function renderHighlightedText(text: string, clauses: any[]) {
+  if (!text) return '';
+  if (!clauses || clauses.length === 0) return text;
+
+  interface Interval {
+    start: number;
+    end: number;
+    clause: any;
+  }
+
+  const intervals: Interval[] = [];
+
+  clauses.forEach(c => {
+    if (!c.clause || c.clause.trim() === '') return;
+    
+    let index = text.indexOf(c.clause);
+    while (index !== -1) {
+      intervals.push({
+        start: index,
+        end: index + c.clause.length,
+        clause: c
+      });
+      index = text.indexOf(c.clause, index + c.clause.length);
+    }
+  });
+
+  intervals.sort((a, b) => {
+    if (a.start !== b.start) {
+      return a.start - b.start;
+    }
+    return b.end - a.end;
+  });
+
+  const nonOverlapping: Interval[] = [];
+  let lastEnd = 0;
+
+  for (const interval of intervals) {
+    if (interval.start >= lastEnd) {
+      nonOverlapping.push(interval);
+      lastEnd = interval.end;
+    }
+  }
+
+  const result: React.ReactNode[] = [];
+  let currentIdx = 0;
+
+  nonOverlapping.forEach((interval, idx) => {
+    if (interval.start > currentIdx) {
+      result.push(<span key={`text-${idx}`}>{text.substring(currentIdx, interval.start)}</span>);
+    }
+
+    const riskLower = interval.clause.riskLevel.toLowerCase();
+    let highlightClass = '';
+    if (riskLower === 'high') {
+      highlightClass = 'bg-red-500/25 border-b-2 border-red-500 dark:bg-red-500/30 text-red-950 dark:text-red-200';
+    } else if (riskLower === 'medium') {
+      highlightClass = 'bg-amber-500/25 border-b-2 border-amber-500 dark:bg-amber-500/30 text-amber-950 dark:text-amber-200';
+    } else {
+      highlightClass = 'bg-emerald-500/25 border-b-2 border-emerald-500 dark:bg-emerald-500/30 text-emerald-950 dark:text-emerald-250';
+    }
+
+    result.push(
+      <span
+        key={`highlight-${idx}`}
+        className="group relative inline cursor-help rounded-sm font-semibold transition-all px-0.5"
+        title={`${interval.clause.riskLevel} Risk: ${interval.clause.riskReason}`}
+        data-testid="heatmap-highlight"
+      >
+        <span className={highlightClass}>
+          {text.substring(interval.start, interval.end)}
+        </span>
+        
+        {/* HSL Glassmorphic Tooltip on hover */}
+        <span className="pointer-events-none absolute bottom-full left-1/2 -translate-x-1/2 mb-2 w-72 origin-bottom scale-95 opacity-0 transition-all duration-200 group-hover:scale-100 group-hover:pointer-events-auto group-hover:opacity-100 z-30 p-3 rounded-xl bg-white dark:bg-gray-900 border border-gray-250 dark:border-gray-800 shadow-2xl backdrop-blur-md">
+          <span className="flex items-center gap-1.5 mb-1.5">
+            <span className={`w-2 h-2 rounded-full ${
+              riskLower === 'high' ? 'bg-red-500' : riskLower === 'medium' ? 'bg-amber-500' : 'bg-emerald-500'
+            }`} />
+            <span className="text-[10px] font-extrabold uppercase tracking-wider text-gray-500 dark:text-gray-400">
+              {interval.clause.riskLevel} Risk Details
+            </span>
+          </span>
+          <p className="text-[11px] font-bold text-gray-900 dark:text-white leading-normal text-left font-sans">
+            {interval.clause.riskReason}
+          </p>
+        </span>
+      </span>
+    );
+
+    currentIdx = interval.end;
+  });
+
+  if (currentIdx < text.length) {
+    result.push(<span key="text-end">{text.substring(currentIdx)}</span>);
+  }
+
+  return result;
+}
 
 export function DocumentsPage() {
   const [isDragging, setIsDragging] = useState(false);
+  const [stagedFiles, setStagedFiles] = useState<File[]>([]);
   const [documents, setDocuments] = useState<Document[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedTypeFilter, setSelectedTypeFilter] = useState<'All' | 'PDF' | 'DOCX' | 'TXT'>('All');
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
   const [shareDoc, setShareDoc] = useState<Document | null>(null);
   const [selectedAuditDoc, setSelectedAuditDoc] = useState<Document | null>(null);
+  const [auditTab, setAuditTab] = useState<'overview' | 'heatmap'>('overview');
+  const [fileObjects, setFileObjects] = useState<Map<string, File>>(new Map());
+
+  useEffect(() => {
+    setAuditTab('overview');
+  }, [selectedAuditDoc]);
+
+  const [isExporting, setIsExporting] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const { showToast } = useToast();
   const navigate = useNavigate();
   const { isRedactionEnabled, redactionStyle } = useRedaction();
+
+  // ---------------------------------------------------------------------------
+  // Multi-document comparison selection state.
+  // Only processed (status === 'processed') documents can be selected.
+  // ---------------------------------------------------------------------------
+  const [selectedDocIds, setSelectedDocIds] = useState<string[]>([]);
+
+  const handleToggleDocSelection = (id: string) => {
+    setSelectedDocIds(prev =>
+      prev.includes(id) ? prev.filter(d => d !== id) : [...prev, id]
+    );
+  };
+
+  const handleClearSelection = () => setSelectedDocIds([]);
+
+  /**
+   * Launch a multi-document comparison chat session.
+   * Creates a new ChatSession with `multiDocContext` populated from the
+   * selected documents' extracted text, then navigates to the chatbot.
+   */
+  const handleCompareDocuments = (ids: string[]) => {
+    const docs = ids
+      .map(id => StorageService.getDocument(id))
+      .filter((d): d is Document => d !== undefined && d.status === 'processed');
+
+    if (docs.length < 2) {
+      showToast('Select at least 2 analyzed documents to compare.', 'warning');
+      return;
+    }
+
+    const names = docs.map(d => d.name).join(', ');
+    const session = ChatStorageService.createSession(`Compare: ${names.substring(0, 60)}`);
+    session.multiDocContext = docs.map(d => ({
+      id: d.id,
+      name: d.name,
+      text: d.text || d.summary || '',
+    }));
+    ChatStorageService.saveSession(session);
+
+    showToast(`Launching comparison of ${docs.length} documents...`, 'info');
+    setSelectedDocIds([]);
+    navigate('/chatbot');
+  };
 
   // Derive the redacted version of the audit summary (never mutates original)
   const auditSummaryDisplay = useMemo(() => {
@@ -41,30 +196,126 @@ export function DocumentsPage() {
     setDocuments(StorageService.getDocuments());
   }, []);
 
-  /** Upload each file to the backend for real AI extraction. */
-  const processFiles = (files: FileList) => {
-    if (files.length === 0) return;
-    
-    // Process the first file and navigate to /processing
-    const file = files[0];
-    const fileExtension = file.name.split('.').pop()?.toLowerCase() || 'txt';
-    
-    const newDoc: Document = {
-      id: `doc_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
-      name: file.name,
-      type: fileExtension,
-      size: file.size,
-      uploadDate: new Date().toISOString(),
-      status: 'processing'
-    };
+  const processBatchFile = async (docId: string, file: File) => {
+    try {
+      const formData = new FormData();
+      formData.append('file', file);
+      const uploadData = await api.upload<{ task_id?: string; filename?: string; text?: string; status?: string }>('/upload', formData);
+      
+      let extractedText = uploadData.text || '';
+      if (uploadData.task_id) {
+        let isComplete = false;
+        let pollResult: any = null;
+        while (!isComplete) {
+          await new Promise(resolve => setTimeout(resolve, 1000));
+          pollResult = await api.get<{ status: string; progress: number; result: any }>(`/upload/status/${uploadData.task_id}`);
+          if (pollResult.status === 'done' || pollResult.status === 'failed') {
+            isComplete = true;
+          }
+        }
+        if (pollResult.status === 'failed') {
+          throw new Error(pollResult.result?.error || 'Document processing failed on server.');
+        }
+        extractedText = pollResult.result?.text || '';
+      }
 
-    // Save to StorageService and update state
-    StorageService.saveDocument(newDoc);
+      if (!extractedText) throw new Error('No text extracted from document.');
+
+      const summaryRes = await api.post<{ summary: string }>('/summarize', { text: extractedText.substring(0, 4000) }).catch(() => ({ summary: 'Batch processed summary.' }));
+      const compiledBrief = summaryRes.summary;
+
+      const jurisdiction = localStorage.getItem('le_selected_jurisdiction') || 'General / Not Specified';
+      let analyzedClauses: any[] = [];
+      try {
+        const response = await api.post<{ clauses: any[] }>('/legal/analyze-clauses', { text: extractedText, jurisdiction });
+        analyzedClauses = response.clauses;
+      } catch (e) {}
+
+      StorageService.updateDocumentStatus(docId, 'processed', compiledBrief, extractedText, analyzedClauses);
+      setDocuments(StorageService.getDocuments());
+      showToast(`"${file.name}" analyzed successfully!`, 'success');
+    } catch (err) {
+      StorageService.updateDocumentStatus(docId, 'failed');
+      setDocuments(StorageService.getDocuments());
+      showToast(`Audit failed for "${file.name}".`, 'error');
+    }
+  };
+
+  /** Stage files for preview before uploading */
+  const stageFiles = (files: FileList | File[]) => {
+    const newFiles = Array.from(files);
+    if (newFiles.length === 0) return;
+    setStagedFiles((prev) => [...prev, ...newFiles]);
+  };
+
+  /** Confirm upload and process all staged files */
+  const confirmUpload = () => {
+    if (stagedFiles.length === 0) return;
+    
+    if (stagedFiles.length === 1) {
+      // Keep existing single-file upload flow working
+      const file = stagedFiles[0];
+      const fileExtension = file.name.split('.').pop()?.toLowerCase() || 'txt';
+      
+      const newDoc: Document = {
+        id: `doc_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+        name: file.name,
+        type: fileExtension,
+        size: file.size,
+        uploadDate: new Date().toISOString(),
+        status: 'processing'
+      };
+
+      // Save to StorageService and update state
+      StorageService.saveDocument(newDoc);
+      setDocuments(StorageService.getDocuments());
+      setStagedFiles([]);
+      showToast(`Initializing processing pipeline for "${file.name}"...`, 'info');
+
+      // Navigate to processing page, passing the document details and the real File object
+      navigate('/processing', { state: { docId: newDoc.id, file } });
+    } else {
+      // Batch document upload with processing queue
+      const newDocs: { doc: Document, file: File }[] = [];
+      const newFileObjects = new Map(fileObjects);
+      
+      stagedFiles.forEach((file, index) => {
+        const fileExtension = file.name.split('.').pop()?.toLowerCase() || 'txt';
+        const newDoc: Document = {
+          id: `doc_${Date.now()}_${index}_${Math.random().toString(36).substr(2, 9)}`,
+          name: file.name,
+          type: fileExtension,
+          size: file.size,
+          uploadDate: new Date().toISOString(),
+          status: 'processing'
+        };
+        StorageService.saveDocument(newDoc);
+        newDocs.push({ doc: newDoc, file });
+        newFileObjects.set(newDoc.id, file);
+      });
+      
+      setFileObjects(newFileObjects);
+      setDocuments(StorageService.getDocuments());
+      setStagedFiles([]);
+      showToast(`Added ${stagedFiles.length} documents to batch processing queue...`, 'info');
+      
+      // Start processing them in background
+      newDocs.forEach(({ doc, file }) => {
+        processBatchFile(doc.id, file);
+      });
+    }
+  };
+
+  const handleRetry = (docId: string, name: string) => {
+    const file = fileObjects.get(docId);
+    if (!file) {
+      showToast('Cannot retry. File data is lost. Please re-upload.', 'error');
+      return;
+    }
+    StorageService.updateDocumentStatus(docId, 'processing');
     setDocuments(StorageService.getDocuments());
-    showToast(`Initializing processing pipeline for "${file.name}"...`, 'info');
-
-    // Navigate to processing page, passing the document details and the real File object
-    navigate('/processing', { state: { docId: newDoc.id, file } });
+    showToast(`Retrying audit for "${name}"...`, 'info');
+    processBatchFile(docId, file);
   };
 
   const handleDragOver = (e: React.DragEvent<HTMLDivElement>) => {
@@ -81,13 +332,13 @@ export function DocumentsPage() {
     e.preventDefault();
     setIsDragging(false);
     if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
-      processFiles(e.dataTransfer.files);
+      stageFiles(e.dataTransfer.files);
     }
   };
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files.length > 0) {
-      processFiles(e.target.files);
+      stageFiles(e.target.files);
       if (e.target.value) e.target.value = '';
     }
   };
@@ -98,7 +349,7 @@ export function DocumentsPage() {
       setDocuments(remaining);
       localStorage.setItem('le_documents', JSON.stringify(remaining));
       showToast(`"${name}" deleted successfully.`, 'info');
-    } catch (err) {
+    } catch {
       showToast('Failed to delete document.', 'error');
     }
   };
@@ -228,6 +479,47 @@ export function DocumentsPage() {
     showToast('AI Summary report downloaded successfully!', 'success');
   };
 
+  const handleExportPDF = async (doc: Document) => {
+    const rawSummary = doc.summary || getMockSummary(doc);
+    if (!rawSummary) {
+      showToast('No summary content available to export.', 'warning');
+      return;
+    }
+
+    const summaryText = isRedactionEnabled
+      ? redact(rawSummary, redactionStyle)
+      : rawSummary;
+
+    setIsExporting(true);
+    showToast('Generating PDF summary...', 'info');
+
+    try {
+      const blob = await api.postBlob('/api/export/pdf', {
+        title: `AI Document Summary: ${doc.name}`,
+        summary: summaryText
+      });
+
+      const today = new Date().toISOString().split('T')[0];
+      const filename = `summary-${today}.pdf`;
+
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.setAttribute('download', filename);
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      URL.revokeObjectURL(url);
+
+      showToast('PDF summary exported successfully!', 'success');
+    } catch (err) {
+      console.error('Failed to export PDF summary:', err);
+      showToast(err instanceof Error ? err.message : 'Failed to export PDF summary.', 'error');
+    } finally {
+      setIsExporting(false);
+    }
+  };
+
   return (
     <div className="relative overflow-hidden bg-background-light dark:bg-background-dark min-h-screen text-gray-800 dark:text-gray-200">
       
@@ -250,22 +542,40 @@ export function DocumentsPage() {
             </p>
           </div>
 
-          <button
-            onClick={() => fileInputRef.current?.click()}
-            className="inline-flex items-center px-5 py-3 text-sm font-semibold rounded-xl text-white bg-primary-600 hover:bg-primary-500 shadow-lg shadow-primary-500/20 hover:shadow-primary-500/35 hover:scale-[1.02] active:scale-95 transition-all duration-300"
-          >
-            <UploadCloud size={18} className="mr-2 animate-bounce" />
-            Upload Document
-          </button>
+          <div className="flex items-center gap-3">
+            {/* Compare shortcut — visible when 2+ processed docs are selected */}
+            {selectedDocIds.length >= 2 && (
+              <button
+                onClick={() => handleCompareDocuments(selectedDocIds)}
+                className="inline-flex items-center gap-2 px-4 py-2.5 text-sm font-semibold rounded-xl
+                           text-white bg-indigo-600 hover:bg-indigo-500 shadow-lg shadow-indigo-500/20
+                           hover:scale-[1.02] active:scale-95 transition-all duration-200"
+                aria-label={`Compare ${selectedDocIds.length} selected documents`}
+              >
+                <GitCompare size={16} />
+                Compare ({selectedDocIds.length})
+              </button>
+            )}
+            <button
+              onClick={() => fileInputRef.current?.click()}
+              className="inline-flex items-center px-5 py-3 text-sm font-semibold rounded-xl text-white bg-primary-600 hover:bg-primary-500 shadow-lg shadow-primary-500/20 hover:shadow-primary-500/35 hover:scale-[1.02] active:scale-95 transition-all duration-300"
+            >
+              <UploadCloud size={18} className="mr-2 animate-bounce" />
+              Upload Document
+            </button>
+          </div>
         </div>
 
         {/* --- UPLOAD AREA WITH GLASSMORPHISM AND NEUMORPHIC GLOW --- */}
         <div
+          id="global-upload-trigger"
           onDragOver={handleDragOver}
           onDragLeave={handleDragLeave}
           onDrop={handleDrop}
           onClick={() => fileInputRef.current?.click()}
-          className={`group cursor-pointer p-10 rounded-2xl border-2 border-dashed text-center transition-all duration-500 bg-white/70 dark:bg-gray-950/40 backdrop-blur-md relative overflow-hidden mb-10 ${
+          className={`group cursor-pointer p-10 rounded-2xl border-2 border-dashed text-center transition-all duration-500 bg-white/70 dark:bg-gray-950/40 backdrop-blur-md relative overflow-hidden ${
+            stagedFiles.length === 0 ? 'mb-10' : 'mb-6'
+          } ${
             isDragging
               ? 'border-primary-600 bg-primary-600/5 dark:bg-primary-500/10 shadow-[0_0_30px_rgba(37,99,235,0.15)] scale-[1.01]'
               : 'border-gray-250 dark:border-gray-800 hover:border-primary-600 hover:bg-gray-50/50 dark:hover:bg-gray-900/20 hover:shadow-md'
@@ -300,6 +610,41 @@ export function DocumentsPage() {
           </span>
         </div>
 
+        {/* --- STAGED FILES PREVIEW --- */}
+        {stagedFiles.length > 0 && (
+          <div className="mb-10 animate-fade-in">
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
+                Staged for Upload ({stagedFiles.length})
+              </h3>
+              <div className="flex gap-3">
+                <button
+                  onClick={() => setStagedFiles([])}
+                  className="px-4 py-2 text-sm font-semibold text-gray-600 dark:text-gray-300 hover:text-red-600 dark:hover:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-xl transition-colors"
+                >
+                  Clear All
+                </button>
+                <button
+                  onClick={confirmUpload}
+                  className="inline-flex items-center px-4 py-2 text-sm font-semibold text-white bg-primary-600 hover:bg-primary-500 rounded-xl shadow-md shadow-primary-500/20 transition-all active:scale-95"
+                >
+                  <UploadCloud size={16} className="mr-2" />
+                  Confirm Upload
+                </button>
+              </div>
+            </div>
+            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4">
+              {stagedFiles.map((file, idx) => (
+                <FilePreview
+                  key={`${file.name}-${idx}`}
+                  file={file}
+                  onRemove={() => setStagedFiles(prev => prev.filter((_, i) => i !== idx))}
+                />
+              ))}
+            </div>
+          </div>
+        )}
+
         {/* search and Filters Bar */}
         <div className="bg-white/80 dark:bg-gray-950/80 border border-gray-150 dark:border-gray-850 p-4 rounded-2xl shadow-sm backdrop-blur-md flex flex-col md:flex-row gap-4 justify-between items-center mb-8">
           
@@ -307,6 +652,7 @@ export function DocumentsPage() {
           <div className="relative w-full md:w-80">
             <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 dark:text-gray-500" />
             <input 
+              id="global-search-input"
               type="text" 
               placeholder="Search documents..."
               value={searchQuery}
@@ -368,17 +714,35 @@ export function DocumentsPage() {
                 return (
                   <div 
                     key={doc.id} 
-                    className="group bg-white dark:bg-gray-900 rounded-2xl border border-gray-200 dark:border-gray-800 shadow-sm hover:shadow-xl hover:-translate-y-1.5 transition-all duration-300 relative overflow-hidden flex flex-col justify-between"
+                    className={`group bg-white dark:bg-gray-900 rounded-2xl border shadow-sm hover:shadow-xl hover:-translate-y-1.5 transition-all duration-300 relative overflow-hidden flex flex-col justify-between ${
+                      selectedDocIds.includes(doc.id)
+                        ? 'border-primary-500 ring-2 ring-primary-500/30'
+                        : 'border-gray-200 dark:border-gray-800'
+                    }`}
                   >
                     {/* Glowing bar at top based on file type */}
                     <div className={`absolute top-0 left-0 w-full h-1 bg-gradient-to-r ${doc.type === 'pdf' ? 'from-red-500 to-rose-500' : doc.type === 'docx' ? 'from-blue-500 to-indigo-500' : 'from-purple-500 to-pink-500'} opacity-0 group-hover:opacity-100 transition-opacity`}></div>
 
                     <div className="p-6">
-                      {/* Header with Type badge and Status */}
+                      {/* Header with Type badge, checkbox, and Status */}
                       <div className="flex justify-between items-start mb-4">
-                        <span className={`text-[10px] font-extrabold uppercase tracking-widest px-2.5 py-0.5 rounded-full border ${typeInfo.color}`}>
-                          {doc.type}
-                        </span>
+                        <div className="flex items-center gap-2">
+                          {/* Multi-select checkbox — only for processed docs */}
+                          {doc.status === 'processed' && (
+                            <input
+                              type="checkbox"
+                              checked={selectedDocIds.includes(doc.id)}
+                              onChange={() => handleToggleDocSelection(doc.id)}
+                              onClick={e => e.stopPropagation()}
+                              className="h-4 w-4 rounded border-gray-300 dark:border-gray-600 text-primary-600
+                                         focus:ring-primary-500 focus:ring-offset-0 cursor-pointer"
+                              aria-label={`Select ${doc.name} for comparison`}
+                            />
+                          )}
+                          <span className={`text-[10px] font-extrabold uppercase tracking-widest px-2.5 py-0.5 rounded-full border ${typeInfo.color}`}>
+                            {doc.type}
+                          </span>
+                        </div>
                         
                         {doc.status === 'processing' ? (
                           <span className="inline-flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-full bg-amber-500/10 text-amber-500 border border-amber-500/20 animate-pulse">
@@ -439,22 +803,32 @@ export function DocumentsPage() {
                         />
                       </div>
 
-                      <button
-                        onClick={() => handleReviewDetails(doc)}
-                        className={`inline-flex items-center gap-1.5 px-4 py-2 text-xs font-bold rounded-lg border border-gray-250 dark:border-gray-800 hover:border-primary-500 hover:bg-primary-500 hover:text-white transition-all`}
-                      >
-                        {doc.status === 'processing' ? (
-                          <>
-                            <span>View Progress</span>
-                            <ArrowRight size={12} className="animate-pulse" />
-                          </>
-                        ) : (
-                          <>
-                            <Eye size={12} />
-                            <span>Audit Analysis</span>
-                          </>
-                        )}
-                      </button>
+                      {(doc.status === 'error' || doc.status === 'failed') ? (
+                        <button
+                          onClick={() => handleRetry(doc.id, doc.name)}
+                          className={`inline-flex items-center gap-1.5 px-4 py-2 text-xs font-bold rounded-lg border border-red-250 dark:border-red-800 text-red-500 hover:bg-red-50 hover:dark:bg-red-900/20 transition-all`}
+                        >
+                          <RefreshCcw size={12} />
+                          <span>Retry</span>
+                        </button>
+                      ) : (
+                        <button
+                          onClick={() => handleReviewDetails(doc)}
+                          className={`inline-flex items-center gap-1.5 px-4 py-2 text-xs font-bold rounded-lg border border-gray-250 dark:border-gray-800 hover:border-primary-500 hover:bg-primary-500 hover:text-white transition-all`}
+                        >
+                          {doc.status === 'processing' ? (
+                            <>
+                              <span>View Progress</span>
+                              <ArrowRight size={12} className="animate-pulse" />
+                            </>
+                          ) : (
+                            <>
+                              <Eye size={12} />
+                              <span>Audit Analysis</span>
+                            </>
+                          )}
+                        </button>
+                      )}
                     </div>
 
                   </div>
@@ -468,6 +842,7 @@ export function DocumentsPage() {
                 <table className="min-w-full divide-y divide-gray-150 dark:divide-gray-800">
                   <thead className="bg-gray-50 dark:bg-gray-950/50">
                     <tr>
+                      <th className="px-4 py-4 w-10" aria-label="Select for comparison"></th>
                       <th className="px-6 py-4 text-left text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider">Document Name</th>
                       <th className="px-6 py-4 text-left text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider">Size</th>
                       <th className="px-6 py-4 text-left text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider">Date Uploaded</th>
@@ -480,7 +855,19 @@ export function DocumentsPage() {
                       const typeInfo = getDocTypeDetails(doc.type);
 
                       return (
-                        <tr key={doc.id} className="hover:bg-gray-50 dark:hover:bg-gray-950/40 transition-colors">
+                        <tr key={doc.id} className={`hover:bg-gray-50 dark:hover:bg-gray-950/40 transition-colors ${selectedDocIds.includes(doc.id) ? 'bg-primary-50/50 dark:bg-primary-900/10' : ''}`}>
+                          <td className="px-4 py-4">
+                            {doc.status === 'processed' && (
+                              <input
+                                type="checkbox"
+                                checked={selectedDocIds.includes(doc.id)}
+                                onChange={() => handleToggleDocSelection(doc.id)}
+                                className="h-4 w-4 rounded border-gray-300 dark:border-gray-600 text-primary-600
+                                           focus:ring-primary-500 focus:ring-offset-0 cursor-pointer"
+                                aria-label={`Select ${doc.name} for comparison`}
+                              />
+                            )}
+                          </td>
                           <td className="px-6 py-4 whitespace-nowrap">
                             <div className="flex items-center gap-3">
                               <div className={`p-2 rounded-lg bg-gray-100 dark:bg-gray-800 flex-shrink-0`}>
@@ -526,13 +913,23 @@ export function DocumentsPage() {
                           </td>
                           <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-semibold">
                             <div className="flex items-center justify-end gap-1">
-                              <button
-                                onClick={() => handleReviewDetails(doc)}
-                                className="p-2 text-gray-400 hover:text-primary-500 dark:hover:text-white hover:bg-primary-500/10 rounded-lg transition-colors"
-                                title="View Details"
-                              >
-                                <Eye size={16} />
-                              </button>
+                              {(doc.status === 'error' || doc.status === 'failed') ? (
+                                <button
+                                  onClick={() => handleRetry(doc.id, doc.name)}
+                                  className="p-2 text-red-400 hover:text-red-500 hover:bg-red-500/10 rounded-lg transition-colors"
+                                  title="Retry"
+                                >
+                                  <RefreshCcw size={16} />
+                                </button>
+                              ) : (
+                                <button
+                                  onClick={() => handleReviewDetails(doc)}
+                                  className="p-2 text-gray-400 hover:text-primary-500 dark:hover:text-white hover:bg-primary-500/10 rounded-lg transition-colors"
+                                  title="View Details"
+                                >
+                                  <Eye size={16} />
+                                </button>
+                              )}
                               {/* WhatsApp Share button — list view */}
                               <ShareButton
                                 document={doc}
@@ -581,6 +978,15 @@ export function DocumentsPage() {
         onClose={() => setShareDoc(null)}
       />
 
+      {/* Multi-document comparison floating action bar */}
+      <DocumentCompareSelector
+        allDocuments={documents}
+        selectedIds={selectedDocIds}
+        onToggle={handleToggleDocSelection}
+        onClear={handleClearSelection}
+        onCompare={handleCompareDocuments}
+      />
+
       {/* Cognitive Audit Brief Modal */}
       {selectedAuditDoc && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-gray-950/60 backdrop-blur-sm animate-fade-in">
@@ -610,37 +1016,108 @@ export function DocumentsPage() {
               </button>
             </div>
 
-            {/* Modal Body */}
-            <div className="p-6 md:p-8 overflow-y-auto flex-grow text-left space-y-6 scrollbar-thin scrollbar-thumb-gray-200 dark:scrollbar-thumb-gray-850">
-              
-              {/* Ready Badge & Overview */}
-              <div className="flex items-center gap-2 flex-wrap">
-                <div className="flex items-center gap-2 p-3 bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 border border-emerald-500/15 rounded-xl text-xs font-bold w-fit">
-                  <CheckCircle size={16} />
-                  <span>AI Cognitive Audit Audit Ready</span>
-                </div>
-                {isRedactionEnabled && (
-                  <div className="flex items-center gap-2 p-3 bg-primary-600/5 text-primary dark:text-primary-400 border border-primary-600/15 rounded-xl text-xs font-bold w-fit">
-                    <ShieldCheck size={16} />
-                    <span>PII Redacted</span>
-                  </div>
-                )}
-              </div>
-
-              {/* Summary Text Content */}
-              <div className="prose prose-sm dark:prose-invert max-w-none text-gray-700 dark:text-gray-200 whitespace-pre-line leading-relaxed text-sm">
-                <RedactedText text={auditSummaryDisplay} />
-              </div>
-
-              {/* Readability Score Analysis */}
-              <ReadabilityScore 
-                originalText={selectedAuditDoc.text} 
-                summaryText={selectedAuditDoc.summary} 
-              />
-
-              <ClauseAnalysisSection clauses={selectedAuditDoc.clauses} />
-
+            {/* Tabs */}
+            <div className="flex border-b border-gray-150 dark:border-gray-850 px-6 bg-gray-50/20 dark:bg-gray-900/10">
+              <button
+                onClick={() => setAuditTab('overview')}
+                className={`py-3 px-4 text-xs font-bold border-b-2 transition-all ${
+                  auditTab === 'overview'
+                    ? 'border-primary-600 text-primary-650 dark:text-primary-450 border-b-primary-600'
+                    : 'border-transparent text-gray-500 hover:text-gray-850 dark:hover:text-gray-300'
+                }`}
+                data-testid="audit-overview-tab"
+              >
+                Overview
+              </button>
+              <button
+                onClick={() => setAuditTab('heatmap')}
+                className={`py-3 px-4 text-xs font-bold border-b-2 transition-all ${
+                  auditTab === 'heatmap'
+                    ? 'border-primary-600 text-primary-650 dark:text-primary-450 border-b-primary-600'
+                    : 'border-transparent text-gray-500 hover:text-gray-850 dark:hover:text-gray-300'
+                }`}
+                data-testid="audit-heatmap-tab"
+              >
+                Risk Heatmap
+              </button>
             </div>
+
+            {/* Modal Body */}
+            {auditTab === 'heatmap' ? (
+              <div className="flex flex-col md:flex-row h-[60vh] overflow-hidden" data-testid="risk-heatmap-view">
+                {/* Left/Main: Full Document Text with Highlights */}
+                <div className="flex-1 p-6 md:p-8 overflow-y-auto text-left border-r border-gray-150 dark:border-gray-850 scrollbar-thin scrollbar-thumb-gray-200 dark:scrollbar-thumb-gray-850">
+                  <h4 className="text-xs font-bold uppercase tracking-wider text-gray-900 dark:text-white mb-4">
+                    Highlighted Contract Text
+                  </h4>
+                  <div className="prose prose-sm dark:prose-invert max-w-none text-gray-700 dark:text-gray-350 font-sans leading-relaxed whitespace-pre-wrap select-text">
+                    {renderHighlightedText(selectedAuditDoc.text || '', selectedAuditDoc.clauses || [])}
+                  </div>
+                </div>
+
+                {/* Right: Legend / Clauses list */}
+                <div className="w-full md:w-80 bg-gray-50/50 dark:bg-gray-900/10 p-6 overflow-y-auto text-left space-y-4 scrollbar-thin scrollbar-thumb-gray-200 dark:scrollbar-thumb-gray-850">
+                  <h4 className="text-xs font-bold uppercase tracking-wider text-gray-900 dark:text-white">
+                    Risk Legend
+                  </h4>
+                  <p className="text-[11px] text-gray-500 dark:text-gray-400">
+                    Hover over highlighted text to view risk details, or browse identified risk clauses below.
+                  </p>
+                  <div className="space-y-3">
+                    {(selectedAuditDoc.clauses || []).map((item, idx) => {
+                      const riskLower = item.riskLevel.toLowerCase();
+                      const bgClass = riskLower === 'high' ? 'bg-red-500/10 border-red-500/25' : riskLower === 'medium' ? 'bg-amber-500/10 border-amber-500/25' : 'bg-emerald-500/10 border-emerald-500/25';
+                      const badgeClass = riskLower === 'high' ? 'bg-red-500/15 text-red-650 dark:text-red-400 border-red-500/20' : riskLower === 'medium' ? 'bg-amber-500/15 text-amber-600 dark:text-amber-400 border-amber-500/20' : 'bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 border-emerald-500/20';
+                      return (
+                        <div key={idx} className={`p-3 rounded-xl border text-xs leading-normal ${bgClass}`} data-testid="heatmap-legend-item">
+                          <div className="flex items-center justify-between mb-1.5">
+                            <span className={`px-2 py-0.5 rounded-full text-[9px] font-extrabold uppercase border tracking-wider ${badgeClass}`}>
+                              {item.riskLevel} Risk
+                            </span>
+                          </div>
+                          <p className="font-semibold text-gray-800 dark:text-gray-200 mb-1">
+                            {item.riskReason}
+                          </p>
+                          <p className="text-[10px] text-gray-500 dark:text-gray-450 line-clamp-2 font-mono">
+                            "{item.clause}"
+                          </p>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              </div>
+            ) : (
+              <div className="p-6 md:p-8 overflow-y-auto flex-grow text-left space-y-6 scrollbar-thin scrollbar-thumb-gray-200 dark:scrollbar-thumb-gray-850">
+                {/* Ready Badge & Overview */}
+                <div className="flex items-center gap-2 flex-wrap">
+                  <div className="flex items-center gap-2 p-3 bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 border border-emerald-500/15 rounded-xl text-xs font-bold w-fit">
+                    <CheckCircle size={16} />
+                    <span>AI Cognitive Audit Audit Ready</span>
+                  </div>
+                  {isRedactionEnabled && (
+                    <div className="flex items-center gap-2 p-3 bg-primary-600/5 text-primary dark:text-primary-400 border border-primary-600/15 rounded-xl text-xs font-bold w-fit">
+                      <ShieldCheck size={16} />
+                      <span>PII Redacted</span>
+                    </div>
+                  )}
+                </div>
+
+                {/* Summary Text Content */}
+                <div className="prose prose-sm dark:prose-invert max-w-none text-gray-700 dark:text-gray-200 whitespace-pre-line leading-relaxed text-sm">
+                  <RedactedText text={auditSummaryDisplay} />
+                </div>
+
+                {/* Readability Score Analysis */}
+                <ReadabilityScore 
+                  originalText={selectedAuditDoc.text} 
+                  summaryText={selectedAuditDoc.summary} 
+                />
+
+                <ClauseAnalysisSection clauses={selectedAuditDoc.clauses} />
+                <EntityGraph documentText={selectedAuditDoc.text} />
+              </div>
+            )}
 
             {/* Modal Footer */}
             <div className="p-4 md:p-6 bg-gray-50/50 dark:bg-gray-900/20 border-t border-gray-150 dark:border-gray-850 flex flex-col sm:flex-row items-center justify-between gap-3">
@@ -651,6 +1128,18 @@ export function DocumentsPage() {
                 >
                   <MessageSquare size={14} />
                   <span>Chat with AI Assistant</span>
+                </button>
+                <button
+                  onClick={() => handleExportPDF(selectedAuditDoc)}
+                  disabled={isExporting}
+                  className="flex-grow sm:flex-none inline-flex items-center justify-center gap-2 px-4 py-2.5 text-xs font-bold text-white bg-primary-600 hover:bg-primary-500 rounded-xl shadow-lg disabled:opacity-50 disabled:cursor-not-allowed transition-all"
+                >
+                  {isExporting ? (
+                    <RefreshCcw size={14} className="animate-spin" />
+                  ) : (
+                    <Download size={14} />
+                  )}
+                  <span>Export PDF</span>
                 </button>
                 <button
                   onClick={() => handleDownloadSummary(selectedAuditDoc)}

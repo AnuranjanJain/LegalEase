@@ -1,7 +1,8 @@
 import { API_BASE_URL } from '../config/api';
+import { getAccessToken } from './authTokenRegistry';
 
 const getAuthHeaders = (): Record<string, string> => {
-  const token = localStorage.getItem('access_token');
+  const token = getAccessToken();
   return token ? { 'Authorization': `Bearer ${token}` } : {};
 };
 
@@ -121,6 +122,23 @@ export const api = {
     }
 
     return response.json();
+  },
+
+  postBlob: async (endpoint: string, data: any): Promise<Blob> => {
+    const response = await fetch(`${API_BASE_URL}${endpoint}`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        ...getAuthHeaders(),
+      },
+      body: JSON.stringify(data),
+    });
+
+    if (!response.ok) {
+      await handleErrorResponse(response, 'Export error');
+    }
+
+    return response.blob();
   },
 
   stream: async (endpoint: string, data: any, conversationHistory?: Array<{role: string, content: string}>): Promise<Response> => {

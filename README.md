@@ -15,6 +15,12 @@
   <img src="https://img.shields.io/github/license/AnuranjanJain/LegalEase?style=for-the-badge" />
 </p>
 
+<p align="center">
+  <a href="https://github.com/AnuranjanJain/LegalEase" target="_blank">
+    <img src="https://img.shields.io/badge/⭐_Star_this_Repo-black?style=for-the-badge&logo=github" alt="Star the Repo" />
+  </a>
+</p>
+
 ## 🎯 Why LegalEase?
 
 Legal documents are often difficult for ordinary users to understand because of legal jargon and lengthy clauses.
@@ -60,6 +66,9 @@ Explore the LegalEase platform to upload documents,view summaries,and interact w
 
 ### 🏠 Homepage
 ![Homepage](assets/homepage.png)
+
+### 🎬 Live Demo Walkthrough
+![Homepage Demo](assets/demo-homepage.gif)
 
 ### 🤖 AI Chatbot
 ![AI Chatbot](assets/aichatbot.png)
@@ -196,6 +205,13 @@ LEGAL EASE
 - **Processing History**: Past document processing records
 - **Status Management**: Cancel, retry, and download options
 
+### 📄 PDF Export Feature
+- **API Endpoint**: `POST /api/export/pdf`
+- **Interactive Button Integration**: Add "Export PDF" button to pages showcasing AI summaries (document details modal in vault, pipeline completion screen) and chatbot conversation transcripts.
+- **Loading & State Handling**: Disables buttons and shows a visual spinner during PDF generation.
+- **Secure Architecture**: Enforces token-based API authentication and server-side text sanitization.
+- **Professional Formatting**: Employs backend `reportlab` layout structure containing dynamic header metadata, running dividers, structured user vs AI dialogue tags, and A4 automatic page numbers ("Page X of Y").
+
 ### 📊 Readability Score Analyzer (`ReadabilityScore.tsx`)
 - **Dual Comparison**: Computes and contrasts readability metrics for the original legal text vs. the AI summary
 - **Linguistic Scores**: Displays Flesch Reading Ease, Flesch-Kincaid Grade Level, and Difficulty Classifications
@@ -276,8 +292,42 @@ The Flesch-Kincaid Grade Level formula translates the Reading Ease score into a 
 
 $$\text{Grade Level} = 0.39 \left( \frac{\text{Total Words}}{\text{Total Sentences}} \right) + 11.8 \left( \frac{\text{Total Syllables}}{\text{Total Words}} \right) - 15.59$$
 
-### Visual Screenshots
-*(Screenshots section placeholder for readability comparison panel)*
+## 🌐 Jurisdiction Context-Switching
+
+### Feature Overview
+Allow users to select a legal jurisdiction (e.g., California, New York, Delaware, India, UK, EU) in the chatbot page and ensure every chatbot response is analyzed under the selected jurisdiction's laws.
+
+### Supported Jurisdictions
+- **General / Not Specified** (Default)
+  - Displays a warning badge: *"Responses may not reflect jurisdiction-specific legal requirements."*
+- **California Law**
+- **New York Law**
+- **Delaware Corporate Law**
+- **Indian Contract Act**
+- **United Kingdom Law**
+- **European Union Law**
+
+### How Jurisdiction Affects AI Responses
+When a jurisdiction is selected, the system dynamically prepends a specialized legal instruction to the prompt:
+> *"You are an expert legal assistant. Analyze all legal questions and uploaded documents strictly according to the laws and regulations of: {selectedJurisdiction}. If legal conclusions depend on jurisdiction-specific rules: Explicitly mention them. Flag potentially unenforceable clauses. Explain why the clause may be invalid in this jurisdiction. State when legal outcomes differ across jurisdictions. Do not assume laws from any other jurisdiction unless comparing them."*
+
+### Example Request/Response
+
+#### Request
+```json
+POST /chat
+{
+  "message": "Is a unilateral termination clause valid?",
+  "jurisdiction": "California Law"
+}
+```
+
+#### Response
+```json
+{
+  "response": "Under California law, while unilateral termination clauses (termination for convenience) are generally enforceable, they are subject to constraints of good faith and fair dealing. If a clause allows one party to terminate at will without notice or cause, California courts may view it critically if it lacks mutual obligation or notice periods, potentially rendering the clause unconscionable..."
+}
+```
 
 ## Setup Instructions
 
@@ -484,10 +534,13 @@ cp .env.example .env
   From `.env.example`:
   - `BYTEZ_API_KEY` — required by the backend to access the Bytez SDK. Keep this secret.
   - `FRONTEND_URL` — frontend origin used for CORS (default: `http://localhost:5173`).
+  - `JWT_SECRET_KEY` — secret key for JWT token signing. Required in all environments.
+  - `DOCUMENT_ENCRYPTION_KEY` — dedicated key for encrypting stored contract content at rest. **Required in production** to ensure cryptographic key separation. Must be different from `JWT_SECRET_KEY`. In non-production environments (development, testing, local), falls back to `JWT_SECRET_KEY` if not set for convenience. Generate using: `python -c "import secrets; print(secrets.token_urlsafe(32))"`
 
   Vercel deployment:
   - The frontend calls same-origin API routes at `/api` in production, so `VITE_API_URL` is usually not required on Vercel.
   - Add `JWT_SECRET_KEY` to Vercel environment variables before testing login/signup.
+  - Add `DOCUMENT_ENCRYPTION_KEY` to Vercel environment variables for production deployments to ensure cryptographic key separation.
   - Add `BYTEZ_API_KEY` to enable AI-backed features; otherwise `/api/health` reports degraded.
   - Add `DATABASE_URL` for persistent accounts. Without it, Vercel uses temporary SQLite storage that can reset between serverless instances.
   - If using a separate backend host instead, set frontend `VITE_API_URL` to that backend URL and backend `FRONTEND_URL` to the Vercel frontend URL.

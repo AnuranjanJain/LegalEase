@@ -1,9 +1,11 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { api } from '../../services/api';
+import { setAccessToken, clearAccessToken } from '../../services/authTokenRegistry';
 
 describe('API Service', () => {
   beforeEach(() => {
     vi.restoreAllMocks();
+    clearAccessToken();
   });
 
   describe('post', () => {
@@ -157,6 +159,73 @@ describe('API Service', () => {
 
       const formData = new FormData();
       await expect(api.upload('/upload', formData)).rejects.toThrow('File too large');
+    });
+  });
+
+  describe('Authentication', () => {
+    it('should include Authorization header when token is set', async () => {
+      const mockFetch = vi.fn().mockResolvedValue({
+        ok: true,
+        json: async () => ({ success: true }),
+      });
+      global.fetch = mockFetch;
+
+      setAccessToken('test-token-123');
+      await api.post('/test', { data: 'test' });
+
+      expect(mockFetch).toHaveBeenCalledWith(
+        expect.stringContaining('/test'),
+        expect.objectContaining({
+          headers: expect.objectContaining({
+            'Authorization': 'Bearer test-token-123',
+          }),
+        })
+      );
+    });
+
+    it('should not include Authorization header when no token is set', async () => {
+      const mockFetch = vi.fn().mockResolvedValue({
+        ok: true,
+        json: async () => ({ success: true }),
+      });
+      global.fetch = mockFetch;
+
+      await api.post('/test', { data: 'test' });
+
+      expect(mockFetch).toHaveBeenCalledWith(
+        expect.stringContaining('/test'),
+        expect.objectContaining({
+          headers: expect.not.objectContaining({
+            'Authorization': expect.any(String),
+          }),
+        })
+      );
+    });
+
+    it('should use token from registry, not localStorage', async () => {
+      const mockFetch = vi.fn().mockResolvedValue({
+        ok: true,
+        json: async () => ({ success: true }),
+      });
+      global.fetch = mockFetch;
+
+      // Set token in registry
+      setAccessToken('registry-token');
+      
+      // Set different token in localStorage (should be ignored)
+      localStorage.setItem('access_token', 'localStorage-token');
+
+      await api.post('/test', { data: 'test' });
+
+      // Should use registry token, not localStorage
+      expect(mockFetch).toHaveBeenCalledWith(
+        expect.stringContaining('/test'),
+        expect.objectContaining({
+          headers: expect.objectContaining({
+            'Authorization': 'Bearer registry-token',
+          }),
+        })
+      );
     });
   });
 });

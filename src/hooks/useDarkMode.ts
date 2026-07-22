@@ -8,7 +8,7 @@ export function useDarkMode() {
       if (saved !== null) {
         return saved === 'true';
       }
-      return false;
+      return window.matchMedia('(prefers-color-scheme: dark)').matches;
     }
     return false;
   });

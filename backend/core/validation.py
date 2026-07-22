@@ -1,20 +1,25 @@
 import os
 import re
 import zipfile
-from io import BytesIO
 from typing import Optional
 from backend.core.exceptions import ValidationError
+from backend.core.jurisdictions import Jurisdictions
+from backend.config import get_settings
+
+# Get configuration from centralized settings
+settings = get_settings()
+input_config = settings.input_validation
 
 # Configuration limits with fallback defaults
-MAX_CHAT_INPUT_CHARS = int(os.getenv("MAX_CHAT_INPUT_CHARS", "4000"))
-MAX_SUMMARIZE_INPUT_CHARS = int(os.getenv("MAX_SUMMARIZE_INPUT_CHARS", "20000"))
-MAX_SIMPLIFY_INPUT_CHARS = int(os.getenv("MAX_SIMPLIFY_INPUT_CHARS", "10000"))
-MAX_CONTEXT_INPUT_CHARS = int(os.getenv("MAX_CONTEXT_INPUT_CHARS", "10000"))
-MAX_DOCX_ARCHIVE_ENTRIES = int(os.getenv("MAX_DOCX_ARCHIVE_ENTRIES", "200"))
-MAX_DOCX_ARCHIVE_UNCOMPRESSED_BYTES = int(os.getenv("MAX_DOCX_ARCHIVE_UNCOMPRESSED_BYTES", str(10 * 1024 * 1024)))
-MAX_DOCX_ARCHIVE_ENTRY_BYTES = int(os.getenv("MAX_DOCX_ARCHIVE_ENTRY_BYTES", str(5 * 1024 * 1024)))
-MAX_DOCX_ARCHIVE_RATIO = float(os.getenv("MAX_DOCX_ARCHIVE_RATIO", "100"))
-MAX_DOCX_XML_BYTES = int(os.getenv("MAX_DOCX_XML_BYTES", str(5 * 1024 * 1024)))
+MAX_CHAT_INPUT_CHARS = input_config.max_chat_input_chars
+MAX_SUMMARIZE_INPUT_CHARS = input_config.max_summarize_input_chars
+MAX_SIMPLIFY_INPUT_CHARS = input_config.max_simplify_input_chars
+MAX_CONTEXT_INPUT_CHARS = input_config.max_context_input_chars
+MAX_DOCX_ARCHIVE_ENTRIES = input_config.max_docx_archive_entries
+MAX_DOCX_ARCHIVE_UNCOMPRESSED_BYTES = input_config.max_docx_archive_uncompressed_bytes
+MAX_DOCX_ARCHIVE_ENTRY_BYTES = input_config.max_docx_archive_entry_bytes
+MAX_DOCX_ARCHIVE_RATIO = input_config.max_docx_archive_ratio
+MAX_DOCX_XML_BYTES = input_config.max_docx_xml_bytes
 
 
 def validate_chat_input(message: str, context: Optional[str] = None):
@@ -98,6 +103,34 @@ def validate_mime_and_bytes(content: bytes, content_type: str, filename: str):
     elif file_extension == ".docx":
         if not content.startswith(b"PK\x03\x04"):
             raise ValidationError("File content signature does not match DOCX structure (ZIP archive)")
+    elif file_extension == ".txt":
+        # .txt has no magic bytes to check, so a renamed binary, script, or
+        # executable disguised as text would otherwise pass through with no
+        # content-level validation at all. Reject anything that isn't
+        # actually decodable plain text.
+        #
+        # Callers may only pass a size-limited prefix of the file, which can
+        # end mid-way through a multi-byte UTF-8 character. Trim up to 3
+        # trailing bytes (the longest a UTF-8 character can be) before
+        # giving up, so a truncated prefix doesn't cause a false rejection.
+        if b"\x00" in content:
+            raise ValidationError("File content contains binary data and is not valid plain text")
+
+        decoded = None
+        for trim in range(0, 4):
+            probe = content[: len(content) - trim] if trim else content
+            try:
+                decoded = probe.decode("utf-8")
+                break
+            except UnicodeDecodeError:
+                continue
+        if decoded is None:
+            raise ValidationError("File content is not valid UTF-8 plain text")
+
+        if decoded:
+            control_chars = sum(1 for c in decoded if ord(c) < 32 and c not in "\n\r\t")
+            if control_chars / len(decoded) > 0.01:
+                raise ValidationError("File content contains excessive non-printable characters and is not valid plain text")
 
 def validate_docx_archive_safety(file_path: str):
     """
@@ -137,3 +170,61 @@ def validate_docx_archive_safety(file_path: str):
                 raise ValidationError("DOCX archive compression ratio is suspiciously high")
     except zipfile.BadZipFile:
         raise ValidationError("File content signature does not match DOCX structure (ZIP archive)")
+
+
+MAX_EXPORT_TITLE_CHARS = 200
+MAX_EXPORT_SUMMARY_CHARS = 100000
+MAX_EXPORT_CHAT_MESSAGES = 500
+MAX_EXPORT_CHAT_MSG_CHARS = 20000
+
+
+def validate_export_pdf_input(title: str, summary: Optional[str] = None, chat_history: Optional[list] = None):
+    """
+    Validate the PDF export request payload.
+    Ensures safe character limits and correct structured formatting.
+    """
+    if not title or not title.strip():
+        raise ValidationError("Report title cannot be empty")
+        
+    if len(title) > MAX_EXPORT_TITLE_CHARS:
+        raise ValidationError(f"Report title exceeds the maximum allowed length of {MAX_EXPORT_TITLE_CHARS} characters")
+        
+    has_summary = bool(summary and summary.strip())
+    has_chat = bool(chat_history and len(chat_history) > 0)
+    
+    if not has_summary and not has_chat:
+        raise ValidationError("Both summary and chat history cannot be empty")
+        
+    if has_summary and len(summary) > MAX_EXPORT_SUMMARY_CHARS:
+        raise ValidationError(f"Summary text exceeds the maximum allowed length of {MAX_EXPORT_SUMMARY_CHARS} characters")
+        
+    if has_chat:
+        if len(chat_history) > MAX_EXPORT_CHAT_MESSAGES:
+            raise ValidationError(f"Chat history exceeds the maximum allowed count of {MAX_EXPORT_CHAT_MESSAGES} messages")
+            
+        for idx, item in enumerate(chat_history):
+            if not isinstance(item, dict):
+                raise ValidationError(f"Chat message at index {idx} must be a dictionary")
+            role = item.get("role")
+            content = item.get("content")
+            
+            if role not in ("user", "assistant", "bot"):
+                raise ValidationError(f"Chat message role at index {idx} must be 'user', 'assistant', or 'bot'")
+                
+            if not content or not content.strip():
+                raise ValidationError(f"Chat message content at index {idx} cannot be empty")
+                
+            if len(content) > MAX_EXPORT_CHAT_MSG_CHARS:
+                raise ValidationError(f"Chat message content at index {idx} exceeds the maximum allowed length of {MAX_EXPORT_CHAT_MSG_CHARS} characters")
+
+
+def validate_jurisdiction(jurisdiction: str):
+    """
+    Validate that the supplied jurisdiction is supported by the system.
+    """
+    if not jurisdiction or jurisdiction.strip() == "":
+        raise ValidationError("Jurisdiction cannot be empty")
+    
+    if jurisdiction not in Jurisdictions.ALL:
+        raise ValidationError(f"Unsupported jurisdiction: '{jurisdiction}'")
+

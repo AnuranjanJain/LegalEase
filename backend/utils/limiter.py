@@ -1,9 +1,10 @@
 import threading
 import time
 from typing import Dict, List
-import os
 import logging
 import redis
+
+from backend.config import get_settings
 
 logger = logging.getLogger(__name__)
 
@@ -12,6 +13,12 @@ class BaseStorage:
     """Base class for rate limiter storage backends."""
 
     def check(self, key: str, calls: int, period: int) -> dict:
+        raise NotImplementedError
+
+    def peek(self, key: str, calls: int, period: int) -> dict:
+        raise NotImplementedError
+
+    def get_attempt_count(self, key: str, period: int) -> int:
         raise NotImplementedError
 
     def cleanup(self, period: int) -> int:
@@ -59,6 +66,40 @@ class InMemoryStorage(BaseStorage):
                 "remaining": max(0, calls - len(timestamps)),
                 "retry_after": 0,
             }
+
+    def peek(self, key: str, calls: int, period: int) -> dict:
+        """Check rate limit without incrementing the counter."""
+        now = time.time()
+        window = now - period
+
+        with self._lock:
+            timestamps = self.storage.get(key, [])
+            timestamps = [t for t in timestamps if t > window]
+            remaining = calls - len(timestamps)
+
+            if remaining <= 0:
+                retry_after = max(1, int(timestamps[0] + period - now) + 1) if timestamps else 1
+                return {
+                    "allowed": False,
+                    "remaining": 0,
+                    "retry_after": retry_after,
+                }
+
+            return {
+                "allowed": True,
+                "remaining": remaining,
+                "retry_after": 0,
+            }
+
+    def get_attempt_count(self, key: str, period: int) -> int:
+        """Get the current attempt count without incrementing."""
+        now = time.time()
+        window = now - period
+
+        with self._lock:
+            timestamps = self.storage.get(key, [])
+            timestamps = [t for t in timestamps if t > window]
+            return len(timestamps)
 
     def cleanup(self, period: int) -> int:
         now = time.time()
@@ -127,6 +168,42 @@ class RedisStorage(BaseStorage):
             "remaining": remaining,
             "retry_after": 0,
         }
+
+    def peek(self, key: str, calls: int, period: int) -> dict:
+        """Check rate limit without incrementing the counter."""
+        now = time.time()
+        window_id = int(now / period)
+        redis_key = f"rate_limit:{key}:{window_id}"
+
+        # Get current value without incrementing
+        val = self.client.get(redis_key)
+        current_count = int(val) if val else 0
+
+        remaining = calls - current_count
+        if remaining <= 0:
+            retry_after = int(period - (now % period))
+            if retry_after <= 0:
+                retry_after = 1
+            return {
+                "allowed": False,
+                "remaining": 0,
+                "retry_after": retry_after,
+            }
+
+        return {
+            "allowed": True,
+            "remaining": remaining,
+            "retry_after": 0,
+        }
+
+    def get_attempt_count(self, key: str, period: int) -> int:
+        """Get the current attempt count without incrementing."""
+        now = time.time()
+        window_id = int(now / period)
+        redis_key = f"rate_limit:{key}:{window_id}"
+
+        val = self.client.get(redis_key)
+        return int(val) if val else 0
 
     def cleanup(self, period: int) -> int:
         # Redis expires keys automatically, cleanup is a no-op
@@ -252,6 +329,9 @@ class SimpleRateLimiter:
 
     This implementation defaults to an in-memory sliding-window backend, but
     automatically uses a Redis backend if REDIS_URL environment variable is set.
+    
+    In production environments, provides warnings and optional fail-fast behavior
+    when Redis is unavailable to prevent inconsistent rate limiting across distributed deployments.
     """
 
     def __init__(self, calls: int, period: int):
@@ -260,14 +340,63 @@ class SimpleRateLimiter:
         self._local_storage = InMemoryStorage()
         self._storage = LimiterStorageProxy(self)
 
-        redis_url = os.getenv("REDIS_URL")
+        settings = get_settings()
+        redis_url = settings.database.redis_url
+        environment = settings.environment.environment
+        rate_config = settings.rate_limit
+        
         self._redis_backend = None
+        self._using_redis = False
+        
         if redis_url:
             try:
                 self._redis_backend = RedisStorage(redis_url)
-                logger.info("Redis rate limiting storage backend initialized successfully.")
+                self._using_redis = True
+                logger.info(
+                    f"Redis rate limiting storage backend initialized successfully. "
+                    f"Environment: {environment}, Redis URL: {redis_url[:20]}..."
+                )
             except Exception as e:
-                logger.error(f"Failed to initialize Redis rate limiting backend: {e}")
+                if rate_config.redis_fail_fast:
+                    logger.error(
+                        f"REDIS_FAIL_FAST is enabled but Redis initialization failed: {e}. "
+                        f"Application cannot start without Redis. Please check REDIS_URL configuration."
+                    )
+                    raise RuntimeError(
+                        f"Redis initialization failed with REDIS_FAIL_FAST enabled: {e}. "
+                        f"Please verify REDIS_URL is correct and Redis is accessible."
+                    ) from e
+                else:
+                    logger.error(
+                        f"Failed to initialize Redis rate limiting backend: {e}. "
+                        f"Falling back to in-memory storage. Rate limiting will be process-local only."
+                    )
+        else:
+            # Redis URL not configured
+            if environment == "production" and rate_config.require_redis_in_production:
+                logger.error(
+                    "REQUIRE_REDIS_IN_PRODUCTION is enabled but REDIS_URL is not configured. "
+                    "Rate limiting will use in-memory storage, which is not suitable for distributed deployments. "
+                    "Set REDIS_URL or disable REQUIRE_REDIS_IN_PRODUCTION."
+                )
+            elif environment == "production":
+                logger.warning(
+                    "REDIS_URL is not configured in production environment. "
+                    "Rate limiting will use in-memory storage, which is not suitable for distributed deployments. "
+                    "Multiple workers or application instances will have independent rate limiters. "
+                    "Consider setting REDIS_URL for distributed rate limiting."
+                )
+            else:
+                logger.info(
+                    f"REDIS_URL not configured. Using in-memory rate limiting storage. "
+                    f"Environment: {environment}. This is appropriate for local development."
+                )
+        
+        # Log final backend selection
+        if self._using_redis:
+            logger.info("Rate limiter: Using Redis backend (distributed)")
+        else:
+            logger.warning("Rate limiter: Using in-memory backend (process-local only)")
 
     @property
     def storage(self) -> dict:
@@ -284,8 +413,34 @@ class SimpleRateLimiter:
 
         return self._local_storage.check(key, self.calls, self.period)
 
+    def peek(self, key: str) -> dict:
+        """Check rate limit without incrementing the counter."""
+        if self._redis_backend:
+            try:
+                return self._redis_backend.peek(key, self.calls, self.period)
+            except Exception as e:
+                logger.error(f"Redis rate limiter peek failed, falling back to local storage: {e}")
+                return self._local_storage.peek(key, self.calls, self.period)
+
+        return self._local_storage.peek(key, self.calls, self.period)
+
+    def get_attempt_count(self, key: str) -> int:
+        """Get the current attempt count without incrementing."""
+        if self._redis_backend:
+            try:
+                return self._redis_backend.get_attempt_count(key, self.period)
+            except Exception as e:
+                logger.error(f"Redis rate limiter get_attempt_count failed, falling back to local storage: {e}")
+                return self._local_storage.get_attempt_count(key, self.period)
+
+        return self._local_storage.get_attempt_count(key, self.period)
+
     def is_allowed(self, key: str) -> bool:
         return self.check(key)["allowed"]
+
+    def is_locked_out(self, key: str) -> bool:
+        """Check if the key is currently locked out without incrementing."""
+        return not self.peek(key)["allowed"]
 
     def cleanup(self) -> int:
         """Remove stale keys that have no timestamps in the current window.

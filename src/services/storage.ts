@@ -2,6 +2,7 @@ export interface ClauseAnalysis {
   clause: string;
   riskLevel: 'Low' | 'Medium' | 'High';
   riskReason: string;
+  liability_score?: number;
 }
 
 export interface Document {
@@ -61,10 +62,25 @@ export interface ChatSessionData {
   id: string;
   title: string;
   messages: ChatMessage[];
+  jurisdiction?: string;
   documentContext?: {
     name: string;
     text: string;
   };
+  /**
+   * Multi-document comparison context.
+   * Populated when the user launches a cross-document comparison session
+   * from the Document Vault. Each entry carries the document's display name
+   * and its extracted text so the AI can analyse all of them together.
+   *
+   * Mutually exclusive with `documentContext` — a session uses either a
+   * single-document context OR a multi-document comparison context, never both.
+   */
+  multiDocContext?: Array<{
+    id: string;
+    name: string;
+    text: string;
+  }>;
 }
 
 const STORAGE_KEYS = {
@@ -74,6 +90,20 @@ const STORAGE_KEYS = {
   CHAT_ACTIVE_ID: 'le_chat_active_id',
   CHAT_SESSION_PREFIX: 'le_chat_session_',
 };
+
+/**
+ * Security: Clear any legacy authentication tokens from localStorage.
+ * This is called on app initialization to ensure tokens are not persisted.
+ */
+export function clearLegacyAuthTokens(): void {
+  const legacyKeys = ['access_token', 'refresh_token', 'auth_token'];
+  legacyKeys.forEach(key => {
+    if (localStorage.getItem(key)) {
+      localStorage.removeItem(key);
+      console.log(`Security: Removed legacy ${key} from localStorage`);
+    }
+  });
+}
 
 export const StorageService = {
   getDocuments: (): Document[] => {
@@ -285,10 +315,12 @@ export const ChatStorageService = {
 
   createSession: (title: string = 'New Conversation'): ChatSessionData => {
     const id = crypto.randomUUID();
+    const defaultJurisdiction = localStorage.getItem('le_selected_jurisdiction') || 'General / Not Specified';
     const sessionData: ChatSessionData = {
       id,
       messages: [],
-      title
+      title,
+      jurisdiction: defaultJurisdiction
     };
     ChatStorageService.saveSession(sessionData);
     ChatStorageService.setActiveSessionId(id);

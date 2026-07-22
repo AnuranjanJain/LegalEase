@@ -35,8 +35,25 @@ def mock_request():
 
 @pytest.fixture
 def mock_db():
-    """Create a mock database session."""
+    """Create a mock database session.
+
+    Queries for models.ApiKey default to "no key found" (matching real DB
+    behavior for the per-user API key lookup in _validate_api_key_token).
+    Queries for every other model keep the original bare-Mock behavior,
+    since several tests in this file rely on that shape for their JWT/
+    user-lookup assertions.
+    """
+    from backend import models
+
     db = Mock()
+
+    def query_side_effect(model, *args, **kwargs):
+        mock_query = Mock()
+        if model is models.ApiKey:
+            mock_query.filter.return_value.first.return_value = None
+        return mock_query
+
+    db.query.side_effect = query_side_effect
     return db
 
 
@@ -72,9 +89,21 @@ def invalid_jwt_token():
 def valid_api_key():
     """Set up a valid API key for testing."""
     os.environ["API_KEYS"] = "test-api-key-12345"
+    os.environ["JWT_SECRET_KEY"] = "testing-secret-key-1234567890-abcdef"
+    # Reset settings to pick up new environment variables
+    import backend.config
+    backend.config._settings = None
+    # Reload auth module to pick up new settings
+    from importlib import reload
+    import backend.auth
+    reload(backend.auth)
     yield "test-api-key-12345"
     if "API_KEYS" in os.environ:
         del os.environ["API_KEYS"]
+    if "JWT_SECRET_KEY" in os.environ:
+        del os.environ["JWT_SECRET_KEY"]
+    # Reset settings after test
+    backend.config._settings = None
 
 
 @pytest.fixture

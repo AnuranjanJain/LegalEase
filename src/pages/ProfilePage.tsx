@@ -6,7 +6,6 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { useNotifications, AppNotification } from '../contexts/NotificationContext';
 import { useAuth } from '../contexts/AuthContext';
 import { api } from '../services/api';
-
 type Section = 'profile' | 'security' | 'notifications' | 'language';
 
 const VALID_TABS: Section[] = ['profile', 'security', 'notifications', 'language'];
@@ -414,8 +413,7 @@ export function ProfilePage() {
                   ))}
                 </div>
               </div>
-            )}
-
+   )}
             {/* ── NOTIFICATIONS PREFERENCES TAB ── */}
             {section === 'notifications' && (
               <div className="space-y-8 max-w-2xl animate-slide-up">
@@ -551,6 +549,26 @@ export function ProfilePage() {
               </div>
             )}
 
+            <div className="pt-10 flex justify-end gap-4">
+              <button
+                onClick={() => setProfile(StorageService.getProfile())}
+                className="px-6 py-2.5 text-sm font-semibold text-gray-500 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white"
+              >
+                Reset
+              </button>
+              <button
+                onClick={handleSaveProfile}
+                disabled={isSaving}
+               className="px-8 py-2.5 bg-primary text-white rounded-xl font-bold hover:shadow-lg hover:shadow-primary/30 hover:scale-105 hover:-translate-y-0.5 active:scale-95 transition-all duration-200 disabled:opacity-70 disabled:cursor-not-allowed disabled:hover:scale-100 disabled:hover:translate-y-0 flex items-center gap-2"
+              >
+                {isSaving ? (
+                  <>
+                    <div className="h-4 w-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                    Saving...
+                  </>
+                ) : 'Save Changes'}
+              </button>
+            </div>
           </div>
 
         </div>
