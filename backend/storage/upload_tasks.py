@@ -10,6 +10,7 @@ storage for development environments.
 
 import json
 import logging
+import os
 import time
 from typing import Optional, Dict, Any
 from abc import ABC, abstractmethod
@@ -327,9 +328,11 @@ class UploadTaskStorage:
 
     def _initialize_backend(self) -> UploadTaskStorageBackend:
         """Initialize the appropriate storage backend."""
-        settings = get_settings()
-        redis_url = settings.database.redis_url
-        environment = settings.environment.environment
+        # Avoid loading the full settings tree here because unrelated
+        # production-only validators (for example document encryption) can
+        # fail when upload task storage itself only needs Redis and env mode.
+        redis_url = os.getenv("REDIS_URL")
+        environment = os.getenv("ENVIRONMENT", "production").lower()
 
         if redis_url:
             try:

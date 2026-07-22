@@ -1,6 +1,7 @@
 import os
 from contextlib import asynccontextmanager
 import asyncio
+import threading
 from fastapi import Depends, FastAPI, HTTPException, UploadFile, File, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, StreamingResponse
@@ -32,7 +33,11 @@ from backend.services.reminder_service import run_obligation_reminders
 from backend.config import get_settings
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from backend.storage.upload_tasks import get_upload_task_storage
-from backend.services.upload_job_queue import UploadJobQueue, build_upload_job
+from backend.services.upload_job_queue import (
+    UploadJobQueue,
+    build_upload_job,
+    process_upload_job_async,
+)
 
 # Optional imports (wrap in try/except so server can start without optional deps)
 try:
@@ -553,6 +558,16 @@ async def upload_document(
         if temp_path and os.path.exists(temp_path):
             os.unlink(temp_path)
         raise HTTPException(status_code=503, detail="Failed to enqueue document for processing")
+
+    # In non-production/local test runs, kick off an in-process worker so the
+    # task moves past the initial queued state without requiring a separate
+    # worker process. Durable Redis-backed deployments still rely on the
+    # external worker loop.
+    if not job_queue.using_redis and settings.environment.environment in {"development", "testing", "local"}:
+        threading.Thread(
+            target=lambda: asyncio.run(process_upload_job_async(job)),
+            daemon=True,
+        ).start()
 
     return JSONResponse(
         status_code=202,

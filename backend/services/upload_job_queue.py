@@ -17,8 +17,6 @@ from dataclasses import dataclass, asdict
 from typing import Any, Optional
 
 import redis
-
-from backend.config import get_settings
 from backend.core.exceptions import ValidationError
 from backend.core.validation import validate_mime_and_bytes, validate_docx_archive_safety
 from backend.storage.upload_tasks import get_upload_task_storage
@@ -59,8 +57,11 @@ class UploadJob:
 
 class UploadJobQueue:
     def __init__(self, redis_url: Optional[str] = None):
-        settings = get_settings()
-        self.redis_url = redis_url or settings.database.redis_url
+        # Keep queue initialization lightweight: upload handling should not
+        # force the full application settings tree to load, because the
+        # settings model includes production-only validation unrelated to the
+        # queue itself.
+        self.redis_url = redis_url or os.getenv("REDIS_URL")
         self._client = None
         self._in_memory: list[str] = []
         self._scheduled: list[tuple[float, str]] = []
