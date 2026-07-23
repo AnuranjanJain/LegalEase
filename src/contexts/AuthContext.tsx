@@ -1,5 +1,6 @@
-import { createContext, useContext, useState, useEffect, ReactNode } from 'react';
+import { createContext, useContext, useEffect, useState, ReactNode } from 'react';
 import { API_BASE_URL } from '../config/api';
+import { api } from '../services/api';
 import { setAccessToken as setTokenInRegistry, clearAccessToken as clearTokenFromRegistry } from '../services/authTokenRegistry';
 
 interface AuthContextType {
@@ -7,24 +8,25 @@ interface AuthContextType {
   isVerifying: boolean;
   /** Email of the authenticated user, decoded from the JWT `sub` claim. */
   userEmail: string | null;
-  /** Current access token stored in memory (not persisted to localStorage). */
+  /** Current access token stored in memory only. */
   accessToken: string | null;
   login: (token: string) => Promise<void>;
   logout: () => boolean;
 }
 
+interface RefreshResponse {
+  access_token: string;
+  token_type?: string;
+}
+
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
-/**
- * Verifies the token with the backend by calling /auth/verify endpoint.
- * This ensures the token signature is valid and the user exists in the database.
- */
 async function verifyTokenWithBackend(token: string): Promise<boolean> {
   try {
     const response = await fetch(`${API_BASE_URL}/auth/verify`, {
       method: 'GET',
       headers: {
-        'Authorization': `Bearer ${token}`,
+        Authorization: `Bearer ${token}`,
         'Content-Type': 'application/json',
       },
     });
@@ -35,10 +37,6 @@ async function verifyTokenWithBackend(token: string): Promise<boolean> {
   }
 }
 
-/**
- * Decodes a JWT payload without verifying its signature.
- * Returns the parsed payload object, or null if the token is malformed.
- */
 function decodeTokenPayload(token: string): { sub?: string; exp?: number } | null {
   try {
     const parts = token.split('.');
@@ -52,24 +50,30 @@ function decodeTokenPayload(token: string): { sub?: string; exp?: number } | nul
   }
 }
 
-/**
- * Checks whether a token is present and not expired.
- * Does not verify the signature; expiry check only.
- */
 function isTokenValid(token: string): boolean {
   const payload = decodeTokenPayload(token);
   if (!payload || typeof payload.exp !== 'number') return false;
   return payload.exp * 1000 > Date.now();
 }
 
-/**
- * Extracts the user's email from a valid token's `sub` claim.
- * Returns null if the token is invalid or carries no email.
- */
 function getEmailFromToken(token: string | null): string | null {
   if (!token || !isTokenValid(token)) return null;
   const payload = decodeTokenPayload(token);
   return typeof payload?.sub === 'string' ? payload.sub : null;
+}
+
+async function restoreSession(): Promise<string | null> {
+  try {
+    const response = await api.refreshSession<RefreshResponse>();
+    if (!response?.access_token || !(await verifyTokenWithBackend(response.access_token))) {
+      return null;
+    }
+
+    return response.access_token;
+  } catch (error) {
+    console.warn('Session restore failed; continuing unauthenticated.', error);
+    return null;
+  }
 }
 
 export function AuthProvider({ children }: { children: ReactNode }) {
@@ -79,15 +83,40 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [accessToken, setAccessToken] = useState<string | null>(null);
 
   useEffect(() => {
-    // Clear any existing localStorage tokens on app load for security migration
-    const existingToken = localStorage.getItem('access_token');
-    if (existingToken) {
-      localStorage.removeItem('access_token');
-      console.log('Security: Removed legacy localStorage token for XSS protection');
-    }
-    sessionStorage.clear();
-    
-    setIsVerifying(false);
+    let isMounted = true;
+
+    const bootstrap = async () => {
+      // Clear any legacy browser-stored auth artifacts. Access tokens remain in memory only.
+      const legacyToken = localStorage.getItem('access_token');
+      if (legacyToken) {
+        localStorage.removeItem('access_token');
+        console.log('Security: Removed legacy localStorage token for XSS protection');
+      }
+      sessionStorage.clear();
+
+      const restoredToken = await restoreSession();
+      if (!isMounted) return;
+
+      if (restoredToken) {
+        setAccessToken(restoredToken);
+        setTokenInRegistry(restoredToken);
+        setIsAuthenticated(true);
+        setUserEmail(getEmailFromToken(restoredToken));
+      } else {
+        setAccessToken(null);
+        clearTokenFromRegistry();
+        setIsAuthenticated(false);
+        setUserEmail(null);
+      }
+
+      setIsVerifying(false);
+    };
+
+    void bootstrap();
+
+    return () => {
+      isMounted = false;
+    };
   }, []);
 
   const login = async (token: string) => {
@@ -100,7 +129,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setUserEmail(getEmailFromToken(token));
     } else {
       setAccessToken(null);
-      setTokenInRegistry(null);
+      clearTokenFromRegistry();
       setIsAuthenticated(false);
       setUserEmail(null);
       throw new Error('Invalid token received from server');
@@ -109,28 +138,23 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const logout = (): boolean => {
     try {
-      // Revoke the token server-side so it cannot be reused even within its expiry window.
       const token = accessToken;
       if (token) {
-        // Fire-and-forget: we always clear the local session regardless of server response.
         fetch(`${API_BASE_URL}/auth/logout`, {
           method: 'POST',
           headers: { Authorization: `Bearer ${token}` },
         }).catch((err) => console.warn('Server-side logout failed:', err));
       }
 
-      // Always clear local state immediately, regardless of server response
       setAccessToken(null);
       clearTokenFromRegistry();
       sessionStorage.clear();
-
       setIsAuthenticated(false);
       setUserEmail(null);
 
       return true;
     } catch (error) {
       console.error('Logout failed:', error);
-      // Ensure local state is cleared even on error
       setAccessToken(null);
       clearTokenFromRegistry();
       sessionStorage.clear();

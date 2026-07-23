@@ -6,6 +6,11 @@ const getAuthHeaders = (): Record<string, string> => {
   return token ? { 'Authorization': `Bearer ${token}` } : {};
 };
 
+const includeCredentials = (init?: RequestInit): RequestInit => ({
+  ...init,
+  credentials: 'include',
+});
+
 export interface NotificationResponse {
   id: number;
   title: string;
@@ -157,6 +162,24 @@ export const api = {
     }
 
     return response;
+  },
+
+  /**
+   * Attempt to restore the current session using an HttpOnly refresh-token cookie.
+   *
+   * Backend dependency:
+   * - The current backend does not yet expose /auth/refresh.
+   * - When implemented, this call must include credentials so the refresh cookie
+   *   can be sent automatically without exposing it to JavaScript.
+   */
+  refreshSession: async <T>(endpoint = '/auth/refresh', method: 'GET' | 'POST' = 'GET'): Promise<T> => {
+    const response = await fetch(`${API_BASE_URL}${endpoint}`, includeCredentials({ method }));
+
+    if (!response.ok) {
+      await handleErrorResponse(response, 'Refresh error');
+    }
+
+    return response.json();
   },
 
   // Notification API methods
