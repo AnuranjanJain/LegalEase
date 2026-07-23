@@ -734,6 +734,7 @@ git push origin your-branch-name
 * Go to your forked repository on GitHub
 * Click on **Compare & Pull Request**
 * Add a clear title and description
+* Ensure your branch is up to date with the latest changes from the main repository before submitting the PR.
 * Submit the PR for review
 
 ---
