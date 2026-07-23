@@ -1,7 +1,8 @@
-import asyncio
 import os
 from contextlib import asynccontextmanager
-from fastapi import BackgroundTasks, Depends, FastAPI, HTTPException, UploadFile, File, Request
+import asyncio
+import threading
+from fastapi import Depends, FastAPI, HTTPException, UploadFile, File, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, StreamingResponse
 from pydantic import BaseModel
@@ -32,6 +33,11 @@ from backend.services.reminder_service import run_obligation_reminders
 from backend.config import get_settings
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from backend.storage.upload_tasks import get_upload_task_storage
+from backend.services.upload_job_queue import (
+    UploadJobQueue,
+    build_upload_job,
+    process_upload_job_async,
+)
 
 # Optional imports (wrap in try/except so server can start without optional deps)
 try:
@@ -479,12 +485,11 @@ async def chat(request: Request, payload: ChatRequest, identity: AuthIdentity = 
 @app.post("/upload", status_code=202)
 async def upload_document(
     request: Request,
-    background_tasks: BackgroundTasks,
     file: UploadFile = File(...),
     identity: AuthIdentity = Depends(validate_token_or_api_key)
 ):
     """Accept a document upload, immediately return 202 with a task_id,
-    and embed it in a background worker to avoid gateway timeouts (#365)."""
+    and enqueue it for durable background processing (#365)."""
     # Content-Length pre-check
     try:
         content_length = int(request.headers.get("content-length", "0"))
@@ -535,69 +540,39 @@ async def upload_document(
 
     # Register the task as "queued" and launch the background worker
     task_storage = get_upload_task_storage()
-    task_storage.create_task(task_id, status="processing", progress=0, result=None)
+    task_storage.create_task(task_id, status="queued", progress=0, result=None)
+    logger.info(f"[{task_id}] Upload task created")
 
-    background_tasks.add_task(
-        _process_document_background,
+    job_queue = UploadJobQueue()
+    job = build_upload_job(
         task_id=task_id,
-        temp_path=temp_path,
+        file_path=temp_path,
         filename=filename,
+        content_type=file.content_type or "",
         file_extension=file_extension,
         content_prefix=content_prefix,
     )
 
+    if not job_queue.enqueue(job):
+        task_storage.mark_failed(task_id, "Failed to enqueue upload job")
+        if temp_path and os.path.exists(temp_path):
+            os.unlink(temp_path)
+        raise HTTPException(status_code=503, detail="Failed to enqueue document for processing")
+
+    # In non-production/local test runs, kick off an in-process worker so the
+    # task moves past the initial queued state without requiring a separate
+    # worker process. Durable Redis-backed deployments still rely on the
+    # external worker loop.
+    if not job_queue.using_redis and settings.environment.environment in {"development", "testing", "local"}:
+        threading.Thread(
+            target=lambda: asyncio.run(process_upload_job_async(job)),
+            daemon=True,
+        ).start()
+
     return JSONResponse(
         status_code=202,
-        content={"task_id": task_id, "filename": filename, "status": "processing"},
+        content={"task_id": task_id, "filename": filename, "status": "queued"},
     )
-
-
-async def _process_document_background(
-    task_id: str,
-    temp_path: str,
-    filename: str,
-    file_extension: str,
-    content_prefix: bytes,
-):
-    """Background worker: parse text, update progress, clean up temp file."""
-    task_storage = get_upload_task_storage()
-    try:
-        task_storage.update_progress(task_id, 20)
-
-        extracted_text = ""
-        if file_extension == ".pdf" or content_prefix.startswith(b"%PDF-"):
-            extracted_text = await _run_bounded_parser(_extract_pdf_text, temp_path)
-        elif file_extension == ".docx":
-            extracted_text = await _run_bounded_parser(_extract_docx_text, temp_path)
-        elif file_extension == ".txt":
-            with open(temp_path, "r", encoding="utf-8") as tf:
-                extracted_text = tf.read(10000)
-
-        task_storage.update_progress(task_id, 70)
-
-        extracted_text = extracted_text[:MAX_EXTRACTED_TEXT_CHARS]
-
-        task_storage.update_progress(task_id, 100)
-        task_storage.mark_completed(task_id, {"filename": filename, "text": extracted_text})
-        logger.info(f"Background processing complete for task {task_id} ({filename})")
-    except Exception as e:
-        logger.error(f"Background processing failed for task {task_id}: {e}", exc_info=True)
-        # Controlled HTTPExceptions (e.g. "file too complex", from
-        # _run_bounded_parser) carry a safe, user-facing detail message.
-        # Anything else is an unexpected internal error, so its raw message
-        # (which may contain file paths or library internals) must not be
-        # returned to the client via /upload/status/{task_id}.
-        if isinstance(e, HTTPException):
-            error_message = str(e.detail)
-        else:
-            error_message = "Failed to process the uploaded document. Please try again or use a different file."
-        task_storage.mark_failed(task_id, error_message)
-    finally:
-        if os.path.exists(temp_path):
-            try:
-                os.unlink(temp_path)
-            except OSError:
-                pass
 
 
 @app.put("/chat/messages/{message_id}")

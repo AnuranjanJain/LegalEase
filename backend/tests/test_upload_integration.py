@@ -11,12 +11,10 @@ storage abstraction, including:
 """
 
 import pytest
-import asyncio
 import io
 import os
 from unittest.mock import patch, MagicMock
 from fastapi.testclient import TestClient
-from fastapi import BackgroundTasks
 
 from backend.main import app
 from backend.storage.upload_tasks import reset_upload_task_storage, get_upload_task_storage
@@ -61,15 +59,14 @@ class TestUploadEndpointIntegration:
         assert response.status_code == 202
         data = response.json()
         assert "task_id" in data
-        assert data["status"] == "processing"
+        assert data["status"] == "queued"
         assert "filename" in data
 
-        # Verify task exists in storage. Background processing runs
-        # synchronously under TestClient, so the task may already be done.
+        # Verify task exists in storage and starts queued.
         task_storage = get_upload_task_storage()
         task = task_storage.get_task(data["task_id"])
         assert task is not None
-        assert task["status"] in ("processing", "done")
+        assert task["status"] == "queued"
 
     def test_upload_status_retrieves_task(self, client, auth_headers):
         """Test that status endpoint retrieves task from shared storage."""
@@ -136,17 +133,16 @@ class TestUploadEndpointIntegration:
         assert data["progress"] == 100
         assert data["result"]["filename"] == "test.txt"
 
-    def test_background_processing_updates_storage(self, client, auth_headers):
-        """Test that background processing updates shared storage."""
+    def test_upload_enqueues_job_and_keeps_task_queued(self, client, auth_headers):
+        """Test that upload enqueues a durable job and keeps the task queued."""
         file_content = b"Sample document content"
         file = io.BytesIO(file_content)
         file.name = "test.txt"
 
-        # Mock the background task to run synchronously for testing
-        with patch('backend.main.BackgroundTasks') as mock_bg_tasks:
-            mock_bg = MagicMock()
-            mock_bg_tasks.return_value = mock_bg
-
+        with patch('backend.main.UploadJobQueue') as mock_queue_cls:
+            mock_queue = MagicMock()
+            mock_queue.enqueue.return_value = True
+            mock_queue_cls.return_value = mock_queue
             response = client.post(
                 "/upload",
                 headers=auth_headers,
@@ -154,14 +150,11 @@ class TestUploadEndpointIntegration:
             )
 
             task_id = response.json()["task_id"]
-
-            # Background processing runs synchronously under TestClient,
-            # so the task is already complete by the time we check.
+            mock_queue.enqueue.assert_called_once()
             task_storage = get_upload_task_storage()
             task = task_storage.get_task(task_id)
-            assert task["status"] == "done"
-            assert task["progress"] == 100
-            assert task["result"]["filename"] == "test.txt"
+            assert task["status"] == "queued"
+            assert task["progress"] == 0
 
     def test_failed_task_updates_storage(self, client, auth_headers):
         """Test that failed tasks are correctly stored."""
