@@ -91,11 +91,11 @@ async def test_simplify_endpoint_rate_limiting():
     os.environ["ALLOW_DEV"] = "true"
     
     # Create a clean limiter specifically for testing this endpoint
-    from backend.utils.limiter import SimpleRateLimiter
+    from backend.utils.limiter import create_rate_limiter
     import backend.main
     
     orig_limiter = backend.main.key_limiter
-    backend.main.key_limiter = SimpleRateLimiter(2, 60)
+    backend.main.key_limiter = create_rate_limiter(2, 60)
     
     headers = {"x-api-key": "dev-token"}
     payload = {"text": "Clause to test rate limiting."}

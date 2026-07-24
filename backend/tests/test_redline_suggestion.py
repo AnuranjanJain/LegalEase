@@ -108,11 +108,11 @@ async def test_suggest_redline_endpoint_validation_error():
 @pytest.mark.asyncio
 async def test_suggest_redline_endpoint_rate_limiting():
     """POST /legal/suggest-redline is rate limited per identity"""
-    from backend.utils.limiter import SimpleRateLimiter
+    from backend.utils.limiter import create_rate_limiter
     import backend.routers.legal_routes as legal_routes
 
     orig_limiter = legal_routes._redline_limiter
-    legal_routes._redline_limiter = SimpleRateLimiter(1, 60)
+    legal_routes._redline_limiter = create_rate_limiter(1, 60)
 
     headers = {"x-api-key": "dev-token"}
     payload = {"clause": "Clause to test rate limiting."}

@@ -290,6 +290,14 @@ class RateLimitConfig(BaseSettings):
     
     model_config = ConfigDict(env_prefix="", case_sensitive=False)
     
+    rate_limit_backend: Literal["redis", "memory", "auto"] = Field(
+        default="auto",
+        description=(
+            "Rate limiting backend: 'redis' for distributed Redis, 'memory' for in-memory, "
+            "'auto' to automatically choose Redis if available, otherwise memory. "
+            "In production, 'redis' is recommended for distributed deployments."
+        )
+    )
     rate_limit_period: int = Field(
         default=60,
         description="Rate limit period in seconds."
@@ -307,11 +315,11 @@ class RateLimitConfig(BaseSettings):
         description="Trust X-Forwarded-* headers for client IP detection."
     )
     require_redis_in_production: bool = Field(
-        default=False,
+        default=True,
         description="Require Redis for rate limiting in production environment. When enabled, application will fail to start if Redis is unavailable in production."
     )
     redis_fail_fast: bool = Field(
-        default=False,
+        default=True,
         description="Fail fast if Redis initialization fails. When enabled, application will fail to start if Redis URL is configured but connection fails."
     )
     
@@ -371,11 +379,19 @@ class RateLimitConfig(BaseSettings):
         if environment == "production" and self.require_redis_in_production:
             redis_url = os.getenv("REDIS_URL")
             if not redis_url:
-                logger.warning(
+                raise ValueError(
                     "REQUIRE_REDIS_IN_PRODUCTION is enabled but REDIS_URL is not set. "
-                    "Rate limiting will use in-memory storage, which is not suitable for distributed deployments. "
+                    "Redis is required for distributed rate limiting in production. "
                     "Set REDIS_URL or disable REQUIRE_REDIS_IN_PRODUCTION."
                 )
+        
+        # Validate backend selection against environment
+        if environment == "production" and self.rate_limit_backend == "memory":
+            logger.warning(
+                "RATE_LIMIT_BACKEND is set to 'memory' in production environment. "
+                "Rate limiting will be process-local only, which is unsafe for distributed deployments. "
+                "Consider setting RATE_LIMIT_BACKEND to 'redis' for distributed rate limiting."
+            )
         
         return self
     
