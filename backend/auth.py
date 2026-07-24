@@ -6,7 +6,7 @@ import secrets
 import json
 from datetime import datetime, timedelta
 from typing import Optional, Union, Literal
-from fastapi import Depends, HTTPException, Request, status
+from fastapi import Depends, HTTPException, Request, status, Response
 from fastapi.security import OAuth2PasswordBearer
 from jose import JWTError, jwt
 import bcrypt
@@ -15,6 +15,7 @@ from dotenv import load_dotenv
 
 from backend.database import get_db
 from backend import models
+from backend.config import get_settings
 
 load_dotenv()
 
@@ -143,6 +144,282 @@ def is_token_revoked(jti: str, db: Session) -> bool:
     """Return True if the token's jti is present in the revocation table."""
     from backend.models import RevokedToken  # local import avoids circular deps
     return db.query(RevokedToken).filter(RevokedToken.jti == jti).first() is not None
+
+
+def create_refresh_token(data: dict, db: Session, expires_delta: Optional[timedelta] = None) -> str:
+    """
+    Create a refresh token and store it in the database for revocation support.
+    
+    Refresh tokens are longer-lived JWTs used to obtain new access tokens.
+    They are stored in the database to enable revocation and rotation.
+    
+    Args:
+        data: Dictionary containing token claims (must include 'sub' for user email)
+        db: Database session for storing the refresh token
+        expires_delta: Optional custom expiration time
+        
+    Returns:
+        The refresh token JWT string
+    """
+    secret_key = _require_secret_key()
+    settings = get_settings()
+    
+    to_encode = data.copy()
+    expire = datetime.utcnow() + (expires_delta if expires_delta else timedelta(days=settings.security.refresh_token_expire_days))
+    to_encode.update({
+        "exp": expire,
+        "jti": str(uuid.uuid4()),  # unique token ID for revocation
+        "type": "refresh",  # token type claim
+    })
+    
+    token = jwt.encode(to_encode, secret_key, algorithm=ALGORITHM)
+    jti = to_encode["jti"]
+    user_email = to_encode.get("sub")
+    
+    if not user_email:
+        raise ValueError("Refresh token must include 'sub' claim (user email)")
+    
+    # Get user ID from email
+    user = db.query(models.User).filter(models.User.email == user_email).first()
+    if not user:
+        raise ValueError(f"User not found for email: {user_email}")
+    
+    # Store refresh token in database
+    refresh_token_record = models.RefreshToken(
+        user_id=user.id,
+        token_jti=jti,
+        expires_at=expire,
+    )
+    db.add(refresh_token_record)
+    db.commit()
+    
+    logger.info(f"Refresh token created for user {user_email} (jti={jti})")
+    return token
+
+
+def validate_refresh_token(token: str, db: Session) -> dict:
+    """
+    Validate a refresh token and return its payload if valid.
+    
+    Performs comprehensive validation:
+    - Signature verification
+    - Expiration check
+    - Token type verification
+    - Database revocation check
+    - User existence verification
+    
+    Args:
+        token: The refresh token JWT string
+        db: Database session for revocation check
+        
+    Returns:
+        The decoded token payload
+        
+    Raises:
+        HTTPException: If token is invalid for any reason
+    """
+    secret_key = _require_secret_key()
+    credentials_exception = HTTPException(
+        status_code=status.HTTP_401_UNAUTHORIZED,
+        detail="Invalid refresh token",
+        headers={"WWW-Authenticate": "Bearer"},
+    )
+    
+    try:
+        payload = jwt.decode(token, secret_key, algorithms=[ALGORITHM])
+    except JWTError as e:
+        logger.warning(f"Refresh token JWT decode failed: {str(e)}")
+        raise credentials_exception
+    
+    # Verify token type
+    token_type = payload.get("type")
+    if token_type != "refresh":
+        logger.warning(f"Invalid token type: {token_type} (expected 'refresh')")
+        raise credentials_exception
+    
+    # Verify subject
+    email = payload.get("sub")
+    if not email:
+        logger.warning("Refresh token missing subject claim")
+        raise credentials_exception
+    
+    # Verify jti
+    jti = payload.get("jti")
+    if not jti:
+        logger.warning("Refresh token missing jti claim")
+        raise credentials_exception
+    
+    # Check if token is revoked in database
+    refresh_token_record = db.query(models.RefreshToken).filter(
+        models.RefreshToken.token_jti == jti
+    ).first()
+    
+    if not refresh_token_record:
+        logger.warning(f"Refresh token not found in database (jti={jti})")
+        raise credentials_exception
+    
+    if refresh_token_record.revoked_at is not None:
+        logger.warning(f"Refresh token has been revoked (jti={jti})")
+        raise credentials_exception
+    
+    # Check expiration (double-check with database)
+    if datetime.utcnow() > refresh_token_record.expires_at:
+        logger.warning(f"Refresh token expired (jti={jti})")
+        raise credentials_exception
+    
+    # Verify user still exists
+    user = db.query(models.User).filter(models.User.email == email).first()
+    if not user:
+        logger.warning(f"Refresh token valid but user not found (email={email})")
+        raise credentials_exception
+    
+    logger.info(f"Refresh token validated for user {email} (jti={jti})")
+    return payload
+
+
+def revoke_refresh_token(jti: str, db: Session) -> bool:
+    """
+    Revoke a refresh token by marking it as revoked in the database.
+    
+    Args:
+        jti: The JWT ID of the refresh token to revoke
+        db: Database session
+        
+    Returns:
+        True if token was revoked, False if not found
+    """
+    refresh_token = db.query(models.RefreshToken).filter(
+        models.RefreshToken.token_jti == jti
+    ).first()
+    
+    if not refresh_token:
+        logger.warning(f"Refresh token not found for revocation (jti={jti})")
+        return False
+    
+    if refresh_token.revoked_at is not None:
+        logger.info(f"Refresh token already revoked (jti={jti})")
+        return True
+    
+    refresh_token.revoked_at = datetime.utcnow()
+    db.commit()
+    
+    logger.info(f"Refresh token revoked (jti={jti})")
+    return True
+
+
+def rotate_refresh_token(old_jti: str, new_token: str, db: Session) -> bool:
+    """
+    Rotate a refresh token by marking the old one as replaced by the new one.
+    
+    This enables detection of replay attacks - if an old refresh token
+    is used after rotation, it will be rejected.
+    
+    Args:
+        old_jti: The JWT ID of the old refresh token
+        new_token: The new refresh token JWT string
+        db: Database session
+        
+    Returns:
+        True if rotation succeeded, False otherwise
+    """
+    # Extract jti from new token
+    try:
+        secret_key = _require_secret_key()
+        new_payload = jwt.decode(new_token, secret_key, algorithms=[ALGORITHM])
+        new_jti = new_payload.get("jti")
+        if not new_jti:
+            logger.error("New refresh token missing jti claim")
+            return False
+    except JWTError as e:
+        logger.error(f"Failed to decode new refresh token: {str(e)}")
+        return False
+    
+    # Update old token record
+    old_token = db.query(models.RefreshToken).filter(
+        models.RefreshToken.token_jti == old_jti
+    ).first()
+    
+    if not old_token:
+        logger.warning(f"Old refresh token not found for rotation (jti={old_jti})")
+        return False
+    
+    old_token.replaced_by_token_jti = new_jti
+    db.commit()
+    
+    logger.info(f"Refresh token rotated: {old_jti} -> {new_jti}")
+    return True
+
+
+def set_refresh_token_cookie(response: Response, token: str) -> None:
+    """
+    Set an HttpOnly Secure SameSite cookie for the refresh token.
+    
+    Args:
+        response: FastAPI Response object
+        token: The refresh token JWT string
+    """
+    settings = get_settings()
+    environment = settings.environment.environment
+    
+    # Calculate cookie expiration
+    refresh_expire_days = settings.security.refresh_token_expire_days
+    max_age = refresh_expire_days * 24 * 60 * 60  # Convert days to seconds
+    
+    # In production, use Secure flag
+    secure = environment == "production"
+    
+    # Use Lax for better UX while maintaining security
+    same_site = "lax"
+    
+    response.set_cookie(
+        key=settings.security.refresh_token_cookie_name,
+        value=token,
+        max_age=max_age,
+        expires=refresh_expire_days,
+        path="/",
+        domain=None,
+        secure=secure,
+        httponly=True,
+        samesite=same_site,
+    )
+    
+    logger.debug(f"Refresh token cookie set (secure={secure}, same_site={same_site})")
+
+
+def clear_refresh_token_cookie(response: Response) -> None:
+    """
+    Clear the refresh token cookie by setting it to expire immediately.
+    
+    Args:
+        response: FastAPI Response object
+    """
+    settings = get_settings()
+    
+    response.delete_cookie(
+        key=settings.security.refresh_token_cookie_name,
+        path="/",
+        domain=None,
+        secure=True,
+        httponly=True,
+        samesite="lax",
+    )
+    
+    logger.debug("Refresh token cookie cleared")
+
+
+def get_refresh_token_from_cookie(request: Request) -> Optional[str]:
+    """
+    Extract refresh token from HttpOnly cookie.
+    
+    Args:
+        request: FastAPI Request object
+        
+    Returns:
+        The refresh token string if present, None otherwise
+    """
+    settings = get_settings()
+    token = request.cookies.get(settings.security.refresh_token_cookie_name)
+    return token
 
 
 def get_current_user(token: str = Depends(oauth2_scheme), db: Session = Depends(get_db)) -> AuthIdentity:

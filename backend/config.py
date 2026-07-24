@@ -68,6 +68,20 @@ class SecurityConfig(BaseSettings):
         description="Development mode API key."
     )
     
+    # Refresh token configuration
+    refresh_token_expire_days: int = Field(
+        default=7,
+        description="Refresh token expiration time in days."
+    )
+    refresh_token_cookie_name: str = Field(
+        default="refresh_token",
+        description="Name of the refresh token cookie."
+    )
+    refresh_token_rotation_enabled: bool = Field(
+        default=True,
+        description="Enable refresh token rotation on each refresh request."
+    )
+    
     @field_validator('jwt_secret_key')
     @classmethod
     def validate_jwt_secret_key(cls, v: str) -> str:
@@ -78,6 +92,19 @@ class SecurityConfig(BaseSettings):
             logger.warning(
                 "JWT_SECRET_KEY is shorter than recommended 16 characters. "
                 "Consider using a stronger secret."
+            )
+        return v
+    
+    @field_validator('refresh_token_expire_days')
+    @classmethod
+    def validate_refresh_token_expire_days(cls, v: int) -> int:
+        """Validate refresh token expiration is positive and reasonable."""
+        if v <= 0:
+            raise ValueError('REFRESH_TOKEN_EXPIRE_DAYS must be greater than 0')
+        if v > 365:
+            logger.warning(
+                f"REFRESH_TOKEN_EXPIRE_DAYS ({v} days) is very long. "
+                "Consider using a shorter duration for better security."
             )
         return v
 

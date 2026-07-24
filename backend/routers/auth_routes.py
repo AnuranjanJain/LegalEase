@@ -1,7 +1,7 @@
 from datetime import timedelta
 import logging
 
-from fastapi import APIRouter, Depends, HTTPException, Request, status
+from fastapi import APIRouter, Depends, HTTPException, Request, status, Response
 from sqlalchemy.exc import IntegrityError, SQLAlchemyError
 from sqlalchemy.orm import Session
 from pydantic import BaseModel, EmailStr, Field
@@ -18,6 +18,13 @@ from backend.auth import (
     _extract_jwt_token,
     SECRET_KEY,
     ALGORITHM,
+    create_refresh_token,
+    validate_refresh_token,
+    revoke_refresh_token,
+    rotate_refresh_token,
+    set_refresh_token_cookie,
+    clear_refresh_token_cookie,
+    get_refresh_token_from_cookie,
 )
 from backend.middleware.auth_rate_limit import (
     check_login_rate_limit,
@@ -62,7 +69,7 @@ class ResendVerificationRequest(BaseModel):
 
 
 @router.post("/signup", status_code=status.HTTP_201_CREATED, response_model=TokenResponse)
-def signup(request: Request, user: UserCreate, db: Session = Depends(get_db)):
+def signup(request: Request, response: Response, user: UserCreate, db: Session = Depends(get_db)):
     # Enforce rate limiting before database operations
     check_signup_rate_limit(request, user.email)
     
@@ -102,11 +109,19 @@ def signup(request: Request, user: UserCreate, db: Session = Depends(get_db)):
         data={"sub": new_user.email},
         expires_delta=timedelta(hours=ACCESS_TOKEN_EXPIRE_HOURS)
     )
+    
+    # Create and set refresh token cookie
+    refresh_token = create_refresh_token(
+        data={"sub": new_user.email},
+        db=db,
+    )
+    set_refresh_token_cookie(response, refresh_token)
+    
     return {"access_token": access_token, "token_type": "bearer"}
 
 
 @router.post("/login", response_model=TokenResponse)
-def login(request: Request, user: UserLogin, db: Session = Depends(get_db)):
+def login(request: Request, response: Response, user: UserLogin, db: Session = Depends(get_db)):
     # Enforce rate limiting before processing
     check_login_rate_limit(request, user.email)
     
@@ -140,6 +155,14 @@ def login(request: Request, user: UserLogin, db: Session = Depends(get_db)):
         data={"sub": db_user.email},
         expires_delta=timedelta(hours=ACCESS_TOKEN_EXPIRE_HOURS)
     )
+    
+    # Create and set refresh token cookie
+    refresh_token = create_refresh_token(
+        data={"sub": db_user.email},
+        db=db,
+    )
+    set_refresh_token_cookie(response, refresh_token)
+    
     return {"access_token": access_token, "token_type": "bearer"}
 
 
@@ -240,14 +263,105 @@ def verify_token(current_user: AuthIdentity = Depends(get_current_user)):
     }
 
 
+@router.get("/refresh", response_model=TokenResponse)
+def refresh(
+    request: Request,
+    response: Response,
+    db: Session = Depends(get_db),
+):
+    """
+    Refresh an access token using a refresh token from an HttpOnly cookie.
+    
+    This endpoint enables session restoration after page refreshes without
+    requiring the user to re-enter credentials. The refresh token is stored
+    in an HttpOnly Secure SameSite cookie for security.
+    
+    Process:
+    1. Extract refresh token from HttpOnly cookie
+    2. Validate refresh token (signature, expiration, revocation, user existence)
+    3. Issue new access token
+    4. Optionally rotate refresh token (if enabled in config)
+    5. Update cookie with new refresh token (if rotated)
+    
+    Returns:
+        JSON with new access token
+        
+    Raises:
+        401: If refresh token is missing, invalid, expired, or revoked
+    """
+    settings = get_settings()
+    
+    # Extract refresh token from cookie
+    refresh_token = get_refresh_token_from_cookie(request)
+    if not refresh_token:
+        logger.warning("Refresh endpoint called without refresh token cookie")
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Missing refresh token",
+        )
+    
+    # Validate refresh token
+    try:
+        payload = validate_refresh_token(refresh_token, db)
+    except HTTPException:
+        # Clear invalid refresh token cookie
+        clear_refresh_token_cookie(response)
+        raise
+    
+    email = payload.get("sub")
+    old_jti = payload.get("jti")
+    
+    # Verify user still exists
+    user = db.query(models.User).filter(models.User.email == email).first()
+    if not user:
+        logger.warning(f"Refresh token valid but user not found (email={email})")
+        clear_refresh_token_cookie(response)
+        revoke_refresh_token(old_jti, db)
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="User not found",
+        )
+    
+    # Create new access token
+    access_token = create_access_token(
+        data={"sub": user.email},
+        expires_delta=timedelta(hours=ACCESS_TOKEN_EXPIRE_HOURS)
+    )
+    
+    # Rotate refresh token if enabled
+    if settings.security.refresh_token_rotation_enabled:
+        try:
+            # Create new refresh token
+            new_refresh_token = create_refresh_token(
+                data={"sub": user.email},
+                db=db,
+            )
+            
+            # Mark old token as replaced (rotation tracking)
+            rotate_refresh_token(old_jti, new_refresh_token, db)
+            
+            # Update cookie with new refresh token
+            set_refresh_token_cookie(response, new_refresh_token)
+            
+            logger.info(f"Refresh token rotated for user {email}")
+        except Exception as e:
+            logger.error(f"Failed to rotate refresh token: {e}")
+            # Continue with non-rotated response if rotation fails
+            # This is a graceful degradation - user still gets a new access token
+    
+    return {"access_token": access_token, "token_type": "bearer"}
+
+
 @router.post("/logout", status_code=status.HTTP_200_OK)
 def logout(
     request: Request,
+    response: Response,
     current_user: AuthIdentity = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
     """
     Invalidate the caller's JWT by recording its jti in the revocation table.
+    Also clears the refresh token cookie if present.
     Subsequent requests carrying the same token will be rejected with 401,
     even if the token has not yet expired.
     """
@@ -255,6 +369,22 @@ def logout(
     from backend.models import RevokedToken
     from datetime import datetime
 
+    # Clear refresh token cookie
+    clear_refresh_token_cookie(response)
+    
+    # Revoke refresh token from database if present
+    refresh_token = get_refresh_token_from_cookie(request)
+    if refresh_token:
+        try:
+            payload = jose_jwt.decode(refresh_token, SECRET_KEY, algorithms=[ALGORITHM])
+            refresh_jti = payload.get("jti")
+            if refresh_jti:
+                revoke_refresh_token(refresh_jti, db)
+        except JWTError:
+            # Invalid refresh token, ignore
+            pass
+
+    # Revoke access token
     token = _extract_jwt_token(request)
     if not token:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Missing token")
