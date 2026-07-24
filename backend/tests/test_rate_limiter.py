@@ -164,7 +164,7 @@ def test_redis_rate_limiter_success(monkeypatch):
 
 @pytest.mark.unit
 def test_redis_rate_limiter_fallback(monkeypatch):
-    """Test automatic fallback to local storage when Redis is unavailable."""
+    """Test that Redis failures raise exceptions (no runtime fallback)."""
     monkeypatch.setenv("REDIS_URL", "redis://localhost:6379/0")
 
     mock_redis_client = MagicMock()
@@ -180,15 +180,7 @@ def test_redis_rate_limiter_fallback(monkeypatch):
         backend.client = mock_redis_client
         limiter = SimpleRateLimiter(calls=2, period=60, backend=backend, backend_name="redis")
         
-        # Should fall back to in-memory store and allow request
-        res1 = limiter.check("fallback_user")
-        assert res1["allowed"] is True
-
-        # Call 2 (should also fall back and be allowed)
-        res2 = limiter.check("fallback_user")
-        assert res2["allowed"] is True
-
-        # Call 3 (falls back, but exceeds local limit of 2)
-        res3 = limiter.check("fallback_user")
-        assert res3["allowed"] is False
+        # Should raise exception (no runtime fallback)
+        with pytest.raises(redis.exceptions.ConnectionError):
+            limiter.check("fallback_user")
 

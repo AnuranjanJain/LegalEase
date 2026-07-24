@@ -375,10 +375,10 @@ class RateLimitConfig(BaseSettings):
     @model_validator(mode='after')
     def validate_redis_config_environment(self):
         """Ensure Redis configuration is appropriate for environment."""
-        # Get environment from the parent Settings object if available
         # This validator runs on RateLimitConfig, so we need to get environment from os
         environment = os.getenv("ENVIRONMENT", "production")
-        test_mode = os.getenv("TEST_MODE", "false").lower() in ("true", "1", "yes")
+        test_mode_str = os.getenv("TEST_MODE", "false")
+        test_mode = test_mode_str.lower() in ("true", "1", "yes")
         
         # Skip Redis requirement in test mode
         if environment == "production" and self.require_redis_in_production and not test_mode:
@@ -598,7 +598,8 @@ class EncryptionConfig(BaseSettings):
     def validate_encryption_key_in_production(self):
         """Ensure DOCUMENT_ENCRYPTION_KEY is set in production environment."""
         environment = os.getenv("ENVIRONMENT", "production")
-        test_mode = os.getenv("TEST_MODE", "false").lower() in ("true", "1", "yes")
+        test_mode_str = os.getenv("TEST_MODE", "false")
+        test_mode = test_mode_str.lower() in ("true", "1", "yes")
         
         if environment == "production" and not self.document_encryption_key and not test_mode:
             logger.error(

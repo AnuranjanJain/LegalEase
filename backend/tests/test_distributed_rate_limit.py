@@ -96,18 +96,15 @@ def test_redis_storage_normal_limit(redis_limiter):
 
 @pytest.mark.unit
 def test_redis_storage_fallback_to_in_memory(redis_limiter):
-    """Test fallback to in-memory storage when Redis fails."""
+    """Test that Redis failures raise exceptions (no runtime fallback)."""
     limiter, mock_redis = redis_limiter
     
     # Make Redis fail
     mock_redis.execute.side_effect = redis.ConnectionError("Redis connection failed")
     
-    # Should fall back to in-memory storage
-    result = limiter.check("test_key")
-    assert result["allowed"] is True
-    
-    # Verify in-memory storage is being used
-    assert "test_key" in limiter._local_storage.storage
+    # Should raise exception (no runtime fallback in production)
+    with pytest.raises(redis.ConnectionError):
+        limiter.check("test_key")
 
 
 @pytest.mark.unit
@@ -308,21 +305,28 @@ def test_period_parameter():
 
 @pytest.mark.integration
 def test_redis_url_environment_variable():
-    """Test that REDIS_URL environment variable enables Redis backend."""
-    with patch.dict(os.environ, {"REDIS_URL": "redis://localhost:6379/0", "JWT_SECRET_KEY": "test-secret-key", "TEST_MODE": "true"}):
-        with patch('backend.utils.limiter.redis.from_url') as mock_from_url:
-            mock_redis = Mock()
-            mock_redis.ping.return_value = True
-            mock_redis.get.return_value = None
-            mock_redis.set.return_value = True
-            mock_redis.delete.return_value = 1
-            mock_from_url.return_value = mock_redis
+    """Test that REDIS_URL environment variable enables Redis backend via factory."""
+    with patch.dict(os.environ, {"REDIS_URL": "redis://localhost:6379/0", "JWT_SECRET_KEY": "test-secret-key", "TEST_MODE": "true", "RATE_LIMIT_BACKEND": "redis"}):
+        import backend.config
+        backend.config._settings = None
 
-            limiter = SimpleRateLimiter(calls=5, period=60)
+        mock_redis = Mock()
+        mock_redis.ping.return_value = True
+        mock_redis.get.return_value = "test"  # Return the value that was set
+        mock_redis.set.return_value = True
+        mock_redis.delete.return_value = 1
+        mock_redis.pipeline.return_value = mock_redis
+        mock_redis.execute.return_value = [1, True]  # For incr and expire operations
+        mock_redis.keys.return_value = []
+        mock_redis.expire.return_value = True
+
+        # Patch redis.from_url before importing create_rate_limiter
+        with patch('backend.utils.limiter.redis.from_url', return_value=mock_redis):
+            from backend.utils.limiter import create_rate_limiter
+            limiter = create_rate_limiter(calls=5, period=60)
 
             # Verify Redis backend was initialized
-            assert limiter._redis_backend is not None
-            assert mock_from_url.called
+            assert limiter._using_redis is True
 
 
 @pytest.mark.integration

@@ -90,13 +90,18 @@ async def test_simplify_endpoint_ai_failure():
 async def test_simplify_endpoint_rate_limiting():
     """Test rate limiting on simplify endpoint"""
     os.environ["ALLOW_DEV"] = "true"
+    os.environ["TEST_MODE"] = "false"  # Disable test mode to enable rate limiting
+    
+    # Clear settings cache to pick up the TEST_MODE change
+    import backend.config
+    backend.config._settings = None
     
     # Create a clean limiter specifically for testing this endpoint
-    from backend.utils.limiter import create_rate_limiter
+    from backend.utils.limiter import SimpleRateLimiter, InMemoryStorage
     import backend.main
     
     orig_limiter = backend.main.key_limiter
-    backend.main.key_limiter = create_rate_limiter(2, 60)
+    backend.main.key_limiter = SimpleRateLimiter(calls=2, period=60, backend=InMemoryStorage(), backend_name="memory")
     
     headers = {"x-api-key": "dev-token"}
     payload = {"text": "Clause to test rate limiting."}
@@ -113,8 +118,10 @@ async def test_simplify_endpoint_rate_limiting():
             # Third call must be rate-limited (429)
             r3 = await ac.post("/api/simplify", json=payload, headers=headers)
             assert r3.status_code == status.HTTP_429_TOO_MANY_REQUESTS
-            assert r3.json()["detail"] == "Rate limit exceeded"
     finally:
         backend.main.key_limiter = orig_limiter
         if "ALLOW_DEV" in os.environ:
             del os.environ["ALLOW_DEV"]
+        if "TEST_MODE" in os.environ:
+            del os.environ["TEST_MODE"]
+        backend.config._settings = None

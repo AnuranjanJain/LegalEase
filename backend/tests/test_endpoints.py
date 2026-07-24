@@ -3,6 +3,7 @@ import uuid
 import pytest
 from fastapi import status
 from httpx import AsyncClient, ASGITransport
+from unittest.mock import MagicMock, patch
 import backend.config
 
 # Reset settings before any tests
@@ -60,15 +61,23 @@ async def test_signup_endpoint_fails_for_duplicate_email():
 
 @pytest.mark.asyncio
 async def test_health_endpoint_degraded():
-    """Test health endpoint returns 503 when service is degraded"""
-    from unittest.mock import patch
+    """Test health endpoint returns 503 when service is degraded (status in response body)"""
+    from sqlalchemy import text
 
-    with patch("backend.main.ai_service") as mock_ai:
+    with patch("backend.main.ai_service") as mock_ai, \
+         patch("backend.main.SessionLocal") as mock_session_local:
         # Mock both check_health and database check to simulate degraded state
-        mock_ai.check_health.return_value = {"status": "degraded", "details": {}}
+        mock_ai.check_health.return_value = {"status": "ok", "details": {}}
+        
+        # Mock database to fail - SessionLocal() returns the mock db directly
+        mock_db = MagicMock()
+        mock_db.execute.side_effect = Exception("Database connection failed")
+        mock_db.close = MagicMock()
+        mock_session_local.return_value = mock_db
+        
         async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as ac:
             r = await ac.get("/health")
-            # The endpoint returns 503 when status is degraded
+            # The endpoint returns 503 with degraded status in body
             assert r.status_code == 503
             data = r.json()
             assert data["detail"]["status"] == "degraded"
@@ -231,13 +240,19 @@ async def test_upload_endpoint_unsupported_file():
 async def test_rate_limiting_on_chat():
     """Test that rate limiting works on chat endpoint"""
     import backend.main
+    from backend.utils.limiter import create_rate_limiter, SimpleRateLimiter, InMemoryStorage
+    import backend.config
 
     os.environ["ALLOW_DEV"] = "true"
     os.environ["JWT_SECRET_KEY"] = "testing-secret-key-1234567890-abcdef"
+    os.environ["TEST_MODE"] = "false"  # Disable test mode to enable rate limiting
+    
+    # Clear settings cache to pick up the TEST_MODE change
+    backend.config._settings = None
 
-    # Patch the limiter directly
+    # Patch the limiter directly with a fresh limiter using in-memory storage
     orig_limiter = backend.main.key_limiter
-    backend.main.key_limiter = backend.main.SimpleRateLimiter(2, 60)
+    backend.main.key_limiter = SimpleRateLimiter(calls=2, period=60, backend=InMemoryStorage(), backend_name="memory")
 
     headers = {"x-api-key": "dev-token"}
     payload = {"message": "Hello"}
@@ -250,9 +265,12 @@ async def test_rate_limiting_on_chat():
 
             # Third request should be rate limited
             r3 = await ac.post("/chat", json=payload, headers=headers)
-            assert r3.status_code == 429
+            assert r3.status_code == status.HTTP_429_TOO_MANY_REQUESTS
     finally:
         backend.main.key_limiter = orig_limiter
         if "ALLOW_DEV" in os.environ:
             del os.environ["ALLOW_DEV"]
+        if "TEST_MODE" in os.environ:
+            del os.environ["TEST_MODE"]
+        backend.config._settings = None
 
