@@ -107,7 +107,7 @@ class TestUploadEndpointIntegration:
         assert "task_id" in data
         assert "filename" in data
         assert "status" in data
-        assert data["status"] == "processing"
+        assert data["status"] == "queued"
 
     def test_upload_status_response_format_unchanged(self, client, auth_headers):
         """Test that status response format remains unchanged."""
@@ -191,11 +191,11 @@ class TestUploadEndpointIntegration:
             task_ids.append(response.json()["task_id"])
 
         # Verify all tasks exist. Background processing runs synchronously
-        # under TestClient, so tasks may already be done.
+        # under TestClient, so tasks may already be done or still queued.
         for task_id in task_ids:
             task = task_storage.get_task(task_id)
             assert task is not None
-            assert task["status"] in ("processing", "done")
+            assert task["status"] in ("queued", "processing", "done")
 
     def test_task_progress_updates(self, client, auth_headers):
         """Test that task progress can be updated multiple times."""

@@ -148,8 +148,16 @@ def test_validate_refresh_token_success(mock_db, mock_user):
     mock_refresh_token.revoked_at = None
     mock_refresh_token.expires_at = datetime.utcnow() + timedelta(days=7)
     
-    mock_db.query.return_value.filter.return_value.first.return_value = mock_user
-    mock_db.query.return_value.filter.return_value.filter.return_value.first.return_value = mock_refresh_token
+    # Mock database queries - two separate query calls
+    def query_side_effect(model, *args, **kwargs):
+        mock_query = Mock()
+        if model is models.User:
+            mock_query.filter.return_value.first.return_value = mock_user
+        elif model is models.RefreshToken:
+            mock_query.filter.return_value.first.return_value = mock_refresh_token
+        return mock_query
+    
+    mock_db.query.side_effect = query_side_effect
     
     payload = validate_refresh_token(token, mock_db)
     
