@@ -18,7 +18,7 @@ from backend.services.entity_extraction import extract_entities
 from backend.services.search_service import perform_web_search
 from backend.services.langgraph_service import run_agent
 from backend.services.hybrid_search import get_hybrid_results, embed_text, search_saved_clauses
-from backend.utils.limiter import SimpleRateLimiter
+from backend.utils.limiter import create_rate_limiter
 from backend.config import get_settings
 
 DEFAULT_JURISDICTION = "General / Not Specified"
@@ -29,7 +29,7 @@ router = APIRouter(prefix="/legal", tags=["legal"])
 # limiting at all, unlike /chat and /simplify which already use key_limiter.
 # Reuses the same per-identity rate limiting pattern established there.
 _settings = get_settings()
-_legal_ai_limiter = SimpleRateLimiter(
+_legal_ai_limiter = create_rate_limiter(
     calls=_settings.rate_limit.rate_limit_key_calls,
     period=_settings.rate_limit.rate_limit_period,
 )
@@ -37,7 +37,7 @@ _legal_ai_limiter = SimpleRateLimiter(
 
 
 
-_redline_limiter = SimpleRateLimiter(
+_redline_limiter = create_rate_limiter(
     calls=_settings.rate_limit.rate_limit_key_calls,
     period=_settings.rate_limit.rate_limit_period,
 )

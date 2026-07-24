@@ -22,7 +22,9 @@ def reset_settings():
 @pytest.mark.unit
 def test_rate_limiter_basic():
     """Test basic rate limiting functionality"""
-    limiter = SimpleRateLimiter(calls=3, period=60)
+    from backend.utils.limiter import InMemoryStorage
+    backend = InMemoryStorage()
+    limiter = SimpleRateLimiter(calls=3, period=60, backend=backend, backend_name="memory")
     
     # First 3 calls should be allowed
     assert limiter.is_allowed("user1") == True
@@ -36,7 +38,9 @@ def test_rate_limiter_basic():
 @pytest.mark.unit
 def test_rate_limiter_different_keys():
     """Test that rate limiting is per-key"""
-    limiter = SimpleRateLimiter(calls=2, period=60)
+    from backend.utils.limiter import InMemoryStorage
+    backend = InMemoryStorage()
+    limiter = SimpleRateLimiter(calls=2, period=60, backend=backend, backend_name="memory")
     
     # Different keys should have independent limits
     assert limiter.is_allowed("user1") == True
@@ -50,7 +54,9 @@ def test_rate_limiter_different_keys():
 @pytest.mark.unit
 def test_rate_limiter_time_window():
     """Test that rate limiting resets after time period"""
-    limiter = SimpleRateLimiter(calls=2, period=1)  # 1 second period
+    from backend.utils.limiter import InMemoryStorage
+    backend = InMemoryStorage()
+    limiter = SimpleRateLimiter(calls=2, period=1, backend=backend, backend_name="memory")  # 1 second period
     
     assert limiter.is_allowed("user1") == True
     assert limiter.is_allowed("user1") == True
@@ -66,7 +72,9 @@ def test_rate_limiter_time_window():
 @pytest.mark.unit
 def test_rate_limiter_pruning():
     """Test that old entries are pruned from storage"""
-    limiter = SimpleRateLimiter(calls=100, period=1)
+    from backend.utils.limiter import InMemoryStorage
+    backend = InMemoryStorage()
+    limiter = SimpleRateLimiter(calls=100, period=1, backend=backend, backend_name="memory")
     
     # Make many calls
     for _ in range(50):
@@ -85,7 +93,9 @@ def test_rate_limiter_pruning():
 @pytest.mark.unit
 def test_rate_limiter_concurrency():
     """Test that local rate limiting is thread-safe under concurrent access."""
-    limiter = SimpleRateLimiter(calls=100, period=60)
+    from backend.utils.limiter import InMemoryStorage
+    backend = InMemoryStorage()
+    limiter = SimpleRateLimiter(calls=100, period=60, backend=backend, backend_name="memory")
     key = "concurrent_user"
 
     # We run 20 threads, each doing 5 requests. Total 100 requests.
@@ -123,7 +133,10 @@ def test_redis_rate_limiter_success(monkeypatch):
     ]
 
     with patch("redis.from_url", return_value=mock_redis_client) as mock_from_url:
-        limiter = SimpleRateLimiter(calls=2, period=60)
+        from backend.utils.limiter import RedisStorage
+        backend = RedisStorage("redis://localhost:6379/0")
+        backend.client = mock_redis_client
+        limiter = SimpleRateLimiter(calls=2, period=60, backend=backend, backend_name="redis")
         assert limiter._redis_backend is not None
         assert limiter._using_redis is True
         
@@ -151,7 +164,7 @@ def test_redis_rate_limiter_success(monkeypatch):
 
 @pytest.mark.unit
 def test_redis_rate_limiter_fallback(monkeypatch):
-    """Test automatic fallback to local storage when Redis is unavailable."""
+    """Test that Redis failures raise exceptions (no runtime fallback)."""
     monkeypatch.setenv("REDIS_URL", "redis://localhost:6379/0")
 
     mock_redis_client = MagicMock()
@@ -162,17 +175,12 @@ def test_redis_rate_limiter_fallback(monkeypatch):
     mock_pipeline.execute.side_effect = redis.exceptions.ConnectionError("Redis connection lost")
 
     with patch("redis.from_url", return_value=mock_redis_client):
-        limiter = SimpleRateLimiter(calls=2, period=60)
+        from backend.utils.limiter import RedisStorage
+        backend = RedisStorage("redis://localhost:6379/0")
+        backend.client = mock_redis_client
+        limiter = SimpleRateLimiter(calls=2, period=60, backend=backend, backend_name="redis")
         
-        # Should fall back to in-memory store and allow request
-        res1 = limiter.check("fallback_user")
-        assert res1["allowed"] is True
-
-        # Call 2 (should also fall back and be allowed)
-        res2 = limiter.check("fallback_user")
-        assert res2["allowed"] is True
-
-        # Call 3 (falls back, but exceeds local limit of 2)
-        res3 = limiter.check("fallback_user")
-        assert res3["allowed"] is False
+        # Should raise exception (no runtime fallback)
+        with pytest.raises(redis.exceptions.ConnectionError):
+            limiter.check("fallback_user")
 

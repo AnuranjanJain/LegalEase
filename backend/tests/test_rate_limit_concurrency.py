@@ -197,23 +197,25 @@ def test_simulated_multi_worker_with_redis():
     mock_redis.get.return_value = None
     mock_redis.delete.return_value = 0
     
-    # Mock atomic increment with shared counter
+    # Mock atomic increment with shared counter and proper limit enforcement
     shared_counter = [0]
+    lock = threading.Lock()
     def mock_execute():
-        shared_counter[0] += 1
-        if shared_counter[0] <= 5:
-            return (shared_counter[0], True)
-        else:
-            return (shared_counter[0], True)
+        with lock:
+            shared_counter[0] += 1
+            if shared_counter[0] <= 5:
+                return (shared_counter[0], True)
+            else:
+                return (shared_counter[0], False)
     
     mock_redis.execute.side_effect = mock_execute
     
     workers = []
     for _ in range(4):
-        limiter = SimpleRateLimiter(calls=5, period=60)
-        redis_storage = RedisStorage("redis://localhost:6379/0")
+        redis_storage = RedisStorage("redis://localhost:6379/50")
         redis_storage.client = mock_redis
-        limiter._redis_backend = redis_storage
+        # Create limiter with Redis backend explicitly
+        limiter = SimpleRateLimiter(calls=5, period=60, backend=redis_storage, backend_name="redis")
         workers.append(limiter)
     
     key = "shared_key"

@@ -9,6 +9,10 @@ import os
 import pytest
 from pydantic import ValidationError
 
+os.environ["JWT_SECRET_KEY"] = "testing-secret-key-1234567890-abcdef"
+os.environ["TEST_MODE"] = "true"
+os.environ["ENVIRONMENT"] = "testing"
+
 from backend.config import (
     Settings,
     DatabaseConfig,
@@ -99,17 +103,28 @@ class TestEnvironmentConfig:
     def test_environment_default_production(self):
         """Test that ENVIRONMENT defaults to production."""
         old_env = os.environ.pop("ENVIRONMENT", None)
+        old_test_mode = os.environ.pop("TEST_MODE", None)
         try:
-            config = EnvironmentConfig()
+            config = EnvironmentConfig(_env_file=None)
             assert config.environment == "production"
         finally:
             if old_env is not None:
                 os.environ["ENVIRONMENT"] = old_env
+            else:
+                os.environ["ENVIRONMENT"] = "testing"
+            if old_test_mode is not None:
+                os.environ["TEST_MODE"] = old_test_mode
+            else:
+                os.environ["TEST_MODE"] = "true"
 
     def test_environment_valid_values(self):
         """Test that valid environment values are accepted."""
         for env in ["development", "testing", "staging", "production"]:
-            config = EnvironmentConfig(environment=env)
+            # For production, ensure test_mode is False
+            if env == "production":
+                config = EnvironmentConfig(environment=env, test_mode=False, _env_file=None)
+            else:
+                config = EnvironmentConfig(environment=env, _env_file=None)
             assert config.environment == env
 
     def test_environment_invalid_value(self):
@@ -120,8 +135,15 @@ class TestEnvironmentConfig:
 
     def test_test_mode_default_false(self):
         """Test that TEST_MODE defaults to False."""
-        config = EnvironmentConfig()
-        assert config.test_mode is False
+        old_test_mode = os.environ.pop("TEST_MODE", None)
+        try:
+            config = EnvironmentConfig(_env_file=None)
+            assert config.test_mode is False
+        finally:
+            if old_test_mode is not None:
+                os.environ["TEST_MODE"] = old_test_mode
+            else:
+                os.environ["TEST_MODE"] = "true"
 
     def test_test_mode_in_development(self):
         """Test that TEST_MODE can be enabled in development."""
@@ -380,6 +402,7 @@ class TestEncryptionConfig:
         """Test that production requires DOCUMENT_ENCRYPTION_KEY."""
         monkeypatch.setenv("ENVIRONMENT", "production")
         monkeypatch.setenv("JWT_SECRET_KEY", "test_secret")
+        monkeypatch.setenv("TEST_MODE", "false")
         try:
             with pytest.raises(ValidationError) as exc_info:
                 EncryptionConfig(_env_file=None)
@@ -387,6 +410,7 @@ class TestEncryptionConfig:
         finally:
             monkeypatch.delenv("ENVIRONMENT", raising=False)
             monkeypatch.delenv("JWT_SECRET_KEY", raising=False)
+            monkeypatch.delenv("TEST_MODE", raising=False)
 
     def test_non_production_allows_missing_document_encryption_key(self, monkeypatch):
         """Test that non-production environments allow missing DOCUMENT_ENCRYPTION_KEY."""
@@ -404,6 +428,7 @@ class TestEncryptionConfig:
         monkeypatch.setenv("ENVIRONMENT", "production")
         monkeypatch.setenv("JWT_SECRET_KEY", "test_secret")
         monkeypatch.setenv("DOCUMENT_ENCRYPTION_KEY", "production-key")
+        monkeypatch.setenv("TEST_MODE", "false")
         try:
             config = EncryptionConfig(_env_file=None)
             assert config.document_encryption_key == "production-key"
@@ -411,6 +436,7 @@ class TestEncryptionConfig:
             monkeypatch.delenv("ENVIRONMENT", raising=False)
             monkeypatch.delenv("JWT_SECRET_KEY", raising=False)
             monkeypatch.delenv("DOCUMENT_ENCRYPTION_KEY", raising=False)
+            monkeypatch.delenv("TEST_MODE", raising=False)
 
 
 class TestSettingsIntegration:
@@ -421,17 +447,17 @@ class TestSettingsIntegration:
         # Set required environment variable
         os.environ["JWT_SECRET_KEY"] = "test_secret_key_12345678"
         os.environ["DOCUMENT_ENCRYPTION_KEY"] = "test_encryption_key_12345678"
-        old_env = os.environ.pop("ENVIRONMENT", None)
+        os.environ["TEST_MODE"] = "true"
+        os.environ["ENVIRONMENT"] = "testing"
         try:
-            settings = Settings()
+            settings = Settings(_env_file=None)
             assert settings.security.jwt_secret_key == "test_secret_key_12345678"
-            assert settings.environment.environment == "production"
+            assert settings.environment.environment == "testing"
             assert settings.file_upload.max_upload_size == 25 * 1024 * 1024
         finally:
             os.environ.pop("JWT_SECRET_KEY", None)
             os.environ.pop("DOCUMENT_ENCRYPTION_KEY", None)
-            if old_env is not None:
-                os.environ["ENVIRONMENT"] = old_env
+            os.environ["ENVIRONMENT"] = "testing"
 
     def test_settings_missing_required_variable(self):
         """Test that Settings fails without required JWT_SECRET_KEY."""
