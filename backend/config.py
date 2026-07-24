@@ -447,6 +447,18 @@ class AIConfig(BaseSettings):
         default=False,
         description="Enable debug information in health endpoint."
     )
+    rag_init_retry_interval: int = Field(
+        default=300,
+        description="Cooldown in seconds before retrying RAG initialization after a failure."
+    )
+    rag_enable_auto_recovery: bool = Field(
+        default=True,
+        description="Enable automatic retry of failed RAG initialization after the cooldown expires."
+    )
+    rag_max_init_retries: int = Field(
+        default=3,
+        description="Maximum number of initialization attempts before treating the RAG service as permanently degraded."
+    )
     
     @field_validator('max_model_input_chars')
     @classmethod
@@ -488,6 +500,20 @@ class AIConfig(BaseSettings):
         """Validate retry backoff factor is positive."""
         if v <= 0:
             raise ValueError('RETRY_BACKOFF_FACTOR must be greater than 0')
+        return v
+
+    @field_validator('rag_init_retry_interval')
+    @classmethod
+    def validate_rag_init_retry_interval(cls, v: int) -> int:
+        if v < 0:
+            raise ValueError('RAG_INIT_RETRY_INTERVAL must be greater than or equal to 0')
+        return v
+
+    @field_validator('rag_max_init_retries')
+    @classmethod
+    def validate_rag_max_init_retries(cls, v: int) -> int:
+        if v < 0:
+            raise ValueError('RAG_MAX_INIT_RETRIES must be greater than or equal to 0')
         return v
     
     @model_validator(mode='after')
