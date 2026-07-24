@@ -84,6 +84,26 @@ class RevokedToken(Base):
     __table_args__ = (UniqueConstraint("jti", name="uq_revoked_tokens_jti"),)
 
 
+class RefreshToken(Base):
+    """
+    Stores refresh tokens for session restoration and token rotation.
+    Enables revocation of refresh tokens and detection of replay attacks.
+    """
+    __tablename__ = "refresh_tokens"
+
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
+    token_jti = Column(String, nullable=False, unique=True, index=True)
+    expires_at = Column(DateTime, nullable=False, index=True)
+    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+    revoked_at = Column(DateTime, nullable=True)
+    replaced_by_token_jti = Column(String, nullable=True, index=True)  # For token rotation tracking
+
+    user = relationship("User")
+
+    __table_args__ = (UniqueConstraint("token_jti", name="uq_refresh_tokens_token_jti"),)
+
+
 class Notification(Base):
     __tablename__ = "notifications"
 
