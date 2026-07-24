@@ -27,7 +27,7 @@ from backend.routers.comments_routes import router as comments_router
 from backend.routers import feedback_routes
 from backend.routers.developer_routes import router as developer_router
 from backend.auth import validate_token_or_api_key, AuthIdentity
-from backend.utils.limiter import create_rate_limiter
+from backend.utils.limiter import create_rate_limiter, SimpleRateLimiter
 from backend.utils.cleanup import start_token_cleanup_task
 from backend.services.reminder_service import run_obligation_reminders
 from backend.config import get_settings

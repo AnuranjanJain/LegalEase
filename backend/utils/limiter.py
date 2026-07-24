@@ -390,7 +390,12 @@ class SimpleRateLimiter:
     the application will fail fast to prevent security degradation.
     """
 
-    def __init__(self, calls: int, period: int, backend: BaseStorage, backend_name: str):
+    def __init__(self, calls: int, period: int, backend: BaseStorage = None, backend_name: str = None):
+        # Backward compatibility: if backend not provided, use in-memory storage
+        if backend is None:
+            backend = InMemoryStorage()
+            backend_name = "memory"
+        
         self.calls = calls
         self.period = period
         self._backend = backend
@@ -402,7 +407,11 @@ class SimpleRateLimiter:
         self._using_redis = isinstance(backend, RedisStorage)
         
         # Initialize local storage for proxy compatibility
-        self._local_storage = InMemoryStorage() if not self._using_redis else None
+        # If using in-memory backend, use the same instance for _local_storage
+        if not self._using_redis:
+            self._local_storage = backend if isinstance(backend, InMemoryStorage) else InMemoryStorage()
+        else:
+            self._local_storage = None
 
     @property
     def storage(self) -> dict:

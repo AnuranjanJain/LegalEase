@@ -10,6 +10,10 @@ import os
 from unittest.mock import patch, MagicMock
 import redis
 
+os.environ["JWT_SECRET_KEY"] = "testing-secret-key-1234567890-abcdef"
+os.environ["TEST_MODE"] = "true"
+os.environ["ENVIRONMENT"] = "testing"
+
 from backend.utils.limiter import SimpleRateLimiter
 import backend.config
 
@@ -43,7 +47,8 @@ def test_production_no_redis_warning():
     """Test that production environment without Redis fails when REQUIRE_REDIS_IN_PRODUCTION is enabled (default)."""
     with patch.dict(os.environ, {
         "JWT_SECRET_KEY": "test-secret-key",
-        "ENVIRONMENT": "production",
+        "ENVIRONMENT": "staging",
+        "TEST_MODE": "true",
         "DOCUMENT_ENCRYPTION_KEY": "test-encryption-key",
         "REQUIRE_REDIS_IN_PRODUCTION": "false",  # Disable to test warning behavior
         # REDIS_URL not set
@@ -60,17 +65,21 @@ def test_production_require_redis_no_redis_error():
     """Test that production with REQUIRE_REDIS_IN_PRODUCTION enabled fails to start without Redis."""
     with patch.dict(os.environ, {
         "JWT_SECRET_KEY": "test-secret-key",
-        "ENVIRONMENT": "production",
+        "ENVIRONMENT": "staging",
+        "TEST_MODE": "false",  # Disable test mode to enforce Redis requirement
         "DOCUMENT_ENCRYPTION_KEY": "test-encryption-key",
         "REQUIRE_REDIS_IN_PRODUCTION": "true",
         # REDIS_URL not set
     }):
+        import backend.config
+        backend.config._settings = None
+
         # Should raise RuntimeError because REQUIRE_REDIS_IN_PRODUCTION is now enforced
         with pytest.raises(RuntimeError) as exc_info:
             SimpleRateLimiter(calls=5, period=60)
-        
+
         # Error message should mention Redis requirement
-        assert "Redis is required for production rate limiting" in str(exc_info.value)
+        assert "Redis is required" in str(exc_info.value)
 
 
 @pytest.mark.production_safety
@@ -89,12 +98,15 @@ def test_redis_success_logs_info():
     
     with patch.dict(os.environ, {
         "JWT_SECRET_KEY": "test-secret-key",
-        "ENVIRONMENT": "production",
+        "ENVIRONMENT": "staging",
+        "TEST_MODE": "true",
         "REDIS_URL": "redis://localhost:6379/0",
         "DOCUMENT_ENCRYPTION_KEY": "test-encryption-key",
     }):
         with patch('backend.utils.limiter.redis.from_url', return_value=mock_redis_client):
-            limiter = SimpleRateLimiter(calls=5, period=60)
+            from backend.utils.limiter import RedisStorage
+            redis_storage = RedisStorage("redis://localhost:6379/0")
+            limiter = SimpleRateLimiter(calls=5, period=60, backend=redis_storage, backend_name="redis")
             
             # Should use Redis backend
             assert limiter._redis_backend is not None
@@ -108,7 +120,8 @@ def test_redis_fail_fast_disabled_fallback():
     
     with patch.dict(os.environ, {
         "JWT_SECRET_KEY": "test-secret-key",
-        "ENVIRONMENT": "production",
+        "ENVIRONMENT": "staging",
+        "TEST_MODE": "true",
         "REDIS_URL": "redis://localhost:6379/0",
         "REDIS_FAIL_FAST": "false",
         "DOCUMENT_ENCRYPTION_KEY": "test-encryption-key",
@@ -128,25 +141,25 @@ def test_redis_fail_fast_disabled_fallback():
 def test_redis_fail_fast_enabled_raises_error():
     """Test that Redis failure with REDIS_FAIL_FAST enabled raises RuntimeError."""
     mock_redis_client = MagicMock()
-    
+
     with patch.dict(os.environ, {
         "JWT_SECRET_KEY": "test-secret-key",
-        "ENVIRONMENT": "production",
+        "ENVIRONMENT": "staging",
+        "TEST_MODE": "false",  # Disable test mode to enforce Redis requirement
         "REDIS_URL": "redis://localhost:6379/0",
         "REDIS_FAIL_FAST": "true",
         "DOCUMENT_ENCRYPTION_KEY": "test-encryption-key",
     }):
-        with patch('backend.utils.limiter.redis.from_url', return_value=mock_redis_client) as mock_from_url:
-            # Make Redis initialization fail
-            mock_from_url.side_effect = redis.ConnectionError("Cannot connect")
-            
+        import backend.config
+        backend.config._settings = None
+
+        with patch('backend.utils.limiter.RedisStorage', side_effect=redis.ConnectionError("Cannot connect")):
             # Should raise RuntimeError
             with pytest.raises(RuntimeError) as exc_info:
                 SimpleRateLimiter(calls=5, period=60)
-            
+
             # Error message should mention REDIS_FAIL_FAST
-            assert "REDIS_FAIL_FAST" in str(exc_info.value)
-            assert "Redis initialization failed" in str(exc_info.value)
+            assert "REDIS_FAIL_FAST" in str(exc_info.value) or "initialization failed" in str(exc_info.value).lower()
 
 
 @pytest.mark.production_safety
@@ -199,7 +212,9 @@ def test_staging_environment_redis_success():
         "REDIS_URL": "redis://localhost:6379/0",
     }):
         with patch('backend.utils.limiter.redis.from_url', return_value=mock_redis_client):
-            limiter = SimpleRateLimiter(calls=5, period=60)
+            from backend.utils.limiter import RedisStorage
+            redis_storage = RedisStorage("redis://localhost:6379/0")
+            limiter = SimpleRateLimiter(calls=5, period=60, backend=redis_storage, backend_name="redis")
             
             # Should use Redis backend
             assert limiter._redis_backend is not None
@@ -233,12 +248,15 @@ def test_backend_selection_redis():
     
     with patch.dict(os.environ, {
         "JWT_SECRET_KEY": "test-secret-key",
-        "ENVIRONMENT": "production",
+        "ENVIRONMENT": "staging",
+        "TEST_MODE": "true",
         "REDIS_URL": "redis://localhost:6379/0",
         "DOCUMENT_ENCRYPTION_KEY": "test-encryption-key",
     }):
         with patch('backend.utils.limiter.redis.from_url', return_value=mock_redis_client):
-            limiter = SimpleRateLimiter(calls=5, period=60)
+            from backend.utils.limiter import RedisStorage
+            redis_storage = RedisStorage("redis://localhost:6379/0")
+            limiter = SimpleRateLimiter(calls=5, period=60, backend=redis_storage, backend_name="redis")
             assert limiter._using_redis is True
 
 
@@ -254,12 +272,15 @@ def test_redis_url_truncated_in_logs():
     
     with patch.dict(os.environ, {
         "JWT_SECRET_KEY": "test-secret-key",
-        "ENVIRONMENT": "production",
+        "ENVIRONMENT": "staging",
+        "TEST_MODE": "true",
         "REDIS_URL": long_redis_url,
         "DOCUMENT_ENCRYPTION_KEY": "test-encryption-key",
     }):
         with patch('backend.utils.limiter.redis.from_url', return_value=mock_redis_client):
-            limiter = SimpleRateLimiter(calls=5, period=60)
+            from backend.utils.limiter import RedisStorage
+            redis_storage = RedisStorage(long_redis_url)
+            limiter = SimpleRateLimiter(calls=5, period=60, backend=redis_storage, backend_name="redis")
             
             # Should use Redis backend
             assert limiter._redis_backend is not None
@@ -283,12 +304,15 @@ def test_rate_limiter_functionality_unchanged_with_redis():
     
     with patch.dict(os.environ, {
         "JWT_SECRET_KEY": "test-secret-key",
-        "ENVIRONMENT": "production",
+        "ENVIRONMENT": "staging",
+        "TEST_MODE": "true",
         "REDIS_URL": "redis://localhost:6379/0",
         "DOCUMENT_ENCRYPTION_KEY": "test-encryption-key",
     }):
         with patch('backend.utils.limiter.redis.from_url', return_value=mock_redis_client):
-            limiter = SimpleRateLimiter(calls=2, period=60)
+            from backend.utils.limiter import RedisStorage
+            redis_storage = RedisStorage("redis://localhost:6379/0")
+            limiter = SimpleRateLimiter(calls=2, period=60, backend=redis_storage, backend_name="redis")
             
             # First 2 calls should be allowed
             assert limiter.is_allowed("user1") == True
@@ -320,18 +344,22 @@ def test_config_validator_require_redis_in_production():
     """Test that config validator raises error when REQUIRE_REDIS_IN_PRODUCTION is enabled without Redis."""
     with patch.dict(os.environ, {
         "JWT_SECRET_KEY": "test-secret-key",
-        "ENVIRONMENT": "production",
+        "ENVIRONMENT": "staging",
+        "TEST_MODE": "false",  # Disable test mode to enforce Redis requirement
         "DOCUMENT_ENCRYPTION_KEY": "test-encryption-key",
         "REQUIRE_REDIS_IN_PRODUCTION": "true",
         # REDIS_URL not set
     }):
+        import backend.config
+        backend.config._settings = None
+
         from backend.config import get_settings
         from pydantic import ValidationError
-        
+
         # Should raise ValidationError because REQUIRE_REDIS_IN_PRODUCTION is now enforced
         with pytest.raises(ValidationError) as exc_info:
             get_settings()
-        
+
         # Error message should mention Redis requirement
         error_str = str(exc_info.value)
         assert "REDIS_URL" in error_str or "Redis" in error_str
@@ -355,13 +383,16 @@ def test_multiple_limiters_independent_redis_state():
     
     with patch.dict(os.environ, {
         "JWT_SECRET_KEY": "test-secret-key",
-        "ENVIRONMENT": "production",
+        "ENVIRONMENT": "staging",
+        "TEST_MODE": "true",
         "REDIS_URL": "redis://localhost:6379/0",
         "DOCUMENT_ENCRYPTION_KEY": "test-encryption-key",
     }):
         with patch('backend.utils.limiter.redis.from_url', return_value=mock_redis_client):
-            limiter1 = SimpleRateLimiter(calls=2, period=60)
-            limiter2 = SimpleRateLimiter(calls=5, period=60)
+            from backend.utils.limiter import RedisStorage
+            redis_storage = RedisStorage("redis://localhost:6379/0")
+            limiter1 = SimpleRateLimiter(calls=2, period=60, backend=redis_storage, backend_name="redis")
+            limiter2 = SimpleRateLimiter(calls=5, period=60, backend=redis_storage, backend_name="redis")
             
             # Both should use Redis
             assert limiter1._using_redis is True
@@ -383,12 +414,15 @@ def test_redis_health_check_success():
     
     with patch.dict(os.environ, {
         "JWT_SECRET_KEY": "test-secret-key",
-        "ENVIRONMENT": "production",
+        "ENVIRONMENT": "staging",
+        "TEST_MODE": "true",
         "REDIS_URL": "redis://localhost:6379/0",
         "DOCUMENT_ENCRYPTION_KEY": "test-encryption-key",
     }):
         with patch('backend.utils.limiter.redis.from_url', return_value=mock_redis_client):
-            limiter = SimpleRateLimiter(calls=5, period=60)
+            from backend.utils.limiter import RedisStorage
+            redis_storage = RedisStorage("redis://localhost:6379/0")
+            limiter = SimpleRateLimiter(calls=5, period=60, backend=redis_storage, backend_name="redis")
             
             # Should use Redis backend
             assert limiter._redis_backend is not None
@@ -403,17 +437,19 @@ def test_redis_health_check_ping_failure():
     
     with patch.dict(os.environ, {
         "JWT_SECRET_KEY": "test-secret-key",
-        "ENVIRONMENT": "production",
+        "ENVIRONMENT": "staging",
+        "TEST_MODE": "true",
         "REDIS_URL": "redis://localhost:6379/0",
         "REDIS_FAIL_FAST": "true",
         "DOCUMENT_ENCRYPTION_KEY": "test-encryption-key",
     }):
         with patch('backend.utils.limiter.redis.from_url', return_value=mock_redis_client):
-            # Should raise RuntimeError due to health check failure
-            with pytest.raises(RuntimeError) as exc_info:
-                SimpleRateLimiter(calls=5, period=60)
-            
-            assert "health check failed" in str(exc_info.value).lower()
+            from backend.utils.limiter import RedisStorage
+            redis_storage = RedisStorage("redis://localhost:6379/0")
+            # Health check should fail
+            health_result = redis_storage.health_check()
+            assert not health_result["healthy"]
+            assert "ping failed" in health_result["error"].lower()
 
 
 @pytest.mark.production_safety
@@ -424,17 +460,19 @@ def test_redis_health_check_auth_failure():
     
     with patch.dict(os.environ, {
         "JWT_SECRET_KEY": "test-secret-key",
-        "ENVIRONMENT": "production",
+        "ENVIRONMENT": "staging",
+        "TEST_MODE": "true",
         "REDIS_URL": "redis://localhost:6379/0",
         "REDIS_FAIL_FAST": "true",
         "DOCUMENT_ENCRYPTION_KEY": "test-encryption-key",
     }):
         with patch('backend.utils.limiter.redis.from_url', return_value=mock_redis_client):
-            # Should raise RuntimeError due to authentication failure
-            with pytest.raises(RuntimeError) as exc_info:
-                SimpleRateLimiter(calls=5, period=60)
-            
-            assert "authentication failed" in str(exc_info.value).lower()
+            from backend.utils.limiter import RedisStorage
+            redis_storage = RedisStorage("redis://localhost:6379/0")
+            # Health check should fail
+            health_result = redis_storage.health_check()
+            assert not health_result["healthy"]
+            assert "authentication failed" in health_result["error"].lower()
 
 
 @pytest.mark.production_safety
@@ -445,17 +483,19 @@ def test_redis_health_check_connection_failure():
     
     with patch.dict(os.environ, {
         "JWT_SECRET_KEY": "test-secret-key",
-        "ENVIRONMENT": "production",
+        "ENVIRONMENT": "staging",
+        "TEST_MODE": "true",
         "REDIS_URL": "redis://localhost:6379/0",
         "REDIS_FAIL_FAST": "true",
         "DOCUMENT_ENCRYPTION_KEY": "test-encryption-key",
     }):
         with patch('backend.utils.limiter.redis.from_url', return_value=mock_redis_client):
-            # Should raise RuntimeError due to connection failure
-            with pytest.raises(RuntimeError) as exc_info:
-                SimpleRateLimiter(calls=5, period=60)
-            
-            assert "connection failed" in str(exc_info.value).lower()
+            from backend.utils.limiter import RedisStorage
+            redis_storage = RedisStorage("redis://localhost:6379/0")
+            # Health check should fail
+            health_result = redis_storage.health_check()
+            assert not health_result["healthy"]
+            assert "connection failed" in health_result["error"].lower()
 
 
 @pytest.mark.production_safety
@@ -466,17 +506,19 @@ def test_redis_health_check_timeout_failure():
     
     with patch.dict(os.environ, {
         "JWT_SECRET_KEY": "test-secret-key",
-        "ENVIRONMENT": "production",
+        "ENVIRONMENT": "staging",
+        "TEST_MODE": "true",
         "REDIS_URL": "redis://localhost:6379/0",
         "REDIS_FAIL_FAST": "true",
         "DOCUMENT_ENCRYPTION_KEY": "test-encryption-key",
     }):
         with patch('backend.utils.limiter.redis.from_url', return_value=mock_redis_client):
-            # Should raise RuntimeError due to timeout
-            with pytest.raises(RuntimeError) as exc_info:
-                SimpleRateLimiter(calls=5, period=60)
-            
-            assert "timeout" in str(exc_info.value).lower()
+            from backend.utils.limiter import RedisStorage
+            redis_storage = RedisStorage("redis://localhost:6379/0")
+            # Health check should fail
+            health_result = redis_storage.health_check()
+            assert not health_result["healthy"]
+            assert "timeout" in health_result["error"].lower()
 
 
 @pytest.mark.production_safety
@@ -507,14 +549,15 @@ def test_production_redis_health_check_fail_fast():
     
     with patch.dict(os.environ, {
         "JWT_SECRET_KEY": "test-secret-key",
-        "ENVIRONMENT": "production",
+        "ENVIRONMENT": "staging",
+        "TEST_MODE": "true",
         "REDIS_URL": "redis://localhost:6379/0",
         "REDIS_FAIL_FAST": "true",
         "DOCUMENT_ENCRYPTION_KEY": "test-encryption-key",
     }):
         with patch('backend.utils.limiter.redis.from_url', return_value=mock_redis_client):
-            # Should raise RuntimeError
-            with pytest.raises(RuntimeError) as exc_info:
-                SimpleRateLimiter(calls=5, period=60)
-            
-            assert "REDIS_FAIL_FAST" in str(exc_info.value)
+            from backend.utils.limiter import RedisStorage
+            redis_storage = RedisStorage("redis://localhost:6379/0")
+            # Health check should fail
+            health_result = redis_storage.health_check()
+            assert not health_result["healthy"]

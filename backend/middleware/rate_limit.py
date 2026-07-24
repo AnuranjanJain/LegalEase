@@ -47,6 +47,11 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
     async def dispatch(self, request: Request, call_next):
         if request.url.path in EXCLUDED_PATHS:
             return await call_next(request)
+        
+        # Skip rate limiting in test mode
+        if settings.environment.test_mode:
+            return await call_next(request)
+        
         ip = get_client_ip(request)
         result = ip_limiter.check(ip)
         if isinstance(result, dict):

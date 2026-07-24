@@ -19,12 +19,23 @@ backend.config._settings = None
 
 # Set JWT_SECRET_KEY for tests
 os.environ["JWT_SECRET_KEY"] = "testing-secret-key-1234567890-abcdef"
+# Disable test mode for rate limiting unit tests to ensure they actually test rate limiting
+os.environ["TEST_MODE"] = "false"
+os.environ["ENVIRONMENT"] = "testing"
+os.environ["REQUIRE_REDIS_IN_PRODUCTION"] = "false"
 
 
 @pytest.fixture(autouse=True)
 def reset_limiters():
     """Reset all rate limiters before each test."""
     from importlib import reload
+    
+    # Reset settings to ensure clean state
+    backend.config._settings = None
+    
+    # Ensure test mode is disabled for these tests
+    os.environ["TEST_MODE"] = "false"
+    os.environ["ENVIRONMENT"] = "testing"
     
     # Reload module to ensure fresh state (handles test_rate_limit_time_window_reset)
     reload(auth_rate_limit)

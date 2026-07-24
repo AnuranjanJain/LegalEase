@@ -68,6 +68,10 @@ def check_login_rate_limit(request: Request, email: str) -> None:
     Raises:
         HTTPException: If rate limit is exceeded
     """
+    # Skip rate limiting in test mode
+    if settings.environment.test_mode:
+        return
+    
     ip = get_client_ip(request)
     email_lower = email.lower()
     
@@ -115,6 +119,10 @@ def check_signup_rate_limit(request: Request, email: str) -> None:
     Raises:
         HTTPException: If rate limit is exceeded
     """
+    # Skip rate limiting in test mode
+    if settings.environment.test_mode:
+        return
+    
     ip = get_client_ip(request)
     email_lower = email.lower()
     
@@ -162,6 +170,10 @@ def check_verification_rate_limit(request: Request, email: str) -> None:
     Raises:
         HTTPException: If rate limit is exceeded
     """
+    # Skip rate limiting in test mode
+    if settings.environment.test_mode:
+        return
+    
     ip = get_client_ip(request)
     email_lower = email.lower()
     

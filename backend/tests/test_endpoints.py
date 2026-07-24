@@ -64,9 +64,11 @@ async def test_health_endpoint_degraded():
     from unittest.mock import patch
 
     with patch("backend.main.ai_service") as mock_ai:
-        mock_ai.check_health.return_value = {"status": "degraded"}
+        # Mock both check_health and database check to simulate degraded state
+        mock_ai.check_health.return_value = {"status": "degraded", "details": {}}
         async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as ac:
             r = await ac.get("/health")
+            # The endpoint returns 503 when status is degraded
             assert r.status_code == 503
             data = r.json()
             assert data["detail"]["status"] == "degraded"
@@ -240,25 +242,13 @@ async def test_rate_limiting_on_chat():
     headers = {"x-api-key": "dev-token"}
     payload = {"message": "Hello"}
 
-    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as ac:
-        # First two requests should succeed (or return 503 if AI unavailable)
-        r1 = await ac.post("/chat", json=payload, headers=headers)
-        r2 = await ac.post("/chat", json=payload, headers=headers)
-        
-        # Third request should be rate limited
-        r3 = await ac.post("/chat", json=payload, headers=headers)
-        assert r3.status_code == 429
-    
-    if "RATE_LIMIT_KEY_CALLS" in os.environ:
-        del os.environ["RATE_LIMIT_KEY_CALLS"]
-    if "RATE_LIMIT_PERIOD" in os.environ:
-        del os.environ["RATE_LIMIT_PERIOD"]
-
     try:
-        async with AsyncClient(app=app, base_url="http://test") as ac:
+        async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as ac:
+            # First two requests should succeed (or return 503 if AI unavailable)
             r1 = await ac.post("/chat", json=payload, headers=headers)
             r2 = await ac.post("/chat", json=payload, headers=headers)
 
+            # Third request should be rate limited
             r3 = await ac.post("/chat", json=payload, headers=headers)
             assert r3.status_code == 429
     finally:

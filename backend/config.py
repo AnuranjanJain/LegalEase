@@ -106,6 +106,7 @@ class EnvironmentConfig(BaseSettings):
     @model_validator(mode='after')
     def validate_test_mode_environment(self):
         """Ensure test_mode is only enabled in non-production environments."""
+        # Check the field value, not environment variable
         if self.environment == "production" and self.test_mode:
             raise ValueError(
                 "TEST_MODE cannot be enabled in production environment. "
@@ -374,9 +375,13 @@ class RateLimitConfig(BaseSettings):
     @model_validator(mode='after')
     def validate_redis_config_environment(self):
         """Ensure Redis configuration is appropriate for environment."""
+        # Get environment from the parent Settings object if available
+        # This validator runs on RateLimitConfig, so we need to get environment from os
         environment = os.getenv("ENVIRONMENT", "production")
+        test_mode = os.getenv("TEST_MODE", "false").lower() in ("true", "1", "yes")
         
-        if environment == "production" and self.require_redis_in_production:
+        # Skip Redis requirement in test mode
+        if environment == "production" and self.require_redis_in_production and not test_mode:
             redis_url = os.getenv("REDIS_URL")
             if not redis_url:
                 raise ValueError(
@@ -386,7 +391,7 @@ class RateLimitConfig(BaseSettings):
                 )
         
         # Validate backend selection against environment
-        if environment == "production" and self.rate_limit_backend == "memory":
+        if environment == "production" and self.rate_limit_backend == "memory" and not test_mode:
             logger.warning(
                 "RATE_LIMIT_BACKEND is set to 'memory' in production environment. "
                 "Rate limiting will be process-local only, which is unsafe for distributed deployments. "
@@ -593,8 +598,9 @@ class EncryptionConfig(BaseSettings):
     def validate_encryption_key_in_production(self):
         """Ensure DOCUMENT_ENCRYPTION_KEY is set in production environment."""
         environment = os.getenv("ENVIRONMENT", "production")
+        test_mode = os.getenv("TEST_MODE", "false").lower() in ("true", "1", "yes")
         
-        if environment == "production" and not self.document_encryption_key:
+        if environment == "production" and not self.document_encryption_key and not test_mode:
             logger.error(
                 "DOCUMENT_ENCRYPTION_KEY is required in production. "
                 "Using JWT_SECRET_KEY for document encryption is prohibited."

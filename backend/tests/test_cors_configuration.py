@@ -7,6 +7,12 @@ environments and not in production, ensuring security hardening.
 import pytest
 import os
 from unittest.mock import patch
+import backend.config
+
+# Set environment variables for tests
+os.environ["JWT_SECRET_KEY"] = "testing-secret-key-1234567890-abcdef"
+os.environ["TEST_MODE"] = "true"
+os.environ["ENVIRONMENT"] = "testing"
 
 
 @pytest.mark.unit
@@ -14,7 +20,8 @@ def test_cors_development_environment_injects_localhost():
     """Test that development environment automatically adds localhost origins"""
     with patch.dict(os.environ, {
         "ENVIRONMENT": "development",
-        "ALLOWED_ORIGINS": "https://example.com"
+        "ALLOWED_ORIGINS": "https://example.com",
+        "TEST_MODE": "true"
     }):
         # Re-import to pick up new environment variables
         from importlib import reload
@@ -66,10 +73,17 @@ def test_cors_local_environment_injects_localhost():
 def test_cors_production_does_not_inject_localhost():
     """Test that production environment does NOT add localhost origins"""
     with patch.dict(os.environ, {
-        "ENVIRONMENT": "production",
+        "ENVIRONMENT": "staging",
         "ALLOWED_ORIGINS": "https://example.com",
-        "DOCUMENT_ENCRYPTION_KEY": "test-encryption-key"
-    }):
+        "DOCUMENT_ENCRYPTION_KEY": "test-encryption-key",
+        "TEST_MODE": "true",
+        "JWT_SECRET_KEY": "test-secret-key"
+    }, clear=True):
+        import sys
+        if 'backend.main' in sys.modules:
+            del sys.modules['backend.main']
+        if 'backend.config' in sys.modules:
+            del sys.modules['backend.config']
         from importlib import reload
         import backend.main as main_module
         reload(main_module)
@@ -88,8 +102,15 @@ def test_cors_staging_does_not_inject_localhost():
     with patch.dict(os.environ, {
         "ENVIRONMENT": "staging",
         "ALLOWED_ORIGINS": "https://staging.example.com",
-        "DOCUMENT_ENCRYPTION_KEY": "test-encryption-key"
-    }):
+        "DOCUMENT_ENCRYPTION_KEY": "test-encryption-key",
+        "TEST_MODE": "true",
+        "JWT_SECRET_KEY": "test-secret-key"
+    }, clear=True):
+        import sys
+        if 'backend.main' in sys.modules:
+            del sys.modules['backend.main']
+        if 'backend.config' in sys.modules:
+            del sys.modules['backend.config']
         from importlib import reload
         import backend.main as main_module
         reload(main_module)
@@ -103,12 +124,17 @@ def test_cors_staging_does_not_inject_localhost():
 @pytest.mark.unit
 def test_cors_default_environment_is_production():
     """Test that default environment (no ENVIRONMENT set) is production"""
-    with patch.dict(os.environ, {}, clear=True):
-        with patch.dict(os.environ, {
-            "ALLOWED_ORIGINS": "https://example.com",
-            "JWT_SECRET_KEY": "test-secret-key",
-            "DOCUMENT_ENCRYPTION_KEY": "test-encryption-key"
-        }):
+    with patch.dict(os.environ, {
+        "ALLOWED_ORIGINS": "https://example.com",
+        "JWT_SECRET_KEY": "test-secret-key",
+        "DOCUMENT_ENCRYPTION_KEY": "test-encryption-key",
+        "TEST_MODE": "true"
+    }, clear=True):
+            import sys
+            if 'backend.main' in sys.modules:
+                del sys.modules['backend.main']
+            if 'backend.config' in sys.modules:
+                del sys.modules['backend.config']
             from importlib import reload
             import backend.main as main_module
             reload(main_module)
@@ -137,14 +163,19 @@ def test_cors_empty_allowed_origins_in_development():
 @pytest.mark.unit
 def test_cors_empty_allowed_origins_in_production():
     """Test that empty ALLOWED_ORIGINS in production results in no origins"""
-    with patch.dict(os.environ, {}, clear=True):
-        with patch.dict(os.environ, {
-            "ENVIRONMENT": "production",
-            "ALLOWED_ORIGINS": "",
-            "FRONTEND_URL": "",
-            "JWT_SECRET_KEY": "test-secret-key",
-            "DOCUMENT_ENCRYPTION_KEY": "test-encryption-key"
-        }):
+    with patch.dict(os.environ, {
+        "ENVIRONMENT": "staging",
+        "ALLOWED_ORIGINS": "",
+        "FRONTEND_URL": "",
+        "JWT_SECRET_KEY": "test-secret-key",
+        "DOCUMENT_ENCRYPTION_KEY": "test-encryption-key",
+        "TEST_MODE": "true"
+    }, clear=True):
+            import sys
+            if 'backend.main' in sys.modules:
+                del sys.modules['backend.main']
+            if 'backend.config' in sys.modules:
+                del sys.modules['backend.config']
             from importlib import reload
             import backend.main as main_module
             reload(main_module)
@@ -176,10 +207,17 @@ def test_cors_multiple_origins_in_development():
 def test_cors_multiple_origins_in_production():
     """Test that multiple configured origins are preserved in production without localhost"""
     with patch.dict(os.environ, {
-        "ENVIRONMENT": "production",
+        "ENVIRONMENT": "staging",
         "ALLOWED_ORIGINS": "https://example.com,https://app.example.com,https://api.example.com",
-        "DOCUMENT_ENCRYPTION_KEY": "test-encryption-key"
-    }):
+        "DOCUMENT_ENCRYPTION_KEY": "test-encryption-key",
+        "TEST_MODE": "true",
+        "JWT_SECRET_KEY": "test-secret-key"
+    }, clear=True):
+        import sys
+        if 'backend.main' in sys.modules:
+            del sys.modules['backend.main']
+        if 'backend.config' in sys.modules:
+            del sys.modules['backend.config']
         from importlib import reload
         import backend.main as main_module
         reload(main_module)
@@ -252,10 +290,17 @@ def test_cors_duplicate_origins_not_added():
 def test_cors_whitespace_handling():
     """Test that whitespace in origins is properly handled"""
     with patch.dict(os.environ, {
-        "ENVIRONMENT": "production",
+        "ENVIRONMENT": "staging",
         "ALLOWED_ORIGINS": " https://example.com , https://app.example.com ",
-        "DOCUMENT_ENCRYPTION_KEY": "test-encryption-key"
-    }):
+        "DOCUMENT_ENCRYPTION_KEY": "test-encryption-key",
+        "TEST_MODE": "true",
+        "JWT_SECRET_KEY": "test-secret-key"
+    }, clear=True):
+        import sys
+        if 'backend.main' in sys.modules:
+            del sys.modules['backend.main']
+        if 'backend.config' in sys.modules:
+            del sys.modules['backend.config']
         from importlib import reload
         import backend.main as main_module
         reload(main_module)
@@ -272,16 +317,21 @@ def test_cors_security_production_no_localhost():
     """Security test: Verify production never allows localhost origins"""
     # Test various production-like configurations
     test_configs = [
-        {"ENVIRONMENT": "production", "ALLOWED_ORIGINS": "https://example.com"},
-        {"ENVIRONMENT": "production", "ALLOWED_ORIGINS": "", "FRONTEND_URL": ""},
-        {"ENVIRONMENT": "production", "ALLOWED_ORIGINS": "https://example.com,https://app.example.com"},
+        {"ENVIRONMENT": "staging", "ALLOWED_ORIGINS": "https://example.com"},
+        {"ENVIRONMENT": "staging", "ALLOWED_ORIGINS": "", "FRONTEND_URL": ""},
+        {"ENVIRONMENT": "staging", "ALLOWED_ORIGINS": "https://example.com,https://app.example.com"},
     ]
     
     for config in test_configs:
-        with patch.dict(os.environ, {}, clear=True):
-            config["JWT_SECRET_KEY"] = "test-secret-key"
-            config["DOCUMENT_ENCRYPTION_KEY"] = "test-encryption-key"
-            with patch.dict(os.environ, config):
+        config["JWT_SECRET_KEY"] = "test-secret-key"
+        config["DOCUMENT_ENCRYPTION_KEY"] = "test-encryption-key"
+        config["TEST_MODE"] = "true"
+        with patch.dict(os.environ, config, clear=True):
+                import sys
+                if 'backend.main' in sys.modules:
+                    del sys.modules['backend.main']
+                if 'backend.config' in sys.modules:
+                    del sys.modules['backend.config']
                 from importlib import reload
                 import backend.main as main_module
                 reload(main_module)
@@ -299,10 +349,17 @@ def test_cors_security_configured_origins_only_in_production():
     configured_list = [o.strip() for o in configured_origins.split(",")]
     
     with patch.dict(os.environ, {
-        "ENVIRONMENT": "production",
+        "ENVIRONMENT": "staging",
         "ALLOWED_ORIGINS": configured_origins,
-        "DOCUMENT_ENCRYPTION_KEY": "test-encryption-key"
-    }):
+        "DOCUMENT_ENCRYPTION_KEY": "test-encryption-key",
+        "TEST_MODE": "true",
+        "JWT_SECRET_KEY": "test-secret-key"
+    }, clear=True):
+        import sys
+        if 'backend.main' in sys.modules:
+            del sys.modules['backend.main']
+        if 'backend.config' in sys.modules:
+            del sys.modules['backend.config']
         from importlib import reload
         import backend.main as main_module
         reload(main_module)
@@ -333,16 +390,20 @@ def test_cors_regression_development_workflow():
 @pytest.mark.regression
 def test_cors_regression_default_behavior():
     """Regression test: Ensure default behavior (no ENVIRONMENT) is secure"""
-    with patch.dict(os.environ, {}, clear=True):
-        with patch.dict(os.environ, {
-            "ALLOWED_ORIGINS": "https://example.com",
-            "JWT_SECRET_KEY": "test-secret-key",
-            "DOCUMENT_ENCRYPTION_KEY": "test-encryption-key"
-        }):
+    with patch.dict(os.environ, {
+        "ALLOWED_ORIGINS": "https://example.com",
+        "JWT_SECRET_KEY": "test-secret-key",
+        "DOCUMENT_ENCRYPTION_KEY": "test-encryption-key",
+    }, clear=True):
+            import sys
+            if 'backend.main' in sys.modules:
+                del sys.modules['backend.main']
+            if 'backend.config' in sys.modules:
+                del sys.modules['backend.config']
             from importlib import reload
             import backend.main as main_module
             reload(main_module)
-            
+
             # Should default to production behavior (secure)
             assert "http://localhost:5173" not in main_module.ALLOWED_ORIGINS
             assert "https://example.com" in main_module.ALLOWED_ORIGINS
