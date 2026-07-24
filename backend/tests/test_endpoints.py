@@ -29,6 +29,8 @@ async def test_health_endpoint_ok():
         assert "details" in data
         assert isinstance(data["details"], dict)
         assert "database" in data["details"]
+        assert "rag" in data["details"]
+        assert "status" in data["details"]["rag"]
 
 
 @pytest.mark.asyncio

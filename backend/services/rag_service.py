@@ -1,5 +1,7 @@
 import logging
-from typing import List, Dict, Any, Tuple
+import time
+from dataclasses import dataclass
+from typing import List, Dict, Any, Tuple, Optional
 
 from langchain_postgres.vectorstores import PGVector
 from langchain_community.vectorstores import Chroma
@@ -9,10 +11,23 @@ import os
 import threading
 from typing import List
 from fastapi.concurrency import run_in_threadpool
+from backend.config import get_settings
 
 logger = logging.getLogger(__name__)
 
 RAG_DEPS_AVAILABLE = True
+
+
+@dataclass
+class RAGInitState:
+    state: str = "UNINITIALIZED"
+    last_attempt_at: Optional[float] = None
+    last_failure_at: Optional[float] = None
+    failure_reason: Optional[str] = None
+    exception_type: Optional[str] = None
+    failure_kind: Optional[str] = None
+    retry_count: int = 0
+    last_success_at: Optional[float] = None
 
 class RAGService:
     def __init__(self):
@@ -22,6 +37,7 @@ class RAGService:
         self.text_splitter = None
         self.is_initialized = False
         self._init_lock = threading.Lock()
+        self._init_state = RAGInitState()
 
     def _lazy_init(self):
         """
@@ -32,10 +48,48 @@ class RAGService:
         if self.is_initialized:
             return
 
+        settings = get_settings().ai
+        now = time.time()
+        retry_interval = max(int(settings.rag_init_retry_interval), 0)
+        max_init_retries = max(int(settings.rag_max_init_retries), 0)
+
+        if self._init_state.state == "FAILED" and self._init_state.failure_kind == "permanent":
+            return
+
+        if self._init_state.retry_count >= max_init_retries > 0:
+            self._init_state.state = "FAILED"
+            return
+
+        if (
+            self._init_state.state == "FAILED"
+            and self._init_state.last_failure_at is not None
+            and retry_interval > 0
+            and now - self._init_state.last_failure_at < retry_interval
+        ):
+            return
+
         with self._init_lock:
             # Double-check lock pattern
             if self.is_initialized:
                 return
+
+            if self._init_state.state == "FAILED" and self._init_state.failure_kind == "permanent":
+                return
+
+            if self._init_state.retry_count >= max_init_retries > 0:
+                self._init_state.state = "FAILED"
+                return
+
+            if (
+                self._init_state.state == "FAILED"
+                and self._init_state.last_failure_at is not None
+                and retry_interval > 0
+                and time.time() - self._init_state.last_failure_at < retry_interval
+            ):
+                return
+
+            self._init_state.state = "INITIALIZING"
+            self._init_state.last_attempt_at = time.time()
 
             try:
                 if not RAG_DEPS_AVAILABLE:
@@ -78,13 +132,84 @@ class RAGService:
                     is_separator_regex=False,
                 )
                 self.is_initialized = True
+                self._init_state.state = "READY"
+                self._init_state.last_success_at = time.time()
+                self._init_state.failure_reason = None
+                self._init_state.exception_type = None
+                self._init_state.retry_count = 0
                 logger.info("RAG Service initialized successfully.")
             except Exception as e:
-                logger.error(f"Failed to initialize RAG Service: {e}", exc_info=True)
+                self._init_state.retry_count += 1
+                self._init_state.state = "FAILED"
+                self._init_state.last_failure_at = time.time()
+                self._init_state.failure_reason = str(e)
+                self._init_state.exception_type = type(e).__name__
+                self._init_state.failure_kind = self._classify_failure(e)
+                logger.error("Failed to initialize RAG Service. Entering degraded mode.", exc_info=True)
                 self.vector_store = None
                 self.embeddings = None
                 self.text_splitter = None
-                # Do not set self.is_initialized = True to allow retries on subsequent requests
+                self.is_initialized = False
+                if self._init_state.failure_kind == "permanent":
+                    self._init_state.retry_count = max(self._init_state.retry_count, max_init_retries or self._init_state.retry_count)
+
+    def _should_attempt_recovery(self) -> bool:
+        settings = get_settings().ai
+        if not settings.rag_enable_auto_recovery:
+            return False
+        if self._init_state.failure_kind == "permanent":
+            return False
+        if self._init_state.state != "FAILED":
+            return True
+        if self._init_state.last_failure_at is None:
+            return True
+        return (time.time() - self._init_state.last_failure_at) >= max(int(settings.rag_init_retry_interval), 0)
+
+    def _classify_failure(self, exc: Exception) -> str:
+        permanent_types = (ImportError, ModuleNotFoundError, AttributeError, OSError, RuntimeError)
+        message = str(exc).lower()
+        if isinstance(exc, permanent_types):
+            return "permanent"
+        if any(token in message for token in ("dll", "missing package", "unsupported platform", "incompatible", "invalid model configuration")):
+            return "permanent"
+        return "transient"
+
+    def _ensure_initialized(self) -> bool:
+        if self.is_initialized:
+            return True
+
+        if self._init_state.state == "FAILED" and not self._should_attempt_recovery():
+            logger.debug("RAG unavailable. Initialization previously failed. Skipping initialization.")
+            return False
+
+        self._lazy_init()
+        return self.is_initialized
+
+    def check_health(self) -> Dict[str, Any]:
+        state = self._init_state.state
+        if self.is_initialized:
+            state = "READY"
+        elif state == "FAILED":
+            settings = get_settings().ai
+            if settings.rag_enable_auto_recovery and self._should_attempt_recovery():
+                state = "RETRYING"
+            else:
+                state = "DEGRADED"
+        elif state == "INITIALIZING":
+            state = "INITIALIZING"
+        else:
+            state = "UNINITIALIZED"
+
+        details = {
+            "state": state.lower(),
+            "last_initialization_attempt": self._init_state.last_attempt_at,
+            "last_failure_at": self._init_state.last_failure_at,
+            "failure_reason": self._init_state.failure_reason,
+            "exception_type": self._init_state.exception_type,
+            "failure_kind": self._init_state.failure_kind,
+            "retry_count": self._init_state.retry_count,
+        }
+        return {"status": state.lower(), "details": details}
 
     async def add_document(self, text: str, doc_id: str, file_name: str = "Document"):
         """
@@ -98,7 +223,7 @@ class RAGService:
 
     def _add_document_sync(self, text: str, doc_id: str, file_name: str = "Document"):
         if not self.is_initialized:
-            self._lazy_init()
+            self._ensure_initialized()
 
         if not self.vector_store:
             logger.warning("RAG vector store unavailable. Skipping document ingestion.")
@@ -123,7 +248,7 @@ class RAGService:
 
     def _get_context_sync(self, query: str, doc_id: str, top_k: int = 5) -> Tuple[str, List[Dict[str, Any]]]:
         if not self.is_initialized:
-            self._lazy_init()
+            self._ensure_initialized()
 
         if not self.vector_store:
             logger.warning("RAG vector store unavailable. Returning empty context.")
