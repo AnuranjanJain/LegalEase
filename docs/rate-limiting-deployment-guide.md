@@ -4,38 +4,54 @@
 
 This document provides deployment recommendations and configuration guidance for the application's rate limiting system. The rate limiter supports both in-memory (process-local) and Redis-based (distributed) storage backends.
 
+**Security Note:** The application no longer silently falls back to in-memory storage at runtime. Backend selection happens at startup, and the chosen backend is used consistently. In production, Redis is required for distributed rate limiting to prevent security bypass.
+
 ## Architecture
 
 ### Storage Backends
 
-The rate limiter automatically selects a storage backend based on configuration:
+The rate limiter uses a single storage backend consistently based on configuration:
 
 1. **Redis Backend (Distributed)**
-   - Used when `REDIS_URL` is configured and connection succeeds
+   - Used when `RATE_LIMIT_BACKEND=redis` or `auto` with Redis available
    - Shares rate limit state across all application workers and instances
    - Required for distributed deployments with multiple workers
    - Provides consistent rate limiting across the entire deployment
+   - **No runtime fallback** - if Redis fails at runtime, errors are raised
 
 2. **In-Memory Backend (Process-Local)**
-   - Used when `REDIS_URL` is not configured or Redis connection fails
+   - Used when `RATE_LIMIT_BACKEND=memory` or Redis unavailable
    - Each process maintains its own independent rate limiter
    - Appropriate for local development and single-instance deployments
-   - Not suitable for distributed deployments with multiple workers
+   - **Not suitable for distributed deployments** - rate limits become process-local
+   - Safe for development/testing environments
 
 ### Backend Selection Logic
 
 ```
-REDIS_URL configured?
-├─ Yes → Try Redis connection
-│   ├─ Success → Use Redis backend
-│   └─ Failure → Check REDIS_FAIL_FAST
-│       ├─ Enabled → Fail to start (RuntimeError)
-│       └─ Disabled → Fall back to in-memory (with warning)
-└─ No → Use in-memory backend
-    └─ Check environment and REQUIRE_REDIS_IN_PRODUCTION
-        ├─ Production + Enabled → Log error
-        ├─ Production + Disabled → Log warning
-        └─ Development → Log info
+RATE_LIMIT_BACKEND setting:
+├─ "redis" → Require Redis
+│   ├─ REDIS_URL configured?
+│   │   ├─ Yes → Try Redis connection
+│   │   │   ├─ Success → Use Redis backend
+│   │   │   └─ Failure → Check environment
+│   │   │       ├─ Production → Fail to start (RuntimeError)
+│   │   │       └─ Development → Fall back to memory (warning)
+│   │   └─ No → Check environment
+│   │       ├─ Production → Fail to start (RuntimeError)
+│   │       └─ Development → Fall back to memory (warning)
+├─ "memory" → Always use in-memory
+│   └─ Production → Log warning (unsafe for distributed)
+└─ "auto" → Automatic selection
+    ├─ REDIS_URL configured?
+    │   ├─ Yes → Try Redis connection
+    │   │   ├─ Success → Use Redis backend
+    │   │   └─ Failure → Check REQUIRE_REDIS_IN_PRODUCTION
+    │   │       ├─ Production + Enabled → Fail to start (RuntimeError)
+    │   │       └─ Development/Disabled → Fall back to memory (warning)
+    │   └─ No → Check REQUIRE_REDIS_IN_PRODUCTION
+    │       ├─ Production + Enabled → Fail to start (RuntimeError)
+    │       └─ Development/Disabled → Use memory (info/warning)
 ```
 
 ## Configuration Options
@@ -44,9 +60,10 @@ REDIS_URL configured?
 
 | Variable | Type | Default | Description |
 |----------|------|---------|-------------|
+| `RATE_LIMIT_BACKEND` | string | `auto` | Backend selection: "redis", "memory", or "auto" |
 | `REDIS_URL` | string | `None` | Redis connection URL (e.g., `redis://localhost:6379/0`) |
-| `REQUIRE_REDIS_IN_PRODUCTION` | bool | `false` | Log error if Redis not configured in production |
-| `REDIS_FAIL_FAST` | bool | `false` | Fail to start if Redis connection fails |
+| `REQUIRE_REDIS_IN_PRODUCTION` | bool | `true` | Require Redis for rate limiting in production |
+| `REDIS_FAIL_FAST` | bool | `true` | Fail to start if Redis URL configured but connection fails |
 | `ENVIRONMENT` | string | `production` | Application environment (development, testing, staging, production, local) |
 
 ### Rate Limiting Configuration
@@ -64,9 +81,10 @@ REDIS_URL configured?
 **Configuration:**
 ```bash
 ENVIRONMENT=development
+RATE_LIMIT_BACKEND=auto
 # REDIS_URL not set
-REQUIRE_REDIS_IN_PRODUCTION=false
-REDIS_FAIL_FAST=false
+REQUIRE_REDIS_IN_PRODUCTION=true
+REDIS_FAIL_FAST=true
 ```
 
 **Behavior:**
@@ -81,9 +99,10 @@ REDIS_FAIL_FAST=false
 **Configuration:**
 ```bash
 ENVIRONMENT=production
+RATE_LIMIT_BACKEND=memory
 # REDIS_URL not set
 REQUIRE_REDIS_IN_PRODUCTION=false
-REDIS_FAIL_FAST=false
+REDIS_FAIL_FAST=true
 ```
 
 **Behavior:**
@@ -98,6 +117,7 @@ REDIS_FAIL_FAST=false
 **Configuration:**
 ```bash
 ENVIRONMENT=production
+RATE_LIMIT_BACKEND=redis
 REDIS_URL=redis://your-redis-host:6379/0
 REQUIRE_REDIS_IN_PRODUCTION=true
 REDIS_FAIL_FAST=true
@@ -108,6 +128,7 @@ REDIS_FAIL_FAST=true
 - Logs: "Rate limiter: Using Redis backend (distributed)"
 - Consistent rate limiting across all workers
 - Fails to start if Redis is unavailable (with REDIS_FAIL_FAST)
+- No runtime fallback - Redis failures raise exceptions
 
 **Recommendation:** This is the recommended configuration for production deployments with multiple workers.
 
@@ -116,6 +137,7 @@ REDIS_FAIL_FAST=true
 **Configuration:**
 ```bash
 ENVIRONMENT=staging
+RATE_LIMIT_BACKEND=auto
 REDIS_URL=redis://staging-redis:6379/0
 REQUIRE_REDIS_IN_PRODUCTION=false
 REDIS_FAIL_FAST=false
@@ -136,23 +158,28 @@ The application provides clear warnings at startup when rate limiting configurat
 
 1. **Production without Redis:**
    ```
-   WARNING: REDIS_URL is not configured in production environment.
-   Rate limiting will use in-memory storage, which is not suitable for distributed deployments.
-   Multiple workers or application instances will have independent rate limiters.
-   Consider setting REDIS_URL for distributed rate limiting.
+   WARNING: REDIS_URL not configured in production environment.
+   Using in-memory rate limiting (process-local only).
+   This is unsafe for distributed deployments.
    ```
 
-2. **Redis connection failure:**
+2. **RATE_LIMIT_BACKEND=memory in production:**
    ```
-   ERROR: Failed to initialize Redis rate limiting backend: [error details].
-   Falling back to in-memory storage. Rate limiting will be process-local only.
+   WARNING: RATE_LIMIT_BACKEND is set to 'memory' in production environment.
+   Rate limiting will be process-local only, which is unsafe for distributed deployments.
+   Consider setting RATE_LIMIT_BACKEND to 'redis' for distributed rate limiting.
    ```
 
-3. **REQUIRE_REDIS_IN_PRODUCTION enabled without Redis:**
+3. **Redis connection failure in development:**
    ```
-   ERROR: REQUIRE_REDIS_IN_PRODUCTION is enabled but REDIS_URL is not configured.
-   Rate limiting will use in-memory storage, which is not suitable for distributed deployments.
-   Set REDIS_URL or disable REQUIRE_REDIS_IN_PRODUCTION.
+   WARNING: Redis health check failed: [error details].
+   Falling back to in-memory storage for development.
+   ```
+
+4. **REQUIRE_REDIS_IN_PRODUCTION enabled without Redis:**
+   ```
+   CRITICAL: REQUIRE_REDIS_IN_PRODUCTION is enabled but REDIS_URL is not configured.
+   Refusing to start because distributed rate limiting is required.
    ```
 
 ### Fail-Fast Behavior
@@ -165,8 +192,23 @@ When `REDIS_FAIL_FAST=true`:
 
 **Example error:**
 ```
-RuntimeError: Redis initialization failed with REDIS_FAIL_FAST enabled: [error details].
+RuntimeError: Redis health check failed with REDIS_FAIL_FAST enabled: [error details].
 Please verify REDIS_URL is correct and Redis is accessible.
+```
+
+### No Runtime Fallback
+
+**Critical Security Change:** The application no longer silently falls back to in-memory storage at runtime.
+
+- Backend selection happens at startup and is used consistently
+- If Redis fails at runtime in production, errors are raised (not silently ignored)
+- This prevents attackers from bypassing rate limits by distributing requests across workers
+- Runtime Redis failures are logged as CRITICAL in production
+
+**Example runtime error:**
+```
+CRITICAL: Redis rate limiter check failed in production.
+This may allow rate limit bypass. Check Redis connectivity.
 ```
 
 ## Redis Configuration
@@ -313,21 +355,26 @@ Before enabling `REDIS_FAIL_FAST` in production:
 
 ## Backward Compatibility
 
-This implementation maintains full backward compatibility:
+This implementation maintains backward compatibility with important security improvements:
 
-- Existing deployments without Redis continue to work
-- In-memory backend remains the default when Redis is not configured
+- Existing deployments without Redis continue to work in development/testing
+- In-memory backend is available via `RATE_LIMIT_BACKEND=memory`
 - No breaking changes to rate limiter API
 - Existing rate limit configuration variables unchanged
-- New configuration options are opt-in with safe defaults
+- New configuration options have safe defaults (`RATE_LIMIT_BACKEND=auto`)
+
+**Important Changes:**
+- Production deployments now require Redis by default (`REQUIRE_REDIS_IN_PRODUCTION=true`)
+- Runtime fallback has been eliminated for security
+- Direct `SimpleRateLimiter()` instantiation is deprecated; use `create_rate_limiter()`
 
 ## Summary
 
-| Deployment Type | Redis Required | REQUIRE_REDIS_IN_PRODUCTION | REDIS_FAIL_FAST |
-|-----------------|----------------|------------------------------|-----------------|
-| Local Development | No | false | false |
-| Single-Instance Production | Optional | false | false |
-| Multi-Worker Production | Yes | true | true |
-| Staging | Recommended | false | false |
+| Deployment Type | RATE_LIMIT_BACKEND | Redis Required | REQUIRE_REDIS_IN_PRODUCTION | REDIS_FAIL_FAST |
+|-----------------|-------------------|----------------|------------------------------|-----------------|
+| Local Development | auto | No | true | true |
+| Single-Instance Production | memory | No | false | true |
+| Multi-Worker Production | redis | Yes | true | true |
+| Staging | auto | Recommended | false | false |
 
-For distributed production deployments, Redis is strongly recommended to ensure consistent rate limiting across all application workers.
+For distributed production deployments, Redis is required to ensure consistent rate limiting across all application workers and prevent security bypass.

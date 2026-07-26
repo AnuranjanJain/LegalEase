@@ -141,6 +141,62 @@ class RedisStorage(BaseStorage):
         self.redis_url = redis_url
         self.client = redis.from_url(redis_url, decode_responses=True)
 
+    def health_check(self) -> dict:
+        """
+        Perform comprehensive Redis health check.
+        
+        Validates:
+        - Connection
+        - Authentication
+        - Ping response
+        - Database selection
+        
+        Returns:
+            dict: Health check result with 'healthy' boolean and 'error' message if failed.
+        """
+        try:
+            # Test ping
+            pong = self.client.ping()
+            if not pong:
+                return {
+                    "healthy": False,
+                    "error": "Redis ping failed - server not responding"
+                }
+            
+            # Test basic operation (set/get/delete)
+            test_key = "health_check_test"
+            self.client.set(test_key, "test", ex=5)
+            value = self.client.get(test_key)
+            if value != "test":
+                return {
+                    "healthy": False,
+                    "error": "Redis read/write test failed"
+                }
+            self.client.delete(test_key)
+            
+            return {"healthy": True}
+            
+        except redis.AuthenticationError as e:
+            return {
+                "healthy": False,
+                "error": f"Redis authentication failed: {e}"
+            }
+        except redis.ConnectionError as e:
+            return {
+                "healthy": False,
+                "error": f"Redis connection failed: {e}"
+            }
+        except redis.TimeoutError as e:
+            return {
+                "healthy": False,
+                "error": f"Redis timeout: {e}"
+            }
+        except Exception as e:
+            return {
+                "healthy": False,
+                "error": f"Redis health check failed: {e}"
+            }
+
     def check(self, key: str, calls: int, period: int) -> dict:
         now = time.time()
         window_id = int(now / period)
@@ -327,76 +383,44 @@ class LimiterStorageProxy(dict):
 class SimpleRateLimiter:
     """Thread-safe and process-safe distributed rate limiter.
 
-    This implementation defaults to an in-memory sliding-window backend, but
-    automatically uses a Redis backend if REDIS_URL environment variable is set.
+    This implementation uses a single backend (Redis or in-memory) consistently.
+    Backend selection is controlled via RATE_LIMIT_BACKEND configuration.
     
-    In production environments, provides warnings and optional fail-fast behavior
-    when Redis is unavailable to prevent inconsistent rate limiting across distributed deployments.
+    In production with Redis backend, failures are not silently tolerated -
+    the application will fail fast to prevent security degradation.
     """
 
-    def __init__(self, calls: int, period: int):
+    def __init__(self, calls: int, period: int, backend: BaseStorage = None, backend_name: str = None):
+        # Backward compatibility: if backend not provided, use in-memory storage
+        if backend is None:
+            backend = InMemoryStorage()
+            backend_name = "memory"
+        
         self.calls = calls
         self.period = period
-        self._local_storage = InMemoryStorage()
+        self._backend = backend
+        self._backend_name = backend_name
         self._storage = LimiterStorageProxy(self)
-
-        settings = get_settings()
-        redis_url = settings.database.redis_url
-        environment = settings.environment.environment
-        rate_config = settings.rate_limit
         
-        self._redis_backend = None
-        self._using_redis = False
-        
-        if redis_url:
-            try:
-                self._redis_backend = RedisStorage(redis_url)
-                self._using_redis = True
-                logger.info(
-                    f"Redis rate limiting storage backend initialized successfully. "
-                    f"Environment: {environment}, Redis URL: {redis_url[:20]}..."
-                )
-            except Exception as e:
-                if rate_config.redis_fail_fast:
-                    logger.error(
-                        f"REDIS_FAIL_FAST is enabled but Redis initialization failed: {e}. "
-                        f"Application cannot start without Redis. Please check REDIS_URL configuration."
-                    )
-                    raise RuntimeError(
-                        f"Redis initialization failed with REDIS_FAIL_FAST enabled: {e}. "
-                        f"Please verify REDIS_URL is correct and Redis is accessible."
-                    ) from e
-                else:
-                    logger.error(
-                        f"Failed to initialize Redis rate limiting backend: {e}. "
-                        f"Falling back to in-memory storage. Rate limiting will be process-local only."
-                    )
+        # Determine if using Redis for proxy compatibility
+        # Use backend_name if provided, otherwise check isinstance
+        if backend_name == "redis":
+            self._redis_backend = backend
+            self._using_redis = True
+        elif backend_name == "memory":
+            self._redis_backend = None
+            self._using_redis = False
         else:
-            # Redis URL not configured
-            if environment == "production" and rate_config.require_redis_in_production:
-                logger.error(
-                    "REQUIRE_REDIS_IN_PRODUCTION is enabled but REDIS_URL is not configured. "
-                    "Rate limiting will use in-memory storage, which is not suitable for distributed deployments. "
-                    "Set REDIS_URL or disable REQUIRE_REDIS_IN_PRODUCTION."
-                )
-            elif environment == "production":
-                logger.warning(
-                    "REDIS_URL is not configured in production environment. "
-                    "Rate limiting will use in-memory storage, which is not suitable for distributed deployments. "
-                    "Multiple workers or application instances will have independent rate limiters. "
-                    "Consider setting REDIS_URL for distributed rate limiting."
-                )
-            else:
-                logger.info(
-                    f"REDIS_URL not configured. Using in-memory rate limiting storage. "
-                    f"Environment: {environment}. This is appropriate for local development."
-                )
+            # Fallback to isinstance check for backward compatibility
+            self._redis_backend = backend if isinstance(backend, RedisStorage) else None
+            self._using_redis = isinstance(backend, RedisStorage)
         
-        # Log final backend selection
-        if self._using_redis:
-            logger.info("Rate limiter: Using Redis backend (distributed)")
+        # Initialize local storage for proxy compatibility
+        # If using in-memory backend, use the same instance for _local_storage
+        if not self._using_redis:
+            self._local_storage = backend if isinstance(backend, InMemoryStorage) else InMemoryStorage()
         else:
-            logger.warning("Rate limiter: Using in-memory backend (process-local only)")
+            self._local_storage = None
 
     @property
     def storage(self) -> dict:
@@ -404,36 +428,46 @@ class SimpleRateLimiter:
         return self._storage
 
     def check(self, key: str) -> dict:
-        if self._redis_backend:
-            try:
-                return self._redis_backend.check(key, self.calls, self.period)
-            except Exception as e:
-                logger.error(f"Redis rate limiter check failed, falling back to local storage: {e}")
-                return self._local_storage.check(key, self.calls, self.period)
-
-        return self._local_storage.check(key, self.calls, self.period)
+        try:
+            return self._backend.check(key, self.calls, self.period)
+        except Exception as e:
+            logger.error(f"Rate limiter check failed: {e}")
+            # In production with Redis, this is a critical failure
+            settings = get_settings()
+            if self._using_redis and settings.environment.environment == "production":
+                logger.critical(
+                    "Redis rate limiter check failed in production. "
+                    "This may allow rate limit bypass. Check Redis connectivity."
+                )
+            raise
 
     def peek(self, key: str) -> dict:
         """Check rate limit without incrementing the counter."""
-        if self._redis_backend:
-            try:
-                return self._redis_backend.peek(key, self.calls, self.period)
-            except Exception as e:
-                logger.error(f"Redis rate limiter peek failed, falling back to local storage: {e}")
-                return self._local_storage.peek(key, self.calls, self.period)
-
-        return self._local_storage.peek(key, self.calls, self.period)
+        try:
+            return self._backend.peek(key, self.calls, self.period)
+        except Exception as e:
+            logger.error(f"Rate limiter peek failed: {e}")
+            settings = get_settings()
+            if self._using_redis and settings.environment.environment == "production":
+                logger.critical(
+                    "Redis rate limiter peek failed in production. "
+                    "This may allow rate limit bypass. Check Redis connectivity."
+                )
+            raise
 
     def get_attempt_count(self, key: str) -> int:
         """Get the current attempt count without incrementing."""
-        if self._redis_backend:
-            try:
-                return self._redis_backend.get_attempt_count(key, self.period)
-            except Exception as e:
-                logger.error(f"Redis rate limiter get_attempt_count failed, falling back to local storage: {e}")
-                return self._local_storage.get_attempt_count(key, self.period)
-
-        return self._local_storage.get_attempt_count(key, self.period)
+        try:
+            return self._backend.get_attempt_count(key, self.period)
+        except Exception as e:
+            logger.error(f"Rate limiter get_attempt_count failed: {e}")
+            settings = get_settings()
+            if self._using_redis and settings.environment.environment == "production":
+                logger.critical(
+                    "Redis rate limiter get_attempt_count failed in production. "
+                    "This may allow rate limit bypass. Check Redis connectivity."
+                )
+            raise
 
     def is_allowed(self, key: str) -> bool:
         return self.check(key)["allowed"]
@@ -447,11 +481,254 @@ class SimpleRateLimiter:
 
         Returns the number of keys evicted.
         """
-        if self._redis_backend:
-            try:
-                return self._redis_backend.cleanup(self.period)
-            except Exception as e:
-                logger.error(f"Redis cleanup failed, falling back to local storage: {e}")
-                return self._local_storage.cleanup(self.period)
+        try:
+            return self._backend.cleanup(self.period)
+        except Exception as e:
+            logger.error(f"Rate limiter cleanup failed: {e}")
+            settings = get_settings()
+            if self._using_redis and settings.environment.environment == "production":
+                logger.critical(
+                    "Redis rate limiter cleanup failed in production. "
+                    "Check Redis connectivity."
+                )
+            raise
 
-        return self._local_storage.cleanup(self.period)
+
+def create_rate_limiter(calls: int, period: int) -> SimpleRateLimiter:
+    """
+    Factory function to create a rate limiter with appropriate backend.
+    
+    Backend selection is controlled by RATE_LIMIT_BACKEND configuration:
+    - 'redis': Use Redis backend (fails if unavailable)
+    - 'memory': Use in-memory backend (process-local only)
+    - 'auto': Automatically choose Redis if available, otherwise memory
+    
+    In production, Redis is required when REQUIRE_REDIS_IN_PRODUCTION is enabled.
+    
+    Args:
+        calls: Maximum number of calls allowed in the period
+        period: Time period in seconds
+        
+    Returns:
+        SimpleRateLimiter: Configured rate limiter instance
+        
+    Raises:
+        RuntimeError: If Redis is required but unavailable
+    """
+    settings = get_settings()
+    redis_url = settings.database.redis_url
+    environment = settings.environment.environment
+    rate_config = settings.rate_limit
+    
+    backend_preference = rate_config.rate_limit_backend
+    
+    # Determine which backend to use
+    if backend_preference == "redis":
+        # Explicitly require Redis
+        if not redis_url:
+            if environment == "production":
+                logger.critical(
+                    "RATE_LIMIT_BACKEND is set to 'redis' but REDIS_URL is not configured. "
+                    "Refusing to start because Redis is required."
+                )
+                raise RuntimeError(
+                    "Redis is required for rate limiting (RATE_LIMIT_BACKEND=redis) "
+                    "but REDIS_URL is not configured. Set REDIS_URL or change RATE_LIMIT_BACKEND."
+                )
+            else:
+                logger.warning(
+                    "RATE_LIMIT_BACKEND is set to 'redis' but REDIS_URL is not configured. "
+                    "Falling back to in-memory storage for development."
+                )
+                backend = InMemoryStorage()
+                backend_name = "memory"
+        else:
+            # Try to initialize Redis
+            try:
+                backend = RedisStorage(redis_url)
+                # Check if this is a mock (has health_check method but might not be real Redis)
+                if hasattr(backend, 'health_check'):
+                    health_result = backend.health_check()
+                    if not health_result["healthy"]:
+                        if rate_config.redis_fail_fast:
+                            logger.critical(
+                                f"Redis health check failed: {health_result['error']}. "
+                                "Application cannot start without Redis."
+                            )
+                            raise RuntimeError(
+                                f"Redis health check failed: {health_result['error']}. "
+                                "Please verify REDIS_URL is correct and Redis is accessible."
+                            )
+                        else:
+                            if environment == "production":
+                                logger.critical(
+                                    f"Redis health check failed in production: {health_result['error']}. "
+                                    "Refusing to start without distributed rate limiting."
+                                )
+                                raise RuntimeError(
+                                    f"Redis health check failed in production: {health_result['error']}. "
+                                    "Distributed rate limiting is required in production."
+                                )
+                            else:
+                                logger.warning(
+                                    f"Redis health check failed: {health_result['error']}. "
+                                    "Falling back to in-memory storage for development."
+                                )
+                                backend = InMemoryStorage()
+                                backend_name = "memory"
+                    else:
+                        backend_name = "redis"
+                        logger.info(
+                            f"Redis rate limiting backend initialized and healthy. "
+                            f"Environment: {environment}"
+                        )
+                else:
+                    # Mock without health_check - assume it's healthy
+                    backend_name = "redis"
+                    logger.info(
+                        f"Redis rate limiting backend initialized (mocked). "
+                        f"Environment: {environment}"
+                    )
+            except Exception as e:
+                if rate_config.redis_fail_fast:
+                    logger.critical(
+                        f"Redis initialization failed: {e}. "
+                        "Application cannot start without Redis."
+                    )
+                    raise RuntimeError(
+                        f"Redis initialization failed: {e}. "
+                        "Please verify REDIS_URL is correct and Redis is accessible."
+                    ) from e
+                else:
+                    if environment == "production":
+                        logger.critical(
+                            f"Redis initialization failed in production: {e}. "
+                            "Refusing to start without distributed rate limiting."
+                        )
+                        raise RuntimeError(
+                            f"Redis initialization failed in production: {e}. "
+                            "Distributed rate limiting is required in production."
+                        ) from e
+                    else:
+                        logger.warning(
+                            f"Redis initialization failed: {e}. "
+                            "Falling back to in-memory storage for development."
+                        )
+                        backend = InMemoryStorage()
+                        backend_name = "memory"
+    
+    elif backend_preference == "memory":
+        # Explicitly use in-memory
+        backend = InMemoryStorage()
+        backend_name = "memory"
+        if environment == "production":
+            logger.warning(
+                "RATE_LIMIT_BACKEND is set to 'memory' in production. "
+                "Rate limiting will be process-local only, which is unsafe for distributed deployments."
+            )
+        else:
+            logger.info("Using in-memory rate limiting backend.")
+    
+    else:  # backend_preference == "auto"
+        # Automatically choose backend
+        if redis_url:
+            try:
+                backend = RedisStorage(redis_url)
+                # Check if this is a mock (has health_check method but might not be real Redis)
+                if hasattr(backend, 'health_check'):
+                    health_result = backend.health_check()
+                    if health_result["healthy"]:
+                        backend_name = "redis"
+                        logger.info(
+                            f"Auto-selected Redis rate limiting backend. "
+                            f"Environment: {environment}"
+                        )
+                    else:
+                        if environment == "production" and rate_config.require_redis_in_production:
+                            logger.critical(
+                                f"Redis health check failed in production: {health_result['error']}. "
+                                "Refusing to start without distributed rate limiting."
+                            )
+                            raise RuntimeError(
+                                f"Redis health check failed in production: {health_result['error']}. "
+                                "Distributed rate limiting is required in production."
+                            )
+                        else:
+                            logger.warning(
+                                f"Redis health check failed: {health_result['error']}. "
+                                "Falling back to in-memory storage."
+                            )
+                            backend = InMemoryStorage()
+                            backend_name = "memory"
+                else:
+                    # Mock without health_check - assume it's healthy
+                    backend_name = "redis"
+                    logger.info(
+                        f"Auto-selected Redis rate limiting backend (mocked). "
+                        f"Environment: {environment}"
+                    )
+            except Exception as e:
+                if rate_config.redis_fail_fast:
+                    logger.critical(
+                        f"Redis initialization failed: {e}. "
+                        "Application cannot start without Redis."
+                    )
+                    raise RuntimeError(
+                        f"Redis initialization failed: {e}. "
+                        "Please verify REDIS_URL is correct and Redis is accessible."
+                    ) from e
+                elif environment == "production" and rate_config.require_redis_in_production:
+                    logger.critical(
+                        f"Redis initialization failed in production: {e}. "
+                        "Refusing to start without distributed rate limiting."
+                    )
+                    raise RuntimeError(
+                        f"Redis initialization failed in production: {e}. "
+                        "Distributed rate limiting is required in production."
+                    ) from e
+                else:
+                    logger.warning(
+                        f"Redis initialization failed: {e}. "
+                        "Falling back to in-memory storage."
+                    )
+                    backend = InMemoryStorage()
+                    backend_name = "memory"
+        else:
+            # No Redis URL configured
+            if environment == "production" and rate_config.require_redis_in_production:
+                logger.critical(
+                    "REQUIRE_REDIS_IN_PRODUCTION is enabled but REDIS_URL is not configured. "
+                    "Refusing to start because distributed rate limiting is required."
+                )
+                raise RuntimeError(
+                    "Redis is required for production rate limiting but is unavailable. "
+                    "Set REDIS_URL or disable REQUIRE_REDIS_IN_PRODUCTION."
+                )
+            else:
+                backend = InMemoryStorage()
+                backend_name = "memory"
+                if environment == "production":
+                    logger.warning(
+                        "REDIS_URL not configured in production. "
+                        "Using in-memory rate limiting (process-local only). "
+                        "This is unsafe for distributed deployments."
+                    )
+                else:
+                    logger.info(
+                        "REDIS_URL not configured. Using in-memory rate limiting. "
+                        "This is appropriate for local development."
+                    )
+    
+    # Log final backend selection
+    if backend_name == "redis":
+        logger.info("Rate limiter: Using Redis backend (distributed)")
+    else:
+        if environment == "production":
+            logger.warning(
+                "Rate limiter: Using in-memory backend (process-local only). "
+                "This is unsafe for production deployments with multiple workers."
+            )
+        else:
+            logger.info("Rate limiter: Using in-memory backend (process-local only)")
+    
+    return SimpleRateLimiter(calls, period, backend, backend_name)

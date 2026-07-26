@@ -11,6 +11,7 @@ does not break existing functionality:
 - API contract preservation
 """
 
+import os
 import pytest
 import io
 from unittest.mock import patch, MagicMock
@@ -18,13 +19,20 @@ from fastapi.testclient import TestClient
 
 from backend.main import app
 from backend.storage.upload_tasks import reset_upload_task_storage, get_upload_task_storage
+import backend.config
+
+# Set environment variables for tests
+os.environ["JWT_SECRET_KEY"] = "testing-secret-key-1234567890-abcdef"
+os.environ["TEST_MODE"] = "true"
 
 
 @pytest.fixture(autouse=True)
 def reset_storage():
     """Reset storage before each test."""
+    backend.config._settings = None
     reset_upload_task_storage()
     yield
+    backend.config._settings = None
     reset_upload_task_storage()
 
 
