@@ -309,6 +309,13 @@ class TestAIConfig:
         config = AIConfig()
         assert config.graceful_degradation is True
 
+    def test_rag_retry_defaults(self):
+        """Test that RAG retry controls have safe defaults."""
+        config = AIConfig()
+        assert config.rag_init_retry_interval == 300
+        assert config.rag_enable_auto_recovery is True
+        assert config.rag_max_init_retries == 3
+
     def test_stub_mode_default_false(self):
         """Test that STUB_MODE defaults to False."""
         import os

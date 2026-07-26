@@ -671,6 +671,7 @@ async def health():
     Returns HTTP 503 when the service is degraded.
     """
     health_data = ai_service.check_health()
+    rag_health = rag_service.check_health()
     uptime = time.monotonic() - _app_start_time
     timestamp = datetime.utcnow().isoformat() + "Z"
 
@@ -686,12 +687,15 @@ async def health():
         db_status = "down"
 
     status = health_data.get("status", "unknown")
+    if rag_health.get("status") in {"degraded", "failed"} and status == "ok":
+        status = "degraded"
     if db_status == "down":
         status = "degraded"
 
     details = health_data.get("details") or {}
     if not isinstance(details, dict):
         details = {"ai_details": details}
+    details["rag"] = rag_health
     details["database"] = db_status
 
     response = HealthResponse(
