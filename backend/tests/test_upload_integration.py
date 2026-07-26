@@ -199,7 +199,7 @@ class TestUploadEndpointIntegration:
             task_ids.append(response.json()["task_id"])
 
         # Verify all tasks exist. Background processing runs synchronously
-        # under TestClient, so tasks may already be done.
+        # under TestClient, so tasks may already be done or still queued.
         for task_id in task_ids:
             task = task_storage.get_task(task_id)
             assert task is not None
