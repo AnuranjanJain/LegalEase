@@ -27,7 +27,7 @@ from backend.routers.comments_routes import router as comments_router
 from backend.routers import feedback_routes
 from backend.routers.developer_routes import router as developer_router
 from backend.auth import validate_token_or_api_key, AuthIdentity
-from backend.utils.limiter import SimpleRateLimiter
+from backend.utils.limiter import create_rate_limiter, SimpleRateLimiter
 from backend.utils.cleanup import start_token_cleanup_task
 from backend.services.reminder_service import run_obligation_reminders
 from backend.config import get_settings
@@ -268,7 +268,7 @@ RATE_LIMIT_KEY_CALLS = rate_config.rate_limit_key_calls
 
 
 # Defaults: 300 requests per minute per API key
-key_limiter = SimpleRateLimiter(calls=RATE_LIMIT_KEY_CALLS, period=RATE_LIMIT_PERIOD)
+key_limiter = create_rate_limiter(calls=RATE_LIMIT_KEY_CALLS, period=RATE_LIMIT_PERIOD)
 
 
 class ChatRequest(BaseModel):
@@ -671,6 +671,7 @@ async def health():
     Returns HTTP 503 when the service is degraded.
     """
     health_data = ai_service.check_health()
+    rag_health = rag_service.check_health()
     uptime = time.monotonic() - _app_start_time
     timestamp = datetime.utcnow().isoformat() + "Z"
 
@@ -686,12 +687,15 @@ async def health():
         db_status = "down"
 
     status = health_data.get("status", "unknown")
+    if rag_health.get("status") in {"degraded", "failed"} and status == "ok":
+        status = "degraded"
     if db_status == "down":
         status = "degraded"
 
     details = health_data.get("details") or {}
     if not isinstance(details, dict):
         details = {"ai_details": details}
+    details["rag"] = rag_health
     details["database"] = db_status
 
     response = HealthResponse(

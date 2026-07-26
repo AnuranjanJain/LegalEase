@@ -133,6 +133,7 @@ class EnvironmentConfig(BaseSettings):
     @model_validator(mode='after')
     def validate_test_mode_environment(self):
         """Ensure test_mode is only enabled in non-production environments."""
+        # Check the field value, not environment variable
         if self.environment == "production" and self.test_mode:
             raise ValueError(
                 "TEST_MODE cannot be enabled in production environment. "
@@ -317,6 +318,14 @@ class RateLimitConfig(BaseSettings):
     
     model_config = ConfigDict(env_prefix="", case_sensitive=False)
     
+    rate_limit_backend: Literal["redis", "memory", "auto"] = Field(
+        default="auto",
+        description=(
+            "Rate limiting backend: 'redis' for distributed Redis, 'memory' for in-memory, "
+            "'auto' to automatically choose Redis if available, otherwise memory. "
+            "In production, 'redis' is recommended for distributed deployments."
+        )
+    )
     rate_limit_period: int = Field(
         default=60,
         description="Rate limit period in seconds."
@@ -334,11 +343,11 @@ class RateLimitConfig(BaseSettings):
         description="Trust X-Forwarded-* headers for client IP detection."
     )
     require_redis_in_production: bool = Field(
-        default=False,
+        default=True,
         description="Require Redis for rate limiting in production environment. When enabled, application will fail to start if Redis is unavailable in production."
     )
     redis_fail_fast: bool = Field(
-        default=False,
+        default=True,
         description="Fail fast if Redis initialization fails. When enabled, application will fail to start if Redis URL is configured but connection fails."
     )
     
@@ -393,16 +402,28 @@ class RateLimitConfig(BaseSettings):
     @model_validator(mode='after')
     def validate_redis_config_environment(self):
         """Ensure Redis configuration is appropriate for environment."""
+        # This validator runs on RateLimitConfig, so we need to get environment from os
         environment = os.getenv("ENVIRONMENT", "production")
+        test_mode_str = os.getenv("TEST_MODE", "false")
+        test_mode = test_mode_str.lower() in ("true", "1", "yes")
         
-        if environment == "production" and self.require_redis_in_production:
+        # Skip Redis requirement in test mode
+        if environment == "production" and self.require_redis_in_production and not test_mode:
             redis_url = os.getenv("REDIS_URL")
             if not redis_url:
-                logger.warning(
+                raise ValueError(
                     "REQUIRE_REDIS_IN_PRODUCTION is enabled but REDIS_URL is not set. "
-                    "Rate limiting will use in-memory storage, which is not suitable for distributed deployments. "
+                    "Redis is required for distributed rate limiting in production. "
                     "Set REDIS_URL or disable REQUIRE_REDIS_IN_PRODUCTION."
                 )
+        
+        # Validate backend selection against environment
+        if environment == "production" and self.rate_limit_backend == "memory" and not test_mode:
+            logger.warning(
+                "RATE_LIMIT_BACKEND is set to 'memory' in production environment. "
+                "Rate limiting will be process-local only, which is unsafe for distributed deployments. "
+                "Consider setting RATE_LIMIT_BACKEND to 'redis' for distributed rate limiting."
+            )
         
         return self
     
@@ -474,6 +495,18 @@ class AIConfig(BaseSettings):
         default=False,
         description="Enable debug information in health endpoint."
     )
+    rag_init_retry_interval: int = Field(
+        default=300,
+        description="Cooldown in seconds before retrying RAG initialization after a failure."
+    )
+    rag_enable_auto_recovery: bool = Field(
+        default=True,
+        description="Enable automatic retry of failed RAG initialization after the cooldown expires."
+    )
+    rag_max_init_retries: int = Field(
+        default=3,
+        description="Maximum number of initialization attempts before treating the RAG service as permanently degraded."
+    )
     
     @field_validator('max_model_input_chars')
     @classmethod
@@ -515,6 +548,20 @@ class AIConfig(BaseSettings):
         """Validate retry backoff factor is positive."""
         if v <= 0:
             raise ValueError('RETRY_BACKOFF_FACTOR must be greater than 0')
+        return v
+
+    @field_validator('rag_init_retry_interval')
+    @classmethod
+    def validate_rag_init_retry_interval(cls, v: int) -> int:
+        if v < 0:
+            raise ValueError('RAG_INIT_RETRY_INTERVAL must be greater than or equal to 0')
+        return v
+
+    @field_validator('rag_max_init_retries')
+    @classmethod
+    def validate_rag_max_init_retries(cls, v: int) -> int:
+        if v < 0:
+            raise ValueError('RAG_MAX_INIT_RETRIES must be greater than or equal to 0')
         return v
     
     @model_validator(mode='after')
@@ -604,8 +651,10 @@ class EncryptionConfig(BaseSettings):
     def validate_encryption_key_in_production(self):
         """Ensure DOCUMENT_ENCRYPTION_KEY is set in production environment."""
         environment = os.getenv("ENVIRONMENT", "production")
+        test_mode_str = os.getenv("TEST_MODE", "false")
+        test_mode = test_mode_str.lower() in ("true", "1", "yes")
         
-        if environment == "production" and not self.document_encryption_key:
+        if environment == "production" and not self.document_encryption_key and not test_mode:
             logger.error(
                 "DOCUMENT_ENCRYPTION_KEY is required in production. "
                 "Using JWT_SECRET_KEY for document encryption is prohibited."
