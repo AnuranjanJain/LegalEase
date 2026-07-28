@@ -49,7 +49,7 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
             return await call_next(request)
         
         # Skip rate limiting in test mode
-        if settings.environment.test_mode:
+        if get_settings().environment.test_mode:
             return await call_next(request)
         
         ip = get_client_ip(request)

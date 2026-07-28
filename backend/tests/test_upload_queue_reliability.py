@@ -9,7 +9,7 @@ from unittest.mock import patch, MagicMock
 
 import pytest
 
-from backend.services.upload_job_queue import UploadJobQueue, UploadJob, build_upload_job
+from backend.services.upload_job_queue import UploadJobQueue, build_upload_job
 
 
 class TestUploadJobQueueReliability:

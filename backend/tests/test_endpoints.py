@@ -64,18 +64,14 @@ async def test_signup_endpoint_fails_for_duplicate_email():
 @pytest.mark.asyncio
 async def test_health_endpoint_degraded():
     """Test health endpoint returns 503 when service is degraded (status in response body)"""
-    from sqlalchemy import text
+    mock_db = MagicMock()
+    mock_db.execute.side_effect = Exception("Database connection failed")
+    mock_db.close = MagicMock()
 
     with patch("backend.main.ai_service") as mock_ai, \
-         patch("backend.main.SessionLocal") as mock_session_local:
-        # Mock both check_health and database check to simulate degraded state
+         patch("backend.main.SessionLocal", return_value=mock_db), \
+         patch("backend.database.SessionLocal", return_value=mock_db):
         mock_ai.check_health.return_value = {"status": "ok", "details": {}}
-        
-        # Mock database to fail - SessionLocal() returns the mock db directly
-        mock_db = MagicMock()
-        mock_db.execute.side_effect = Exception("Database connection failed")
-        mock_db.close = MagicMock()
-        mock_session_local.return_value = mock_db
         
         async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as ac:
             r = await ac.get("/health")

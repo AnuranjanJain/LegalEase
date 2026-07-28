@@ -29,17 +29,16 @@ def isolate_test_environment():
     import os
     import backend.config as config
     
-    # Backup os.environ and settings cache
+    # Backup os.environ and ensure clean initial settings cache
     old_environ = dict(os.environ)
-    old_settings = config._settings
     config._settings = None
     
     yield
     
-    # Restore os.environ and settings cache
+    # Restore os.environ and reset settings cache
     os.environ.clear()
     os.environ.update(old_environ)
-    config._settings = old_settings
+    config._settings = None
 
 @pytest.fixture(autouse=True)
 def clear_rate_limiters():

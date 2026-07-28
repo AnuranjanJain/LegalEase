@@ -16,8 +16,6 @@ jobs:
       with:
         node-version: '20'
         cache: 'npm'
-      env:
-        FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
     - run: npm ci
     - run: npm run lint
     - run: npm run build
