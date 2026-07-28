@@ -19,6 +19,12 @@ import {
   getRedactionToken,
   PII_PATTERNS,
   PiiPattern,
+  isEmail,
+  isPhone,
+  isSSN,
+  isAadhaar,
+  isPAN,
+  redactWithFeedback,
 } from '../../utils/redaction';
 
 // ---------------------------------------------------------------------------
@@ -386,3 +392,56 @@ describe('PII_PATTERNS array', () => {
     });
   });
 });
+
+// ---------------------------------------------------------------------------
+// Explicit Regex Helper Utility Functions & Labeled Tokens (Issue #578)
+// ---------------------------------------------------------------------------
+
+describe('Regex Helper Functions (isEmail, isPhone, isSSN, isAadhaar, isPAN)', () => {
+  it('isEmail correctly identifies emails', () => {
+    expect(isEmail('user@domain.com')).toBe(true);
+    expect(isEmail('not-an-email')).toBe(false);
+  });
+
+  it('isPhone correctly identifies phone numbers', () => {
+    expect(isPhone('9876543210')).toBe(true);
+    expect(isPhone('+1 555-867-5309')).toBe(true);
+    expect(isPhone('hello world')).toBe(false);
+  });
+
+  it('isSSN correctly identifies Social Security Numbers', () => {
+    expect(isSSN('123-45-6789')).toBe(true);
+    expect(isSSN('999999')).toBe(false);
+  });
+
+  it('isAadhaar correctly identifies 12-digit Aadhaar numbers', () => {
+    expect(isAadhaar('2345 6789 0123')).toBe(true);
+    expect(isAadhaar('123')).toBe(false);
+  });
+
+  it('isPAN correctly identifies Indian PAN numbers', () => {
+    expect(isPAN('ABCDE1234F')).toBe(true);
+    expect(isPAN('INVALIDPAN')).toBe(false);
+  });
+});
+
+describe('Labeled token redaction & redactWithFeedback', () => {
+  it('redacts with labeled placeholders e.g. [REDACTED_EMAIL]', () => {
+    const text = 'Contact user@test.com or call 555-867-5309 for SSN 123-45-6789';
+    const result = redact(text, 'labeled');
+    expect(result).toContain('[REDACTED_EMAIL]');
+    expect(result).toContain('[REDACTED_PHONE]');
+    expect(result).toContain('[REDACTED_SSN]');
+  });
+
+  it('redactWithFeedback provides full match summary and count', () => {
+    const text = 'Email user1@a.com and user2@b.com, call 9876543210';
+    const feedback = redactWithFeedback(text, 'labeled');
+    expect(feedback.matchCount).toBe(3);
+    expect(feedback.matchSummary['EMAIL']).toBe(2);
+    expect(feedback.matchSummary['PHONE']).toBe(1);
+    expect(feedback.redactedText).toContain('[REDACTED_EMAIL]');
+    expect(feedback.redactedText).toContain('[REDACTED_PHONE]');
+  });
+});
+

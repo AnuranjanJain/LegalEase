@@ -11,7 +11,7 @@
  *  - Each pattern carries a human-readable `label` for future audit logging.
  */
 
-export type RedactionStyle = 'bracket' | 'block';
+export type RedactionStyle = 'bracket' | 'block' | 'labeled';
 
 export interface PiiPattern {
   /** Human-readable identifier, e.g. "EMAIL" */
@@ -98,6 +98,45 @@ export const PII_PATTERNS: PiiPattern[] = [
 ];
 
 // ---------------------------------------------------------------------------
+// Explicit Regex Helper Utility Functions (Acceptance Criteria 1)
+// ---------------------------------------------------------------------------
+
+export function isEmail(text: string): boolean {
+  const p = PII_PATTERNS.find(item => item.label === 'EMAIL')?.pattern;
+  if (!p) return false;
+  p.lastIndex = 0;
+  return new RegExp(p.source, p.flags.replace('g', '')).test(text);
+}
+
+export function isPhone(text: string): boolean {
+  const p = PII_PATTERNS.find(item => item.label === 'PHONE')?.pattern;
+  if (!p) return false;
+  p.lastIndex = 0;
+  return new RegExp(p.source, p.flags.replace('g', '')).test(text);
+}
+
+export function isSSN(text: string): boolean {
+  const p = PII_PATTERNS.find(item => item.label === 'SSN')?.pattern;
+  if (!p) return false;
+  p.lastIndex = 0;
+  return new RegExp(p.source, p.flags.replace('g', '')).test(text);
+}
+
+export function isAadhaar(text: string): boolean {
+  const p = PII_PATTERNS.find(item => item.label === 'AADHAAR')?.pattern;
+  if (!p) return false;
+  p.lastIndex = 0;
+  return new RegExp(p.source, p.flags.replace('g', '')).test(text);
+}
+
+export function isPAN(text: string): boolean {
+  const p = PII_PATTERNS.find(item => item.label === 'PAN')?.pattern;
+  if (!p) return false;
+  p.lastIndex = 0;
+  return new RegExp(p.source, p.flags.replace('g', '')).test(text);
+}
+
+// ---------------------------------------------------------------------------
 // Redaction token helpers
 // ---------------------------------------------------------------------------
 
@@ -105,10 +144,12 @@ const BRACKET_TOKEN = '[REDACTED]';
 const BLOCK_TOKEN = '██████████';
 
 /**
- * Returns the replacement token for the given style.
+ * Returns the replacement token for the given style and optional pattern label.
  */
-export function getRedactionToken(style: RedactionStyle = 'bracket'): string {
-  return style === 'block' ? BLOCK_TOKEN : BRACKET_TOKEN;
+export function getRedactionToken(style: RedactionStyle = 'bracket', label?: string): string {
+  if (style === 'block') return BLOCK_TOKEN;
+  if (style === 'labeled' && label) return `[REDACTED_${label}]`;
+  return BRACKET_TOKEN;
 }
 
 // ---------------------------------------------------------------------------
@@ -120,24 +161,27 @@ export function getRedactionToken(style: RedactionStyle = 'bracket'): string {
  *
  * @param text  - Input string (never mutated).
  * @param style - Replacement token style ('bracket' = "[REDACTED]",
- *                'block' = "██████████"). Defaults to 'bracket'.
+ *                'block' = "██████████", 'labeled' = "[REDACTED_EMAIL]"). Defaults to 'bracket'.
  * @param patterns - PII pattern list to apply. Defaults to `PII_PATTERNS`.
- *                   Pass a custom list to extend or restrict detection.
+ * @param useLabeledPlaceholders - If true, replaces each PII type with a specific placeholder e.g. [REDACTED_EMAIL].
  * @returns A new string with all detected PII replaced.
  */
 export function redact(
   text: string,
   style: RedactionStyle = 'bracket',
-  patterns: PiiPattern[] = PII_PATTERNS
+  patterns: PiiPattern[] = PII_PATTERNS,
+  useLabeledPlaceholders = false
 ): string {
   if (!text || typeof text !== 'string') return text;
 
-  const token = getRedactionToken(style);
   let result = text;
 
-  for (const { pattern } of patterns) {
+  for (const { label, pattern } of patterns) {
     // Reset lastIndex so re-used regex objects work correctly across calls
     pattern.lastIndex = 0;
+    const token = useLabeledPlaceholders || style === 'labeled'
+      ? `[REDACTED_${label}]`
+      : getRedactionToken(style, label);
     result = result.replace(pattern, token);
   }
 
@@ -178,4 +222,38 @@ export function findPiiMatches(
 
   // Sort by position in text for deterministic output
   return matches.sort((a, b) => a.index - b.index);
+}
+
+/**
+ * Redacts PII in text and returns detailed feedback metadata for UI components.
+ * Real-time visual feedback helper (Acceptance Criteria 3).
+ */
+export function redactWithFeedback(
+  text: string,
+  style: RedactionStyle = 'labeled',
+  patterns: PiiPattern[] = PII_PATTERNS
+): {
+  redactedText: string;
+  matchCount: number;
+  matches: PiiMatch[];
+  matchSummary: Record<string, number>;
+} {
+  if (!text || typeof text !== 'string') {
+    return { redactedText: '', matchCount: 0, matches: [], matchSummary: {} };
+  }
+
+  const matches = findPiiMatches(text, patterns);
+  const redactedText = redact(text, style, patterns, style === 'labeled');
+
+  const matchSummary: Record<string, number> = {};
+  matches.forEach(m => {
+    matchSummary[m.label] = (matchSummary[m.label] || 0) + 1;
+  });
+
+  return {
+    redactedText,
+    matchCount: matches.length,
+    matches,
+    matchSummary,
+  };
 }
