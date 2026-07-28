@@ -32,6 +32,7 @@ def isolate_test_environment():
     # Backup os.environ and settings cache
     old_environ = dict(os.environ)
     old_settings = config._settings
+    config._settings = None
     
     yield
     
