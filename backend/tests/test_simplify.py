@@ -91,6 +91,7 @@ async def test_simplify_endpoint_rate_limiting():
     """Test rate limiting on simplify endpoint"""
     os.environ["ALLOW_DEV"] = "true"
     os.environ["TEST_MODE"] = "false"  # Disable test mode to enable rate limiting
+    os.environ["ENVIRONMENT"] = "development"
     
     # Clear settings cache to pick up the TEST_MODE change
     import backend.config
@@ -124,4 +125,5 @@ async def test_simplify_endpoint_rate_limiting():
             del os.environ["ALLOW_DEV"]
         if "TEST_MODE" in os.environ:
             del os.environ["TEST_MODE"]
+        os.environ["ENVIRONMENT"] = "testing"
         backend.config._settings = None

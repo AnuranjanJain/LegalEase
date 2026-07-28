@@ -18,7 +18,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Update PR branches with latest main
-        uses: actions/github-script@v9
+        uses: actions/github-script@v7
         with:
           script: |
             const { owner, repo } = context.repo;
