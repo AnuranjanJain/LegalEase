@@ -242,12 +242,13 @@ async def test_upload_endpoint_unsupported_file():
 async def test_rate_limiting_on_chat():
     """Test that rate limiting works on chat endpoint"""
     import backend.main
-    from backend.utils.limiter import create_rate_limiter, SimpleRateLimiter, InMemoryStorage
+    from backend.utils.limiter import SimpleRateLimiter, InMemoryStorage
     import backend.config
 
     os.environ["ALLOW_DEV"] = "true"
     os.environ["JWT_SECRET_KEY"] = "testing-secret-key-1234567890-abcdef"
     os.environ["TEST_MODE"] = "false"  # Disable test mode to enable rate limiting
+    os.environ["ENVIRONMENT"] = "development"
     
     # Clear settings cache to pick up the TEST_MODE change
     backend.config._settings = None
@@ -274,5 +275,5 @@ async def test_rate_limiting_on_chat():
             del os.environ["ALLOW_DEV"]
         if "TEST_MODE" in os.environ:
             del os.environ["TEST_MODE"]
+        os.environ["ENVIRONMENT"] = "testing"
         backend.config._settings = None
-
