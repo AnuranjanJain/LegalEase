@@ -64,10 +64,10 @@ async def test_signup_endpoint_fails_for_duplicate_email():
 @pytest.mark.asyncio
 async def test_health_endpoint_degraded():
     """Test health endpoint returns 503 when service is degraded (status in response body)"""
-    from sqlalchemy import text
+    import backend.main as main_mod
 
-    with patch("backend.main.ai_service") as mock_ai, \
-         patch("backend.main.SessionLocal") as mock_session_local:
+    with patch.object(main_mod, "ai_service") as mock_ai, \
+         patch.object(main_mod, "SessionLocal") as mock_session_local:
         # Mock both check_health and database check to simulate degraded state
         mock_ai.check_health.return_value = {"status": "ok", "details": {}}
         
