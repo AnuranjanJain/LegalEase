@@ -52,6 +52,7 @@ jobs:
         file: ./backend/coverage.xml
         flags: backend
         name: backend-coverage
+        fail_ci_if_error: false
 
   frontend-tests:
     name: Frontend Tests
@@ -79,6 +80,7 @@ jobs:
         file: ./coverage/coverage-final.json
         flags: frontend
         name: frontend-coverage
+        fail_ci_if_error: false
 
   lint-check:
     name: Lint Check
