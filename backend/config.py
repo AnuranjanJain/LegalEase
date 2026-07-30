@@ -130,6 +130,18 @@ class EnvironmentConfig(BaseSettings):
         description="Enable test mode for controlled failure simulation."
     )
     
+    @model_validator(mode='before')
+    @classmethod
+    def default_testing_environment_if_test_mode(cls, data):
+        if isinstance(data, dict):
+            test_mode = data.get("test_mode")
+            if isinstance(test_mode, str):
+                test_mode = test_mode.lower() in ("true", "1", "yes")
+            if test_mode and "environment" not in data:
+                data = dict(data)
+                data["environment"] = "testing"
+        return data
+
     @model_validator(mode='after')
     def validate_test_mode_environment(self):
         """Ensure test_mode is only enabled in non-production environments."""

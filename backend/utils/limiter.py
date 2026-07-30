@@ -1,3 +1,4 @@
+import os
 import threading
 import time
 from typing import Dict, List
@@ -391,11 +392,19 @@ class SimpleRateLimiter:
     """
 
     def __init__(self, calls: int, period: int, backend: BaseStorage = None, backend_name: str = None):
-        # Backward compatibility: if backend not provided, use in-memory storage
+        # Backward compatibility / default initialization: if backend not provided, delegate to factory function
         if backend is None:
-            backend = InMemoryStorage()
-            backend_name = "memory"
-        
+            limiter = create_rate_limiter(calls, period)
+            self.calls = calls
+            self.period = period
+            self._backend = limiter._backend
+            self._backend_name = limiter._backend_name
+            self._redis_backend = limiter._redis_backend
+            self._using_redis = limiter._using_redis
+            self._local_storage = limiter._local_storage or InMemoryStorage()
+            self._storage = LimiterStorageProxy(self)
+            return
+
         self.calls = calls
         self.period = period
         self._backend = backend
@@ -416,11 +425,11 @@ class SimpleRateLimiter:
             self._using_redis = isinstance(backend, RedisStorage)
         
         # Initialize local storage for proxy compatibility
-        # If using in-memory backend, use the same instance for _local_storage
+        # Always maintain a non-None InMemoryStorage for fallback safety
         if not self._using_redis:
             self._local_storage = backend if isinstance(backend, InMemoryStorage) else InMemoryStorage()
         else:
-            self._local_storage = None
+            self._local_storage = InMemoryStorage()
 
     @property
     def storage(self) -> dict:
@@ -516,11 +525,23 @@ def create_rate_limiter(calls: int, period: int) -> SimpleRateLimiter:
         RuntimeError: If Redis is required but unavailable
     """
     settings = get_settings()
-    redis_url = settings.database.redis_url
-    environment = settings.environment.environment
+    redis_url = os.getenv("REDIS_URL") or settings.database.redis_url
+    environment = os.getenv("ENVIRONMENT") or settings.environment.environment
     rate_config = settings.rate_limit
     
-    backend_preference = rate_config.rate_limit_backend
+    backend_preference = os.getenv("RATE_LIMIT_BACKEND") or rate_config.rate_limit_backend
+    
+    redis_fail_fast_env = os.getenv("REDIS_FAIL_FAST")
+    if redis_fail_fast_env is not None:
+        redis_fail_fast = redis_fail_fast_env.lower() in ("true", "1", "yes")
+    else:
+        redis_fail_fast = rate_config.redis_fail_fast
+
+    require_redis_env = os.getenv("REQUIRE_REDIS_IN_PRODUCTION")
+    if require_redis_env is not None:
+        require_redis_in_production = require_redis_env.lower() in ("true", "1", "yes")
+    else:
+        require_redis_in_production = rate_config.require_redis_in_production
     
     # Determine which backend to use
     if backend_preference == "redis":
@@ -550,7 +571,7 @@ def create_rate_limiter(calls: int, period: int) -> SimpleRateLimiter:
                 if hasattr(backend, 'health_check'):
                     health_result = backend.health_check()
                     if not health_result["healthy"]:
-                        if rate_config.redis_fail_fast:
+                        if redis_fail_fast:
                             logger.critical(
                                 f"Redis health check failed: {health_result['error']}. "
                                 "Application cannot start without Redis."
@@ -590,7 +611,7 @@ def create_rate_limiter(calls: int, period: int) -> SimpleRateLimiter:
                         f"Environment: {environment}"
                     )
             except Exception as e:
-                if rate_config.redis_fail_fast:
+                if redis_fail_fast:
                     logger.critical(
                         f"Redis initialization failed: {e}. "
                         "Application cannot start without Redis."
@@ -644,7 +665,7 @@ def create_rate_limiter(calls: int, period: int) -> SimpleRateLimiter:
                             f"Environment: {environment}"
                         )
                     else:
-                        if environment == "production" and rate_config.require_redis_in_production:
+                        if environment == "production" and require_redis_in_production:
                             logger.critical(
                                 f"Redis health check failed in production: {health_result['error']}. "
                                 "Refusing to start without distributed rate limiting."
@@ -668,16 +689,7 @@ def create_rate_limiter(calls: int, period: int) -> SimpleRateLimiter:
                         f"Environment: {environment}"
                     )
             except Exception as e:
-                if rate_config.redis_fail_fast:
-                    logger.critical(
-                        f"Redis initialization failed: {e}. "
-                        "Application cannot start without Redis."
-                    )
-                    raise RuntimeError(
-                        f"Redis initialization failed: {e}. "
-                        "Please verify REDIS_URL is correct and Redis is accessible."
-                    ) from e
-                elif environment == "production" and rate_config.require_redis_in_production:
+                if environment == "production" and (require_redis_in_production or redis_fail_fast):
                     logger.critical(
                         f"Redis initialization failed in production: {e}. "
                         "Refusing to start without distributed rate limiting."
@@ -695,7 +707,7 @@ def create_rate_limiter(calls: int, period: int) -> SimpleRateLimiter:
                     backend_name = "memory"
         else:
             # No Redis URL configured
-            if environment == "production" and rate_config.require_redis_in_production:
+            if environment == "production" and require_redis_in_production:
                 logger.critical(
                     "REQUIRE_REDIS_IN_PRODUCTION is enabled but REDIS_URL is not configured. "
                     "Refusing to start because distributed rate limiting is required."

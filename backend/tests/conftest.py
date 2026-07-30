@@ -36,10 +36,10 @@ def isolate_test_environment():
     
     yield
     
-    # Restore os.environ and settings cache
+    # Restore os.environ and reset settings cache so every test starts clean
     os.environ.clear()
     os.environ.update(old_environ)
-    config._settings = old_settings
+    config._settings = None
 
 @pytest.fixture(autouse=True)
 def clear_rate_limiters():
@@ -47,6 +47,8 @@ def clear_rate_limiters():
     try:
         from backend.main import key_limiter
         key_limiter.storage.clear()
+        if hasattr(key_limiter, "_local_storage"):
+            key_limiter._local_storage.clear()
     except Exception:
         pass
 
@@ -54,6 +56,8 @@ def clear_rate_limiters():
     try:
         from backend.routers.compare_routes import _compare_limiter
         _compare_limiter.storage.clear()
+        if hasattr(_compare_limiter, "_local_storage"):
+            _compare_limiter._local_storage.clear()
     except Exception:
         pass
 
@@ -61,6 +65,8 @@ def clear_rate_limiters():
     try:
         from backend.middleware.rate_limit import ip_limiter
         ip_limiter.storage.clear()
+        if hasattr(ip_limiter, "_local_storage"):
+            ip_limiter._local_storage.clear()
     except Exception:
         pass
 
@@ -76,6 +82,8 @@ def clear_rate_limiters():
             limiter = getattr(auth_rate_limit, attr, None)
             if limiter:
                 limiter.storage.clear()
+                if hasattr(limiter, "_local_storage"):
+                    limiter._local_storage.clear()
     except Exception:
         pass
 
