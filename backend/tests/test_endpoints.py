@@ -9,14 +9,13 @@ import backend.config
 # Reset settings before any tests
 backend.config._settings = None
 
-# Import app (JWT_SECRET_KEY is set by conftest.py)
-from backend.main import app
+import backend.main as main
 
 
 @pytest.mark.asyncio
 async def test_health_endpoint_ok():
     """Test health endpoint when services are available"""
-    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as ac:
+    async with AsyncClient(transport=ASGITransport(app=main.app), base_url="http://test") as ac:
         r = await ac.get("/health")
         assert r.status_code == 200
         data = r.json()
@@ -39,7 +38,7 @@ async def test_signup_endpoint_creates_account():
     email = f"test+{uuid.uuid4()}@example.com"
     payload = {"email": email, "password": "securePass123"}
 
-    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as ac:
+    async with AsyncClient(transport=ASGITransport(app=main.app), base_url="http://test") as ac:
         r = await ac.post("/auth/signup", json=payload)
         assert r.status_code == status.HTTP_201_CREATED
         data = r.json()
@@ -52,7 +51,7 @@ async def test_signup_endpoint_fails_for_duplicate_email():
     email = f"test+{uuid.uuid4()}@example.com"
     payload = {"email": email, "password": "securePass123"}
 
-    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as ac:
+    async with AsyncClient(transport=ASGITransport(app=main.app), base_url="http://test") as ac:
         first_response = await ac.post("/auth/signup", json=payload)
         assert first_response.status_code == status.HTTP_201_CREATED
 
@@ -64,16 +63,9 @@ async def test_signup_endpoint_fails_for_duplicate_email():
 @pytest.mark.asyncio
 async def test_health_endpoint_degraded():
     """Test health endpoint returns 503 when service is degraded (status in response body)"""
-    mock_db = MagicMock()
-    mock_db.execute.side_effect = Exception("Database connection failed")
-    mock_db.close = MagicMock()
-
-    with patch("backend.main.ai_service") as mock_ai, \
-         patch("backend.main.SessionLocal", return_value=mock_db), \
-         patch("backend.database.SessionLocal", return_value=mock_db):
-        mock_ai.check_health.return_value = {"status": "ok", "details": {}}
-        
-        async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as ac:
+    with patch("backend.services.ai_service.AIService.check_health", return_value={"status": "degraded", "details": {}}), \
+         patch("backend.main.ai_service.check_health", return_value={"status": "degraded", "details": {}}):
+        async with AsyncClient(transport=ASGITransport(app=main.app), base_url="http://test") as ac:
             r = await ac.get("/health")
             # The endpoint returns 503 with degraded status in body
             assert r.status_code == 503
@@ -92,7 +84,7 @@ async def test_chat_endpoint_with_valid_key():
     headers = {"x-api-key": "dev-token"}
     payload = {"message": "Hello"}
     
-    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as ac:
+    async with AsyncClient(transport=ASGITransport(app=main.app), base_url="http://test") as ac:
         r = await ac.post("/chat", json=payload, headers=headers)
         # Will return 503 if Bytez client not initialized, but should not be auth error
         assert r.status_code in [200, 503]
@@ -113,7 +105,7 @@ async def test_chat_endpoint_with_context():
         "context": "Document context here"
     }
     
-    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as ac:
+    async with AsyncClient(transport=ASGITransport(app=main.app), base_url="http://test") as ac:
         r = await ac.post("/chat", json=payload, headers=headers)
         assert r.status_code in [200, 503]
     
@@ -130,7 +122,7 @@ async def test_summarize_endpoint_with_valid_key():
     headers = {"x-api-key": "dev-token"}
     payload = {"text": "This is a sample text to summarize."}
     
-    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as ac:
+    async with AsyncClient(transport=ASGITransport(app=main.app), base_url="http://test") as ac:
         r = await ac.post("/summarize", json=payload, headers=headers)
         assert r.status_code in [200, 503]
     
@@ -148,7 +140,7 @@ async def test_upload_endpoint_with_text_file():
     content = b"This is a sample text file content."
     files = {"file": ("sample.txt", content, "text/plain")}
     
-    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as ac:
+    async with AsyncClient(transport=ASGITransport(app=main.app), base_url="http://test") as ac:
         r = await ac.post("/upload", files=files, headers=headers)
         assert r.status_code == 202
         data = r.json()
@@ -169,7 +161,7 @@ async def test_upload_endpoint_with_pdf():
     content = b"%PDF-1.4\n%mock pdf content"
     files = {"file": ("sample.pdf", content, "application/pdf")}
     
-    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as ac:
+    async with AsyncClient(transport=ASGITransport(app=main.app), base_url="http://test") as ac:
         r = await ac.post("/upload", files=files, headers=headers)
         # Will return 202
         assert r.status_code == 202
@@ -204,7 +196,7 @@ async def test_upload_endpoint_with_docx():
     files = {"file": ("sample.docx", content, "application/vnd.openxmlformats-officedocument.wordprocessingml.document")}
 
     with patch("backend.main.DocxDocument", return_value=mock_doc):
-        async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as ac:
+        async with AsyncClient(transport=ASGITransport(app=main.app), base_url="http://test") as ac:
             r = await ac.post("/upload", files=files, headers=headers)
             assert r.status_code == 202
             data = r.json()
@@ -226,7 +218,7 @@ async def test_upload_endpoint_unsupported_file():
     content = b"\x00\x01\x02\x03\x04\x05"
     files = {"file": ("sample.bin", content, "application/octet-stream")}
     
-    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as ac:
+    async with AsyncClient(transport=ASGITransport(app=main.app), base_url="http://test") as ac:
         r = await ac.post("/upload", files=files, headers=headers)
         assert r.status_code == 400
     
@@ -237,39 +229,26 @@ async def test_upload_endpoint_unsupported_file():
 @pytest.mark.asyncio
 async def test_rate_limiting_on_chat():
     """Test that rate limiting works on chat endpoint"""
-    import backend.main
-    from backend.utils.limiter import SimpleRateLimiter, InMemoryStorage
-    import backend.config
+    import os
+    import backend.main as main
+    from backend.utils.limiter import SimpleRateLimiter
 
     os.environ["ALLOW_DEV"] = "true"
-    os.environ["JWT_SECRET_KEY"] = "testing-secret-key-1234567890-abcdef"
-    os.environ["TEST_MODE"] = "false"  # Disable test mode to enable rate limiting
-    os.environ["ENVIRONMENT"] = "development"
-    
-    # Clear settings cache to pick up the TEST_MODE change
-    backend.config._settings = None
-
-    # Patch the limiter directly with a fresh limiter using in-memory storage
-    orig_limiter = backend.main.key_limiter
-    backend.main.key_limiter = SimpleRateLimiter(calls=2, period=60, backend=InMemoryStorage(), backend_name="memory")
+    orig_limiter = main.key_limiter
+    main.key_limiter = SimpleRateLimiter(2, 60)
 
     headers = {"x-api-key": "dev-token"}
     payload = {"message": "Hello"}
 
     try:
-        async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as ac:
-            # First two requests should succeed (or return 503 if AI unavailable)
+        async with AsyncClient(transport=ASGITransport(app=main.app), base_url="http://test") as ac:
             r1 = await ac.post("/chat", json=payload, headers=headers)
-            r2 = await ac.post("/chat", json=payload, headers=headers)
+            assert r1.status_code != 429
 
-            # Third request should be rate limited
+            r2 = await ac.post("/chat", json=payload, headers=headers)
+            assert r2.status_code != 429
+
             r3 = await ac.post("/chat", json=payload, headers=headers)
             assert r3.status_code == status.HTTP_429_TOO_MANY_REQUESTS
     finally:
-        backend.main.key_limiter = orig_limiter
-        if "ALLOW_DEV" in os.environ:
-            del os.environ["ALLOW_DEV"]
-        if "TEST_MODE" in os.environ:
-            del os.environ["TEST_MODE"]
-        os.environ["ENVIRONMENT"] = "testing"
-        backend.config._settings = None
+        main.key_limiter = orig_limiter

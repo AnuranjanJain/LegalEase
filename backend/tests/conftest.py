@@ -14,7 +14,10 @@ os.environ["ALLOW_DEV"] = "true"
 os.environ["STUB_MODE"] = "true"
 os.environ["MAX_MODEL_INPUT_CHARS"] = "15000"
 os.environ["DATABASE_URL"] = "sqlite:///./test_legalease.db"
+os.environ["HF_HUB_OFFLINE"] = "1"
+os.environ["TRANSFORMERS_OFFLINE"] = "1"
 os.environ["ENVIRONMENT"] = "testing"
+os.environ["TEST_MODE"] = "true"
 
 ROOT = Path(__file__).resolve().parents[2]
 root_path = str(ROOT)
@@ -42,10 +45,11 @@ def isolate_test_environment():
 
 @pytest.fixture(autouse=True)
 def clear_rate_limiters():
-    # Clear main key limiter
     try:
-        from backend.main import key_limiter
-        key_limiter.storage.clear()
+        import backend.main as main_mod
+        limiter = getattr(main_mod, "key_limiter", None)
+        if limiter and hasattr(limiter, "storage") and callable(getattr(limiter.storage, "clear", None)):
+            limiter.storage.clear()
     except Exception:
         pass
 
