@@ -1,8 +1,9 @@
+import os
+import ipaddress
 from fastapi import Request
 from fastapi.responses import JSONResponse
 from starlette.middleware.base import BaseHTTPMiddleware
 from backend.utils.limiter import create_rate_limiter
-import ipaddress
 from backend.config import get_settings
 
 # Get configuration from centralized settings
@@ -49,7 +50,13 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
             return await call_next(request)
         
         # Skip rate limiting in test mode
-        if get_settings().environment.test_mode:
+        test_mode_env = os.getenv("TEST_MODE")
+        if test_mode_env is not None:
+            is_test_mode = test_mode_env.lower() in ("true", "1", "yes")
+        else:
+            is_test_mode = get_settings().environment.test_mode
+            
+        if is_test_mode:
             return await call_next(request)
         
         ip = get_client_ip(request)

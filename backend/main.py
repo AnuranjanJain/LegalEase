@@ -679,17 +679,30 @@ async def health():
     db_status = "ok"
     try:
         from sqlalchemy import text
-        db = SessionLocal()
+        from backend.database import SessionLocal as HealthSessionLocal
+        db = HealthSessionLocal()
         db.execute(text("SELECT 1"))
         db.close()
     except Exception as e:
         logger.error(f"Database health check failed: {e}")
         db_status = "down"
 
+    redis_status = "ok"
+    if hasattr(key_limiter, "_redis_backend") and key_limiter._redis_backend:
+        try:
+            h_res = key_limiter._redis_backend.health_check()
+            if not h_res.get("healthy", True):
+                redis_status = "degraded"
+        except Exception as e:
+            logger.error(f"Redis health check failed: {e}")
+            redis_status = "down"
+
     status = health_data.get("status", "unknown")
     if rag_health.get("status") in {"degraded", "failed"} and status == "ok":
         status = "degraded"
     if db_status == "down":
+        status = "degraded"
+    if redis_status in ("degraded", "down"):
         status = "degraded"
 
     details = health_data.get("details") or {}
@@ -697,6 +710,7 @@ async def health():
         details = {"ai_details": details}
     details["rag"] = rag_health
     details["database"] = db_status
+    details["redis"] = redis_status
 
     response = HealthResponse(
         status=status,

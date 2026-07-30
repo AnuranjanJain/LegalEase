@@ -15,6 +15,19 @@ os.environ["TEST_MODE"] = "true"
 os.environ["ENVIRONMENT"] = "testing"
 
 
+@pytest.fixture(autouse=True, scope="module")
+def restore_backend_main_after_cors_tests():
+    yield
+    os.environ["JWT_SECRET_KEY"] = "testing-secret-key-1234567890-abcdef"
+    os.environ["TEST_MODE"] = "true"
+    os.environ["ENVIRONMENT"] = "testing"
+    import backend.config
+    backend.config._settings = None
+    import backend.main as main_module
+    from importlib import reload
+    reload(main_module)
+
+
 @pytest.mark.unit
 def test_cors_development_environment_injects_localhost():
     """Test that development environment automatically adds localhost origins"""
@@ -420,11 +433,8 @@ def test_cors_default_environment_is_production():
         "DOCUMENT_ENCRYPTION_KEY": "test-encryption-key",
         "REQUIRE_REDIS_IN_PRODUCTION": "false"
     }, clear=True):
-            import sys
-            if 'backend.main' in sys.modules:
-                del sys.modules['backend.main']
-            if 'backend.config' in sys.modules:
-                del sys.modules['backend.config']
+            import backend.config
+            backend.config._settings = None
             from importlib import reload
             import backend.main as main_module
             reload(main_module)
