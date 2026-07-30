@@ -721,6 +721,34 @@ def get_settings() -> Settings:
     """
     global _settings
     
+    if _settings is not None:
+        env_in_os = os.getenv("ENVIRONMENT")
+        redis_in_os = os.getenv("REDIS_URL")
+        backend_in_os = os.getenv("RATE_LIMIT_BACKEND")
+        fail_fast_in_os = os.getenv("REDIS_FAIL_FAST")
+        req_redis_in_os = os.getenv("REQUIRE_REDIS_IN_PRODUCTION")
+        test_in_os = os.getenv("TEST_MODE")
+        jwt_in_os = os.getenv("JWT_SECRET_KEY")
+
+        cached_env = _settings.environment.environment
+        cached_redis = _settings.database.redis_url
+        cached_backend = _settings.rate_limit.rate_limit_backend
+        cached_fail_fast = "true" if _settings.rate_limit.redis_fail_fast else "false"
+        cached_req_redis = "true" if _settings.rate_limit.require_redis_in_production else "false"
+        cached_test = "true" if _settings.environment.test_mode else "false"
+        cached_jwt = _settings.security.jwt_secret_key
+
+        if (
+            (env_in_os is not None and env_in_os.lower() != cached_env.lower())
+            or (redis_in_os != cached_redis)
+            or (backend_in_os is not None and backend_in_os.lower() != cached_backend.lower())
+            or (fail_fast_in_os is not None and fail_fast_in_os.lower() != cached_fail_fast)
+            or (req_redis_in_os is not None and req_redis_in_os.lower() != cached_req_redis)
+            or (test_in_os is not None and test_in_os.lower() != cached_test)
+            or (jwt_in_os is not None and jwt_in_os != cached_jwt)
+        ):
+            _settings = None
+
     if _settings is None:
         try:
             _settings = Settings()

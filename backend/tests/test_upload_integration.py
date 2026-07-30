@@ -288,6 +288,7 @@ class TestUploadWithRedisStorage:
         """Test upload endpoint with Redis storage backend."""
         with patch.dict('os.environ', {
             'JWT_SECRET_KEY': 'test-secret',
+            'DOCUMENT_ENCRYPTION_KEY': 'test-document-encryption-key-12345',
             'REDIS_URL': 'redis://localhost:6379/0',
             'ENVIRONMENT': 'production',
             'ALLOW_DEV': 'true',
@@ -324,6 +325,7 @@ class TestUploadWithRedisStorage:
         """Test status endpoint with Redis storage backend."""
         with patch.dict('os.environ', {
             'JWT_SECRET_KEY': 'test-secret',
+            'DOCUMENT_ENCRYPTION_KEY': 'test-document-encryption-key-12345',
             'REDIS_URL': 'redis://localhost:6379/0',
             'ENVIRONMENT': 'production',
             'ALLOW_DEV': 'true',

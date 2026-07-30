@@ -114,6 +114,7 @@ def test_production_requires_dedicated_encryption_key(monkeypatch):
     monkeypatch.delenv("DOCUMENT_ENCRYPTION_KEY", raising=False)
     monkeypatch.setenv("ENVIRONMENT", "production")
     monkeypatch.setenv("TEST_MODE", "false")
+    monkeypatch.setenv("REQUIRE_REDIS_IN_PRODUCTION", "false")
     config._settings = None
     encryption.reset_fernet_cache()
 
