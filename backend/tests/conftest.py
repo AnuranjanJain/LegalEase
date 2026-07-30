@@ -14,7 +14,10 @@ os.environ["ALLOW_DEV"] = "true"
 os.environ["STUB_MODE"] = "true"
 os.environ["MAX_MODEL_INPUT_CHARS"] = "15000"
 os.environ["DATABASE_URL"] = "sqlite:///./test_legalease.db"
+os.environ["HF_HUB_OFFLINE"] = "1"
+os.environ["TRANSFORMERS_OFFLINE"] = "1"
 os.environ["ENVIRONMENT"] = "testing"
+os.environ["TEST_MODE"] = "true"
 
 ROOT = Path(__file__).resolve().parents[2]
 root_path = str(ROOT)
@@ -29,9 +32,8 @@ def isolate_test_environment():
     import os
     import backend.config as config
     
-    # Backup os.environ and settings cache
+    # Backup os.environ and ensure clean initial settings cache
     old_environ = dict(os.environ)
-    old_settings = config._settings
     config._settings = None
     
     yield
@@ -43,12 +45,13 @@ def isolate_test_environment():
 
 @pytest.fixture(autouse=True)
 def clear_rate_limiters():
-    # Clear main key limiter
     try:
-        from backend.main import key_limiter
-        key_limiter.storage.clear()
-        if hasattr(key_limiter, "_local_storage"):
-            key_limiter._local_storage.clear()
+        import backend.main as main_mod
+        limiter = getattr(main_mod, "key_limiter", None)
+        if limiter and hasattr(limiter, "storage") and callable(getattr(limiter.storage, "clear", None)):
+            limiter.storage.clear()
+        if limiter and hasattr(limiter, "_local_storage") and callable(getattr(limiter._local_storage, "clear", None)):
+            limiter._local_storage.clear()
     except Exception:
         pass
 

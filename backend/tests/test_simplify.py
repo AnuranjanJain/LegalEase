@@ -3,10 +3,9 @@ import pytest
 from unittest.mock import patch
 from fastapi import status
 from httpx import AsyncClient, ASGITransport
-import backend.main as main_module
 from backend.core.exceptions import ProviderError, TimeoutError
-from backend.auth import AuthIdentity
 import backend.config
+import backend.main as main
 
 # Reset settings before any tests
 backend.config._settings = None
@@ -24,7 +23,7 @@ async def test_simplify_endpoint_success():
     os.environ["ALLOW_DEV"] = "true"
     os.environ["STUB_MODE"] = "true"
 
-    async with AsyncClient(transport=ASGITransport(app=main_module.app), base_url="http://test") as ac:
+    async with AsyncClient(transport=ASGITransport(app=main.app), base_url="http://test") as ac:
         r = await ac.post("/api/simplify", json=payload, headers=headers)
         assert r.status_code == status.HTTP_200_OK
         data = r.json()
@@ -44,7 +43,7 @@ async def test_simplify_endpoint_validation_errors():
     headers = {"x-api-key": "dev-token"}
     os.environ["ALLOW_DEV"] = "true"
 
-    async with AsyncClient(transport=ASGITransport(app=main_module.app), base_url="http://test") as ac:
+    async with AsyncClient(transport=ASGITransport(app=main.app), base_url="http://test") as ac:
         # Empty text
         r = await ac.post("/api/simplify", json={"text": ""}, headers=headers)
         assert r.status_code == status.HTTP_400_BAD_REQUEST
@@ -77,7 +76,7 @@ async def test_simplify_endpoint_ai_failure():
     # Mock simplify_clause to raise ProviderError (graceful_degradation = False)
     with patch("backend.services.ai_service.ai_service.simplify_clause", side_effect=ProviderError("Connection failed")), \
          patch("backend.services.ai_service.ai_service.graceful_degradation", False):
-        async with AsyncClient(transport=ASGITransport(app=main_module.app), base_url="http://test") as ac:
+        async with AsyncClient(transport=ASGITransport(app=main.app), base_url="http://test") as ac:
             r = await ac.post("/api/simplify", json=payload, headers=headers)
             assert r.status_code == status.HTTP_502_BAD_GATEWAY
             assert r.json()["error"] == "provider_error"
@@ -89,6 +88,11 @@ async def test_simplify_endpoint_ai_failure():
 @pytest.mark.asyncio
 async def test_simplify_endpoint_rate_limiting():
     """Test rate limiting on simplify endpoint"""
+    import os
+    import backend.main as main
+    from backend.utils.limiter import SimpleRateLimiter
+
+    os.environ["ALLOW_DEV"] = "true"
     os.environ["ALLOW_DEV"] = "true"
     os.environ["TEST_MODE"] = "false"  # Disable test mode to enable rate limiting
     os.environ["ENVIRONMENT"] = "development"
@@ -109,11 +113,9 @@ async def test_simplify_endpoint_rate_limiting():
     import backend.middleware.rate_limit as rate_limit_mod
     ip_fresh_limiter = SimpleRateLimiter(calls=100, period=60, backend=InMemoryStorage(), backend_name="memory")
 
-    import sys
-    main_mod = sys.modules["backend.main"]
-    with patch.object(main_mod, "key_limiter", test_limiter), \
+    with patch.object(main, "key_limiter", test_limiter), \
          patch.object(rate_limit_mod, "ip_limiter", ip_fresh_limiter):
-        async with AsyncClient(transport=ASGITransport(app=main_mod.app), base_url="http://test") as ac:
+        async with AsyncClient(transport=ASGITransport(app=main.app), base_url="http://test") as ac:
             # First call should be allowed (will respond with 200 or 503 depending on Bytez client)
             r1 = await ac.post("/api/simplify", json=payload, headers=headers)
             assert r1.status_code in [200, 503]
@@ -121,3 +123,10 @@ async def test_simplify_endpoint_rate_limiting():
             # Second call must be rate-limited (429)
             r2 = await ac.post("/api/simplify", json=payload, headers=headers)
             assert r2.status_code == status.HTTP_429_TOO_MANY_REQUESTS
+
+    if "ALLOW_DEV" in os.environ:
+        del os.environ["ALLOW_DEV"]
+    if "TEST_MODE" in os.environ:
+        del os.environ["TEST_MODE"]
+    os.environ["ENVIRONMENT"] = "testing"
+    backend.config._settings = None

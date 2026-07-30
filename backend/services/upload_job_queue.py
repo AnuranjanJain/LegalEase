@@ -3,7 +3,15 @@ Durable upload job queue and worker helpers.
 
 The API enqueues upload jobs in Redis and returns immediately. A separate
 worker process can dequeue and process the jobs independently of the request
-lifecycle, which makes the upload pipeline safe for serverless deployments.
+lifecycle, which makes the upload pipeline safe for serverless and multi-worker deployments.
+
+Production Deployment & Fail-Fast Policy:
+- In production / staging, Redis is mandatory for job durability, multi-worker coordination,
+  and process restart resilience. Falling back to an in-memory queue in production is strictly
+  forbidden as it leads to silent job loss and process isolation issues.
+- If Redis is unavailable or REDIS_URL is missing in production, UploadJobQueue raises
+  a RuntimeError immediately on startup.
+- Development, testing, and local environments allow an explicit in-memory fallback with warning logs.
 """
 
 from __future__ import annotations
@@ -28,6 +36,49 @@ SCHEDULED_ZSET_KEY = "upload_jobs:scheduled"
 DEAD_LETTER_KEY = "upload_jobs:dead"
 DEFAULT_MAX_RETRIES = 3
 DEFAULT_RETRY_BACKOFF_SECONDS = 2
+ALLOWED_IN_MEMORY_ENVIRONMENTS = {"development", "testing", "local"}
+
+
+def get_current_environment(explicit_env: Optional[str] = None) -> str:
+    """Retrieve the current environment name.
+
+    Prefers explicit parameter if provided, otherwise checks project configuration system
+    (backend.config.get_settings()), and falls back to os.getenv("ENVIRONMENT").
+    """
+    if explicit_env and explicit_env.strip():
+        return explicit_env.strip().lower()
+
+    try:
+        from backend.config import get_settings
+        settings = get_settings()
+        if hasattr(settings, "environment") and hasattr(settings.environment, "environment"):
+            return settings.environment.environment.lower()
+    except Exception:
+        pass
+
+    env = os.getenv("ENVIRONMENT", "production")
+    return env.strip().lower()
+
+
+def get_redis_url(explicit_url: Optional[str] = None) -> Optional[str]:
+    """Retrieve the configured Redis URL.
+
+    Prefers explicit parameter if provided, otherwise checks project configuration system
+    (backend.config.get_settings()), and falls back to os.getenv("REDIS_URL").
+    """
+    if explicit_url and explicit_url.strip():
+        return explicit_url.strip()
+
+    try:
+        from backend.config import get_settings
+        settings = get_settings()
+        if hasattr(settings, "database") and getattr(settings.database, "redis_url", None):
+            return settings.database.redis_url
+    except Exception:
+        pass
+
+    url = os.getenv("REDIS_URL")
+    return url.strip() if url else None
 
 
 @dataclass
@@ -56,23 +107,77 @@ class UploadJob:
 
 
 class UploadJobQueue:
-    def __init__(self, redis_url: Optional[str] = None):
-        # Keep queue initialization lightweight: upload handling should not
-        # force the full application settings tree to load, because the
-        # settings model includes production-only validation unrelated to the
-        # queue itself.
-        self.redis_url = redis_url or os.getenv("REDIS_URL")
+    """Queue for managing background document upload processing jobs.
+
+    In production or staging environments, Redis is strictly required for multi-worker
+    coordination, durability across process restarts, and reliable job execution.
+    If Redis is unconfigured or unreachable in production, initialization fails fast
+    with a critical log and a RuntimeError.
+
+    In non-production environments (development, testing, local), if Redis is unavailable
+    or unconfigured, the queue logs an explicit warning and falls back to process-local memory.
+    """
+
+    def __init__(
+        self,
+        redis_url: Optional[str] = None,
+        environment: Optional[str] = None,
+    ):
+        self.environment = get_current_environment(environment)
+        self.redis_url = get_redis_url(redis_url)
         self._client = None
         self._in_memory: list[str] = []
         self._scheduled: list[tuple[float, str]] = []
         self._dead_letters: list[str] = []
+
+        is_non_prod = self.environment in ALLOWED_IN_MEMORY_ENVIRONMENTS
+
         if self.redis_url:
             try:
                 self._client = redis.from_url(self.redis_url, decode_responses=True)
                 self._client.ping()
+                logger.info(
+                    f"UploadJobQueue initialized successfully using Redis backend "
+                    f"[environment='{self.environment}', redis_url_configured=True]"
+                )
             except Exception as exc:
-                logger.warning(f"Falling back to in-memory upload queue: {exc}")
+                fallback_reason = f"Redis connection failed: {exc}"
+                if is_non_prod:
+                    logger.warning(
+                        f"Redis unavailable ({fallback_reason}). "
+                        f"Using in-memory upload queue ({self.environment} mode only). Jobs are not durable. "
+                        f"[environment='{self.environment}', redis_url_configured=True]"
+                    )
+                    self._client = None
+                else:
+                    logger.critical(
+                        f"Failed to connect to Redis at '{self.redis_url}' in '{self.environment}' environment: {exc}. "
+                        f"UploadJobQueue cannot operate safely without Redis."
+                    )
+                    raise RuntimeError(
+                        f"Redis connection failed for UploadJobQueue in environment '{self.environment}' (URL: '{self.redis_url}'): {exc}. "
+                        f"UploadJobQueue cannot operate safely in production using an in-memory fallback. "
+                        f"Please verify REDIS_URL environment variable is correct and Redis server is accessible."
+                    ) from exc
+        else:
+            fallback_reason = "REDIS_URL environment variable is not configured"
+            if is_non_prod:
+                logger.warning(
+                    f"Redis unavailable ({fallback_reason}). "
+                    f"Using in-memory upload queue ({self.environment} mode only). Jobs are not durable. "
+                    f"[environment='{self.environment}', redis_url_configured=False]"
+                )
                 self._client = None
+            else:
+                logger.critical(
+                    f"REDIS_URL is not configured in '{self.environment}' environment. "
+                    f"UploadJobQueue cannot operate safely without Redis."
+                )
+                raise RuntimeError(
+                    f"REDIS_URL environment variable is required for UploadJobQueue in environment '{self.environment}'. "
+                    f"UploadJobQueue cannot operate safely in production using an in-memory queue. "
+                    f"Please set REDIS_URL (e.g., redis://localhost:6379/0) in your production environment configuration."
+                )
 
     @property
     def using_redis(self) -> bool:
