@@ -267,8 +267,36 @@ def process_upload_job(job: UploadJob) -> None:
     raise RuntimeError("Use process_upload_job_async()")
 
 
-async def process_upload_job_async(job: UploadJob) -> None:
-    """Process one upload job and update task state."""
+def _cleanup_temp_file(job: UploadJob) -> None:
+    """
+    Delete the job's temp file if it still exists. Safe to call more than
+    once (e.g. once from a no-retry caller's default cleanup, and never
+    again) since it no-ops if the file is already gone.
+    """
+    try:
+        if os.path.exists(job.file_path):
+            os.unlink(job.file_path)
+            logger.info(f"[{job.task_id}] Cleaned up temporary upload file")
+    except OSError as cleanup_error:
+        logger.warning(f"[{job.task_id}] Temporary file cleanup failed: {cleanup_error}")
+
+
+async def process_upload_job_async(job: UploadJob, *, cleanup_on_exit: bool = True) -> None:
+    """
+    Process one upload job and update task state.
+
+    cleanup_on_exit controls whether the temp file is deleted when this
+    function returns or raises. Defaults to True for callers with no retry
+    logic (e.g. the in-process dev/test worker thread started directly from
+    main.py's /upload handler). Callers that implement their own retry
+    logic — currently only run_upload_worker_loop_async — must pass
+    cleanup_on_exit=False and manage cleanup themselves: a failed attempt
+    that's about to be retried needs job.file_path to still exist, since
+    the retry reuses the same UploadJob (and therefore the same path).
+    Deleting it unconditionally here previously caused every retry to fail
+    immediately with a spurious FileNotFoundError instead of getting a
+    genuine second attempt at the original failure.
+    """
     from backend.main import (
         MAX_EXTRACTED_TEXT_CHARS,
         _extract_docx_text,
@@ -311,12 +339,34 @@ async def process_upload_job_async(job: UploadJob) -> None:
         logger.error(f"[{job.task_id}] Upload processing failed: {exc}", exc_info=True)
         raise
     finally:
-        try:
-            if os.path.exists(job.file_path):
-                os.unlink(job.file_path)
-                logger.info(f"[{job.task_id}] Cleaned up temporary upload file")
-        except OSError as cleanup_error:
-            logger.warning(f"[{job.task_id}] Temporary file cleanup failed: {cleanup_error}")
+        if cleanup_on_exit:
+            _cleanup_temp_file(job)
+
+
+async def _handle_one_job(job: UploadJob, queue: "UploadJobQueue", storage) -> None:
+    """
+    Process a single dequeued job and decide its fate: mark complete and
+    clean up on success; schedule a retry (preserving the temp file) on a
+    recoverable failure; or dead-letter and clean up once retries are
+    exhausted. Extracted from run_upload_worker_loop_async's while-loop
+    body so this per-job logic is directly unit-testable without needing
+    to drive (and break out of) an infinite loop.
+    """
+    try:
+        await process_upload_job_async(job, cleanup_on_exit=False)
+        _cleanup_temp_file(job)
+    except Exception as exc:
+        job.attempts += 1
+        if job.attempts < job.max_retries:
+            storage.update_status(job.task_id, "queued")
+            storage.update_progress(job.task_id, 0)
+            queue.schedule_retry(job)
+            # Intentionally no cleanup here — the retried attempt reuses
+            # this same job.file_path.
+        else:
+            storage.mark_failed(job.task_id, str(getattr(exc, "detail", exc)))
+            queue.dead_letter(job, str(exc))
+            _cleanup_temp_file(job)
 
 
 async def run_upload_worker_loop_async(poll_interval_seconds: float = 1.0) -> None:
@@ -330,17 +380,7 @@ async def run_upload_worker_loop_async(poll_interval_seconds: float = 1.0) -> No
         if not task:
             logger.warning(f"[{job.task_id}] Skipping missing task record")
             continue
-        try:
-            await process_upload_job_async(job)
-        except Exception as exc:
-            job.attempts += 1
-            if job.attempts < job.max_retries:
-                storage.update_status(job.task_id, "queued")
-                storage.update_progress(job.task_id, 0)
-                queue.schedule_retry(job)
-            else:
-                storage.mark_failed(job.task_id, str(getattr(exc, "detail", exc)))
-                queue.dead_letter(job, str(exc))
+        await _handle_one_job(job, queue, storage)
 
 
 def run_upload_worker_loop(poll_interval_seconds: float = 1.0) -> None:
