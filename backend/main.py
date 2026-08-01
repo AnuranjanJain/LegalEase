@@ -540,7 +540,13 @@ async def upload_document(
 
     # Register the task as "queued" and launch the background worker
     task_storage = get_upload_task_storage()
-    task_storage.create_task(task_id, status="queued", progress=0, result=None)
+    task_storage.create_task(
+        task_id,
+        status="queued",
+        progress=0,
+        result=None,
+        user_id=identity.get_user_id(),
+    )
     logger.info(f"[{task_id}] Upload task created")
 
     job_queue = UploadJobQueue()
@@ -612,11 +618,22 @@ async def edit_message(
 
 @app.get("/upload/status/{task_id}")
 async def upload_status(task_id: str, identity: AuthIdentity = Depends(validate_token_or_api_key)):
-    """Poll the processing status of an async upload task (#365)."""
+    """
+    Poll the processing status of an async upload task (#365).
+
+    Returns 404 (not 403) when the task exists but belongs to a different
+    identity, matching the ownership-check pattern used elsewhere (e.g.
+    comments_routes.py's _get_owned_document) — this avoids confirming to
+    an unauthorized caller that a given task_id actually exists.
+    """
     task_storage = get_upload_task_storage()
     task = task_storage.get_task(task_id)
     if not task:
         raise HTTPException(status_code=404, detail="Task not found")
+
+    if task.get("user_id") != identity.get_user_id():
+        raise HTTPException(status_code=404, detail="Task not found")
+
     response = {
         "task_id": task_id,
         "status": task["status"],
