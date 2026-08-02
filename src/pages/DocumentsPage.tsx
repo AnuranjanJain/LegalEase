@@ -33,7 +33,7 @@ function renderHighlightedText(text: string, clauses: any[]) {
   const intervals: Interval[] = [];
 
   clauses.forEach(c => {
-    if (!c.clause || c.clause.trim() === '') return;
+    if (!c.clause || c.clause.trim().length === 0) return;
     
     let index = text.indexOf(c.clause);
     while (index !== -1) {
@@ -217,7 +217,7 @@ export function DocumentsPage() {
       return;
     }
 
-    const names = docs.map(d => d.name).join(', ');
+    const names = (docs ?? []).map(d => d.name).join(', ');
     const session = ChatStorageService.createSession(`Compare: ${names.substring(0, 60)}`);
     session.multiDocContext = docs.map(d => ({
       id: d.id,
