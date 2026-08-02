@@ -1,4 +1,4 @@
-import { createContext, useContext, useEffect, useState, ReactNode } from 'react';
+import { createContext, useContext, useEffect, useRef, useState, ReactNode } from 'react';
 import { API_BASE_URL } from '../config/api';
 import { api } from '../services/api';
 import { setAccessToken as setTokenInRegistry, clearAccessToken as clearTokenFromRegistry } from '../services/authTokenRegistry';
@@ -20,6 +20,14 @@ interface RefreshResponse {
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
+
+// How long before a token's exp we proactively refresh it. Comfortably
+// larger than typical request latency plus one retry, so a background
+// refresh has time to complete before the token actually expires.
+const PROACTIVE_REFRESH_MARGIN_MS = 60_000;
+// Never schedule a refresh sooner than this — guards against a token
+// that's already within the margin right after bootstrap.
+const MIN_REFRESH_DELAY_MS = 5_000;
 
 async function verifyTokenWithBackend(token: string): Promise<boolean> {
   try {
@@ -62,6 +70,15 @@ function getEmailFromToken(token: string | null): string | null {
   return typeof payload?.sub === 'string' ? payload.sub : null;
 }
 
+/** ms until we should proactively refresh this token, clamped to a sane minimum. */
+function msUntilProactiveRefresh(token: string): number | null {
+  const payload = decodeTokenPayload(token);
+  if (!payload || typeof payload.exp !== 'number') return null;
+  const expiresAtMs = payload.exp * 1000;
+  const delay = expiresAtMs - Date.now() - PROACTIVE_REFRESH_MARGIN_MS;
+  return Math.max(delay, MIN_REFRESH_DELAY_MS);
+}
+
 async function restoreSession(): Promise<string | null> {
   try {
     const response = await api.refreshSession<RefreshResponse>();
@@ -82,6 +99,56 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [userEmail, setUserEmail] = useState<string | null>(null);
   const [accessToken, setAccessToken] = useState<string | null>(null);
 
+  const refreshTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const clearScheduledRefresh = () => {
+    if (refreshTimerRef.current) {
+      clearTimeout(refreshTimerRef.current);
+      refreshTimerRef.current = null;
+    }
+  };
+
+  /**
+   * Schedule a proactive refresh shortly before `token` expires. This is
+   * the "never let the access token actually die while the tab is open"
+   * half of the fix — the reactive 401-retry in api.ts is the fallback
+   * for cases this timer misses (e.g. the tab was backgrounded/throttled
+   * past the scheduled time).
+   */
+  const scheduleProactiveRefresh = (token: string) => {
+    clearScheduledRefresh();
+    const delay = msUntilProactiveRefresh(token);
+    if (delay === null) return;
+
+    refreshTimerRef.current = setTimeout(async () => {
+      const refreshed = await restoreSession();
+      if (refreshed) {
+        applyToken(refreshed);
+      }
+      // If this failed, do nothing forceful here — the reactive 401 path
+      // (and the auth:session-expired listener below) will handle logging
+      // the user out the next time they actually make a request, rather
+      // than forcing a logout on a transient network blip while a valid
+      // refresh cookie might still exist.
+    }, delay);
+  };
+
+  const applyToken = (token: string) => {
+    setAccessToken(token);
+    setTokenInRegistry(token);
+    setIsAuthenticated(true);
+    setUserEmail(getEmailFromToken(token));
+    scheduleProactiveRefresh(token);
+  };
+
+  const clearSession = () => {
+    clearScheduledRefresh();
+    setAccessToken(null);
+    clearTokenFromRegistry();
+    setIsAuthenticated(false);
+    setUserEmail(null);
+  };
+
   useEffect(() => {
     let isMounted = true;
 
@@ -98,15 +165,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       if (!isMounted) return;
 
       if (restoredToken) {
-        setAccessToken(restoredToken);
-        setTokenInRegistry(restoredToken);
-        setIsAuthenticated(true);
-        setUserEmail(getEmailFromToken(restoredToken));
+        applyToken(restoredToken);
       } else {
-        setAccessToken(null);
-        clearTokenFromRegistry();
-        setIsAuthenticated(false);
-        setUserEmail(null);
+        clearSession();
       }
 
       setIsVerifying(false);
@@ -116,6 +177,31 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
     return () => {
       isMounted = false;
+      clearScheduledRefresh();
+    };
+  }, []);
+
+  // Keep React state in sync with refreshes/expirations that happen
+  // silently inside api.ts's reactive 401-retry path, which has no direct
+  // access to this component's state setters.
+  useEffect(() => {
+    const handleTokenRefreshed = (event: Event) => {
+      const detail = (event as CustomEvent<{ token: string }>).detail;
+      if (detail?.token) {
+        applyToken(detail.token);
+      }
+    };
+
+    const handleSessionExpired = () => {
+      clearSession();
+    };
+
+    window.addEventListener('auth:token-refreshed', handleTokenRefreshed);
+    window.addEventListener('auth:session-expired', handleSessionExpired);
+
+    return () => {
+      window.removeEventListener('auth:token-refreshed', handleTokenRefreshed);
+      window.removeEventListener('auth:session-expired', handleSessionExpired);
     };
   }, []);
 
@@ -123,15 +209,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const isValid = await verifyTokenWithBackend(token);
 
     if (isValid) {
-      setAccessToken(token);
-      setTokenInRegistry(token);
-      setIsAuthenticated(true);
-      setUserEmail(getEmailFromToken(token));
+      applyToken(token);
     } else {
-      setAccessToken(null);
-      clearTokenFromRegistry();
-      setIsAuthenticated(false);
-      setUserEmail(null);
+      clearSession();
       throw new Error('Invalid token received from server');
     }
   };
@@ -146,20 +226,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         }).catch((err) => console.warn('Server-side logout failed:', err));
       }
 
-      setAccessToken(null);
-      clearTokenFromRegistry();
+      clearSession();
       sessionStorage.clear();
-      setIsAuthenticated(false);
-      setUserEmail(null);
 
       return true;
     } catch (error) {
       console.error('Logout failed:', error);
-      setAccessToken(null);
-      clearTokenFromRegistry();
+      clearSession();
       sessionStorage.clear();
-      setIsAuthenticated(false);
-      setUserEmail(null);
       return false;
     }
   };

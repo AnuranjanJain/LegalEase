@@ -1,5 +1,5 @@
 import { API_BASE_URL } from '../config/api';
-import { getAccessToken } from './authTokenRegistry';
+import { getAccessToken, setAccessToken, clearAccessToken } from './authTokenRegistry';
 
 const getAuthHeaders = (): Record<string, string> => {
   const token = getAccessToken();
@@ -48,129 +48,214 @@ async function handleErrorResponse(response: Response, fallbackPrefix: string): 
   throw new Error(message);
 }
 
+// ---------------------------------------------------------------------------
+// Automatic access-token refresh on 401.
+//
+// Previously, a 401 from an expired access token was a dead end: nothing in
+// this file (or AuthContext) retried after refreshing, so every call failed
+// until the user manually reloaded the page. This module now transparently
+// refreshes once via the HttpOnly refresh-token cookie and retries the
+// original request. If the refresh itself fails (refresh token also
+// expired/revoked), the failure is surfaced as an 'auth:session-expired'
+// window event so AuthContext can update isAuthenticated/userEmail without
+// this module needing direct access to React state.
+// ---------------------------------------------------------------------------
+
+const REFRESH_ENDPOINT = '/auth/refresh';
+
+/** Dedupes concurrent refresh attempts: several 401s arriving at once
+ * should trigger exactly one /auth/refresh call, not one per request. */
+let inFlightRefresh: Promise<string | null> | null = null;
+
+async function performTokenRefresh(): Promise<string | null> {
+  if (inFlightRefresh) {
+    return inFlightRefresh;
+  }
+
+  inFlightRefresh = (async () => {
+    try {
+      const response = await fetch(
+        `${API_BASE_URL}${REFRESH_ENDPOINT}`,
+        includeCredentials({ method: 'GET' })
+      );
+
+      if (!response.ok) {
+        clearAccessToken();
+        window.dispatchEvent(new CustomEvent('auth:session-expired'));
+        return null;
+      }
+
+      const data = await response.json();
+      const newToken: string | undefined = data?.access_token;
+      if (!newToken) {
+        clearAccessToken();
+        window.dispatchEvent(new CustomEvent('auth:session-expired'));
+        return null;
+      }
+
+      setAccessToken(newToken);
+      window.dispatchEvent(new CustomEvent('auth:token-refreshed', { detail: { token: newToken } }));
+      return newToken;
+    } catch {
+      clearAccessToken();
+      window.dispatchEvent(new CustomEvent('auth:session-expired'));
+      return null;
+    } finally {
+      inFlightRefresh = null;
+    }
+  })();
+
+  return inFlightRefresh;
+}
+
+/**
+ * Perform a fetch with the current access token attached. On a 401,
+ * attempt exactly one refresh-and-retry before giving up. Never retries
+ * the refresh endpoint itself (would recurse forever).
+ */
+async function fetchWithAuthRetry(
+  buildRequest: () => RequestInit,
+  endpoint: string,
+  fallbackPrefix: string
+): Promise<Response> {
+  let response = await fetch(`${API_BASE_URL}${endpoint}`, buildRequest());
+
+  if (response.status === 401 && endpoint !== REFRESH_ENDPOINT) {
+    const refreshedToken = await performTokenRefresh();
+    if (refreshedToken) {
+      response = await fetch(`${API_BASE_URL}${endpoint}`, buildRequest());
+    }
+  }
+
+  if (!response.ok) {
+    await handleErrorResponse(response, fallbackPrefix);
+  }
+
+  return response;
+}
+
 export const api = {
   post: async <T>(endpoint: string, data: any, conversationHistory?: Array<{role: string, content: string}>): Promise<T> => {
     const requestData = conversationHistory ? { ...data, conversation_history: conversationHistory } : data;
-    const response = await fetch(`${API_BASE_URL}${endpoint}`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        ...getAuthHeaders(),
-      },
-      body: JSON.stringify(requestData),
-    });
-
-    if (!response.ok) {
-      await handleErrorResponse(response, 'API error');
-    }
+    const response = await fetchWithAuthRetry(
+      () => ({
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...getAuthHeaders(),
+        },
+        body: JSON.stringify(requestData),
+      }),
+      endpoint,
+      'API error'
+    );
 
     return response.json();
   },
 
   get: async <T>(endpoint: string): Promise<T> => {
-    const response = await fetch(`${API_BASE_URL}${endpoint}`, {
-      headers: {
-        ...getAuthHeaders(),
-      },
-    });
-
-    if (!response.ok) {
-      await handleErrorResponse(response, 'API error');
-    }
+    const response = await fetchWithAuthRetry(
+      () => ({
+        headers: {
+          ...getAuthHeaders(),
+        },
+      }),
+      endpoint,
+      'API error'
+    );
 
     return response.json();
   },
 
   put: async <T>(endpoint: string, data?: any): Promise<T> => {
-    const response = await fetch(`${API_BASE_URL}${endpoint}`, {
-      method: 'PUT',
-      headers: {
-        'Content-Type': 'application/json',
-        ...getAuthHeaders(),
-      },
-      body: data ? JSON.stringify(data) : undefined,
-    });
-
-    if (!response.ok) {
-      await handleErrorResponse(response, 'API error');
-    }
+    const response = await fetchWithAuthRetry(
+      () => ({
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          ...getAuthHeaders(),
+        },
+        body: data ? JSON.stringify(data) : undefined,
+      }),
+      endpoint,
+      'API error'
+    );
 
     return response.json();
   },
 
   delete: async <T>(endpoint: string): Promise<T> => {
-    const response = await fetch(`${API_BASE_URL}${endpoint}`, {
-      method: 'DELETE',
-      headers: {
-        ...getAuthHeaders(),
-      },
-    });
-
-    if (!response.ok) {
-      await handleErrorResponse(response, 'API error');
-    }
+    const response = await fetchWithAuthRetry(
+      () => ({
+        method: 'DELETE',
+        headers: {
+          ...getAuthHeaders(),
+        },
+      }),
+      endpoint,
+      'API error'
+    );
 
     return response.json();
   },
 
   upload: async <T>(endpoint: string, formData: FormData): Promise<T> => {
-    const response = await fetch(`${API_BASE_URL}${endpoint}`, {
-      method: 'POST',
-      headers: {
-        ...getAuthHeaders(),
-      },
-      body: formData,
-    });
-
-    if (!response.ok) {
-      await handleErrorResponse(response, 'Upload error');
-    }
+    const response = await fetchWithAuthRetry(
+      () => ({
+        method: 'POST',
+        headers: {
+          ...getAuthHeaders(),
+        },
+        body: formData,
+      }),
+      endpoint,
+      'Upload error'
+    );
 
     return response.json();
   },
 
   postBlob: async (endpoint: string, data: any): Promise<Blob> => {
-    const response = await fetch(`${API_BASE_URL}${endpoint}`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        ...getAuthHeaders(),
-      },
-      body: JSON.stringify(data),
-    });
-
-    if (!response.ok) {
-      await handleErrorResponse(response, 'Export error');
-    }
+    const response = await fetchWithAuthRetry(
+      () => ({
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...getAuthHeaders(),
+        },
+        body: JSON.stringify(data),
+      }),
+      endpoint,
+      'Export error'
+    );
 
     return response.blob();
   },
 
   stream: async (endpoint: string, data: any, conversationHistory?: Array<{role: string, content: string}>): Promise<Response> => {
     const requestData = conversationHistory ? { ...data, conversation_history: conversationHistory, stream: true } : { ...data, stream: true };
-    const response = await fetch(`${API_BASE_URL}${endpoint}`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        ...getAuthHeaders(),
-      },
-      body: JSON.stringify(requestData),
-    });
-
-    if (!response.ok) {
-      await handleErrorResponse(response, 'API error');
-    }
+    const response = await fetchWithAuthRetry(
+      () => ({
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...getAuthHeaders(),
+        },
+        body: JSON.stringify(requestData),
+      }),
+      endpoint,
+      'API error'
+    );
 
     return response;
   },
 
   /**
    * Attempt to restore the current session using an HttpOnly refresh-token cookie.
-   *
-   * Backend dependency:
-   * - The current backend does not yet expose /auth/refresh.
-   * - When implemented, this call must include credentials so the refresh cookie
-   *   can be sent automatically without exposing it to JavaScript.
+   * Backend: GET /auth/refresh (backend/routers/auth_routes.py) — fully
+   * implemented (signature/expiry/revocation checks, rotation). Used both
+   * for initial session bootstrap (AuthContext) and internally by
+   * fetchWithAuthRetry's 401 handling above.
    */
   refreshSession: async <T>(endpoint = '/auth/refresh', method: 'GET' | 'POST' = 'GET'): Promise<T> => {
     const response = await fetch(`${API_BASE_URL}${endpoint}`, includeCredentials({ method }));
