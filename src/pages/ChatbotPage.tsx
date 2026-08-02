@@ -3,6 +3,7 @@ import { api } from '../services/api';
 import { ChatStorageService, ChatMessage, ChatSessionMetadata } from '../services/storage';
 import { useRef, useState, useEffect, useCallback } from 'react';
 import { useToast } from '../contexts/ToastContext';
+import { useDebounce } from '../hooks/useDebounce';
 import LegalMapping from '../components/LegalMapping';
 import { WebSearchSidebar } from '../components/WebSearchSidebar';
 import { useRedaction } from '../contexts/RedactionContext';
@@ -13,6 +14,7 @@ import remarkGfm from 'remark-gfm';
 import rehypeRaw from 'rehype-raw';
 import { JURISDICTIONS } from '../config/jurisdictions';
 import { FeedbackWidget } from '../components/FeedbackWidget';
+
 function makeGreeting(): ChatMessage {
   return {
     id: 'default-greeting',
@@ -24,7 +26,7 @@ function makeGreeting(): ChatMessage {
 }
 
 const MAX_CONTEXT_MESSAGES = 10;
-const MAX_INPUT_CHARS = 2000; // NEW: Character limit constant added here
+const MAX_INPUT_CHARS = 2000;
 
 function buildConversationHistory(msgs: ChatMessage[]) {
   return msgs
@@ -97,8 +99,7 @@ export function ChatbotPage() {
   // State to track which message ID was copied to show the checkmark temporarily
   const [copiedId, setCopiedId] = useState<string | null>(null);
 
-  // Announcement text for the aria-live region. Updated whenever the
-  // redaction toggle changes so screen readers announce the state change.
+  // Announcement text for the aria-live region.
   const [redactionAnnouncement, setRedactionAnnouncement] = useState('');
 
   const { showToast } = useToast();
@@ -108,8 +109,6 @@ export function ChatbotPage() {
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   // Announce redaction state changes to screen readers via aria-live.
-  // Skip the very first render (isFirstRender guard) so we don't announce
-  // "PII redaction disabled" on page load when the default is already OFF.
   const isFirstRedactionRender = useRef(true);
   useEffect(() => {
     if (isFirstRedactionRender.current) {
@@ -121,19 +120,11 @@ export function ChatbotPage() {
         ? 'PII redaction enabled. Sensitive data is now masked in AI responses.'
         : 'PII redaction disabled. Original AI responses are now shown.'
     );
-    // Clear after a short delay so the same message can re-fire if the user
-    // toggles rapidly, while not leaving stale text in the live region.
     const timer = setTimeout(() => setRedactionAnnouncement(''), 3000);
     return () => clearTimeout(timer);
   }, [isRedactionEnabled]);
 
-  // ---------------------------------------------------------------------------
-  // Clipboard handler.
-  //
-  // Receives the already-computed displayText (the text currently visible to
-  // the user, possibly redacted) to avoid re-running redact() on click.
-  // This ensures the copied text always exactly matches what is on screen.
-  // ---------------------------------------------------------------------------
+  // Clipboard handler
   const handleCopy = (displayText: string, id: string) => {
     navigator.clipboard.writeText(displayText);
     setCopiedId(id);
@@ -183,15 +174,58 @@ export function ChatbotPage() {
     setSessions(ChatStorageService.getSessions());
   }, []);
 
+  // Refs always hold the latest values so the unmount flush can access them
+  const latestMessagesRef = useRef(messages);
+  latestMessagesRef.current = messages;
+  const latestDocRef = useRef(uploadedDoc);
+  latestDocRef.current = uploadedDoc;
+  const latestSessionIdRef = useRef(activeSessionId);
+  latestSessionIdRef.current = activeSessionId;
+
+  // Debounce messages and document context so persistence doesn't
+  // fire on every stream chunk — localStorage writes are synchronous
+  // and block the main thread.
+  const debouncedMessages = useDebounce(messages, 1500);
+  const debouncedDoc = useDebounce(uploadedDoc, 1500);
+
   useEffect(() => {
     if (activeSessionId) {
-      persistSession(messages, uploadedDoc, activeSessionId, multiDocContext, selectedJurisdiction);
+      persistSession(
+        debouncedMessages,
+        debouncedDoc,
+        activeSessionId,
+        multiDocContext,
+        selectedJurisdiction
+      );
     }
-  }, [messages, uploadedDoc, multiDocContext, activeSessionId, selectedJurisdiction, persistSession]);
+  }, [
+    debouncedMessages,
+    debouncedDoc,
+    activeSessionId,
+    multiDocContext,
+    selectedJurisdiction,
+    persistSession,
+  ]);
+
+  // Flush any pending persist on unmount so no data is lost
+  useEffect(() => {
+    return () => {
+      const sid = latestSessionIdRef.current;
+      if (sid) {
+        persistSession(
+          latestMessagesRef.current,
+          latestDocRef.current,
+          sid,
+          multiDocContext,
+          selectedJurisdiction
+        );
+      }
+    };
+  }, [multiDocContext, selectedJurisdiction, persistSession]);
 
   // Toggle dropdown
   const toggleDropdown = () => {
-    setIsDropdownOpen(prev => {
+    setIsDropdownOpen((prev) => {
       const next = !prev;
       if (next) {
         setSearchQuery('');
@@ -204,7 +238,10 @@ export function ChatbotPage() {
   // Close dropdown on click outside
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
-      if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
+      if (
+        dropdownRef.current &&
+        !dropdownRef.current.contains(event.target as Node)
+      ) {
         setIsDropdownOpen(false);
       }
     };
@@ -229,7 +266,7 @@ export function ChatbotPage() {
   };
 
   const jurisdictionsList = Object.values(JURISDICTIONS);
-  const filteredJurisdictions = jurisdictionsList.filter(j =>
+  const filteredJurisdictions = jurisdictionsList.filter((j) =>
     j.toLowerCase().includes(searchQuery.toLowerCase())
   );
 
@@ -245,19 +282,22 @@ export function ChatbotPage() {
     switch (e.key) {
       case 'ArrowDown':
         e.preventDefault();
-        setFocusedOptionIndex(prev => 
+        setFocusedOptionIndex((prev) =>
           prev < filteredJurisdictions.length - 1 ? prev + 1 : 0
         );
         break;
       case 'ArrowUp':
         e.preventDefault();
-        setFocusedOptionIndex(prev => 
+        setFocusedOptionIndex((prev) =>
           prev > 0 ? prev - 1 : filteredJurisdictions.length - 1
         );
         break;
       case 'Enter':
         e.preventDefault();
-        if (focusedOptionIndex >= 0 && focusedOptionIndex < filteredJurisdictions.length) {
+        if (
+          focusedOptionIndex >= 0 &&
+          focusedOptionIndex < filteredJurisdictions.length
+        ) {
           handleSelectJurisdiction(filteredJurisdictions[focusedOptionIndex]);
         }
         break;
@@ -337,121 +377,115 @@ export function ChatbotPage() {
       if (!input.trim()) return;
 
       const userMessage: ChatMessage = {
-      id: crypto.randomUUID(),
-      text: input,
-      sender: 'user',
-      time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-      timestamp: new Date().toISOString(),
-    };
-
-    const updatedMessages = [...messages, userMessage];
-    setMessages(updatedMessages);
-    const currentInput = input;
-    setInput('');
-    setIsTyping(true);
-
-    try {
-      const conversationHistory = buildConversationHistory(updatedMessages);
-      const botId = crypto.randomUUID();
-      const botMessage: ChatMessage = {
-        id: botId,
-        text: '',
-        sender: 'bot',
+        id: crypto.randomUUID(),
+        text: input,
+        sender: 'user',
         time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
         timestamp: new Date().toISOString(),
       };
-      setMessages(prev => [...prev, botMessage]);
-      setIsTyping(false);
 
-      // ---------------------------------------------------------------------------
-      // Route selection:
-      //   - Multi-doc comparison session → POST /compare/chat (structured response)
-      //   - Single-doc or no-doc session  → POST /chat (streaming)
-      // ---------------------------------------------------------------------------
-      if (multiDocContext && multiDocContext.length >= 2) {
-        const data = await api.post<{ response: string }>(
-          '/compare/chat',
-          {
-            message: currentInput,
-            document_ids: multiDocContext.map(d => d.id),
-            document_texts: multiDocContext.map(d => ({ id: d.id, name: d.name, text: d.text })),
-            conversation_history: conversationHistory,
-            jurisdiction: selectedJurisdiction,
-          }
-        );
-        setMessages(prev =>
-          prev.map(msg =>
-            msg.id === botId
-              ? { ...msg, text: data.response || "I couldn't generate a comparison for those documents." }
-              : msg
-          )
-        );
-      } else {
-        // Standard single-doc streaming path
-        const response = await api.stream(
-          '/chat',
-          { message: currentInput, context: uploadedDoc?.text, jurisdiction: selectedJurisdiction },
-          conversationHistory
-        );
+      const updatedMessages = [...messages, userMessage];
+      setMessages(updatedMessages);
+      const currentInput = input;
+      setInput('');
+      setIsTyping(true);
 
-        const reader = response.body?.getReader();
-        const decoder = new TextDecoder('utf-8');
+      try {
+        const conversationHistory = buildConversationHistory(updatedMessages);
+        const botId = crypto.randomUUID();
+        const botMessage: ChatMessage = {
+          id: botId,
+          text: '',
+          sender: 'bot',
+          time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+          timestamp: new Date().toISOString(),
+        };
+        setMessages(prev => [...prev, botMessage]);
+        setIsTyping(false);
 
-        if (reader) {
-          let done = false;
-          while (!done) {
-            const { value, done: readerDone } = await reader.read();
-            done = readerDone;
-            if (value) {
-              const chunk = decoder.decode(value, { stream: true });
-              const lines = chunk.split('\n');
-              for (const line of lines) {
-                if (line.startsWith('data: ')) {
-                  const dataStr = line.slice(6);
-                  if (dataStr === '[DONE]') {
-                    done = true;
-                    break;
-                  }
-                  try {
-                    const data = JSON.parse(dataStr);
-                    if (data.response) {
-                      setMessages(prev =>
-                        prev.map(msg =>
-                          msg.id === botId
-                            ? { ...msg, text: msg.text + data.response }
-                            : msg
-                        )
-                      );
+        if (multiDocContext && multiDocContext.length >= 2) {
+          const data = await api.post<{ response: string }>(
+            '/compare/chat',
+            {
+              message: currentInput,
+              document_ids: multiDocContext.map(d => d.id),
+              document_texts: multiDocContext.map(d => ({ id: d.id, name: d.name, text: d.text })),
+              conversation_history: conversationHistory,
+              jurisdiction: selectedJurisdiction,
+            }
+          );
+          setMessages(prev =>
+            prev.map(msg =>
+              msg.id === botId
+                ? { ...msg, text: data.response || "I couldn't generate a comparison for those documents." }
+                : msg
+            )
+          );
+        } else {
+          // Standard single-doc streaming path
+          const response = await api.stream(
+            '/chat',
+            { message: currentInput, context: uploadedDoc?.text, jurisdiction: selectedJurisdiction },
+            conversationHistory
+          );
+
+          const reader = response.body?.getReader();
+          const decoder = new TextDecoder('utf-8');
+
+          if (reader) {
+            let done = false;
+            while (!done) {
+              const { value, done: readerDone } = await reader.read();
+              done = readerDone;
+              if (value) {
+                const chunk = decoder.decode(value, { stream: true });
+                const lines = chunk.split('\n');
+                for (const line of lines) {
+                  if (line.startsWith('data: ')) {
+                    const dataStr = line.slice(6);
+                    if (dataStr === '[DONE]') {
+                      done = true;
+                      break;
                     }
-                  } catch {
-                    // Ignore incomplete JSON chunks
+                    try {
+                      const data = JSON.parse(dataStr);
+                      if (data.response) {
+                        setMessages(prev =>
+                          prev.map(msg =>
+                            msg.id === botId
+                              ? { ...msg, text: msg.text + data.response }
+                              : msg
+                          )
+                        );
+                      }
+                    } catch {
+                      // Ignore incomplete JSON chunks
+                    }
                   }
                 }
               }
             }
           }
         }
+      } catch (error) {
+        console.error('Error sending message:', error);
+        showToast('Failed to send message. Please try again.', 'error');
+        const errorMessage: ChatMessage = {
+          id: crypto.randomUUID(),
+          text: error instanceof Error
+            ? error.message
+            : "Sorry, I'm having trouble connecting to the server. Please ensure the backend is running.",
+          sender: 'bot',
+          time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+          timestamp: new Date().toISOString(),
+        };
+        setMessages(prev => [...prev, errorMessage]);
+      } finally {
+        setIsTyping(false);
       }
-    } catch (error) {
-      console.error('Error sending message:', error);
-      showToast('Failed to send message. Please try again.', 'error');
-      const errorMessage: ChatMessage = {
-        id: crypto.randomUUID(),
-        text: error instanceof Error
-          ? error.message
-          : "Sorry, I'm having trouble connecting to the server. Please ensure the backend is running.",
-        sender: 'bot',
-        time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-        timestamp: new Date().toISOString(),
-      };
-      setMessages(prev => [...prev, errorMessage]);
-    } finally {
-      setIsTyping(false);
-    }
     });
   };
 
-  
   const handleEditSubmit = async (msgId: string) => {
     if (!editText.trim()) {
       setEditingId(null);
@@ -487,7 +521,6 @@ export function ChatbotPage() {
         [msgId]: [...(prev[msgId] || [{ userText: messages[idx].text, botText: messages[idx + 1]?.text || '' }]), { userText: res.edited_content, botText: res.response }]
       }));
       setBranchIdx(prev => ({ ...prev, [msgId]: (messageBranches[msgId]?.length ?? 1) }));
-      // Replace edited msg + its following bot msg
       const updated = [...messages.slice(0, idx), newUserMsg, newBotMsg, ...messages.slice(idx + 2)];
       setMessages(updated);
     } catch (err) {
@@ -570,14 +603,12 @@ export function ChatbotPage() {
     formData.append('file', file);
 
     try {
-      // POST upload — backend returns 202 + task_id immediately (#365)
       const initial = await api.upload<{ task_id: string; filename: string; status: string }>(
         '/upload', formData
       );
       const taskId = initial.task_id;
       const filename = initial.filename;
 
-      // Poll /upload/status/:task_id until done or failed
       let progress = 0;
       while (true) {
         await new Promise(r => setTimeout(r, 1500));
@@ -586,7 +617,6 @@ export function ChatbotPage() {
         );
         progress = status.progress;
 
-        // Update progress toast label via state
         setUploadProgress(progress);
 
         if (status.status === 'done' && status.result) {
@@ -936,7 +966,6 @@ export function ChatbotPage() {
 
                     return (
                       <div key={idx} className={`p-4 rounded-2xl border text-xs flex flex-col space-y-3 ${borderClass}`} data-testid="conflict-card">
-                        {/* Header: Severity & Explanation */}
                         <div className="flex items-start justify-between gap-3">
                           <div>
                             <span className={`px-2.5 py-0.5 rounded-full text-[9px] font-extrabold uppercase border tracking-wider ${badgeClass}`}>
@@ -948,9 +977,7 @@ export function ChatbotPage() {
                           </div>
                         </div>
 
-                        {/* Split Columns */}
                         <div className="grid md:grid-cols-2 gap-4 pt-2 border-t border-gray-150 dark:border-gray-800">
-                          {/* Column 1: Primary Document Clause */}
                           <div className="space-y-1">
                             <span className="text-[10px] font-extrabold uppercase text-gray-400 dark:text-gray-500">
                               Primary Document Constraint
@@ -960,7 +987,6 @@ export function ChatbotPage() {
                             </blockquote>
                           </div>
 
-                          {/* Column 2: Secondary Document Clause */}
                           <div className="space-y-1">
                             <span className="text-[10px] font-extrabold uppercase text-gray-400 dark:text-gray-500">
                               Secondary Document Violation
@@ -988,7 +1014,7 @@ export function ChatbotPage() {
               {showWebSearch && <WebSearchSidebar />}
             </div>
 
-            {/* Message list - takes remaining space */}
+            {/* Message list */}
             <div className="flex-grow overflow-y-auto px-4 sm:px-6 py-6 sm:py-8 space-y-4 sm:space-y-6 relative z-10 min-h-0">
               {messages.map((msg: ChatMessage) => {
                 const isUser = msg.sender === 'user';
@@ -1012,6 +1038,7 @@ export function ChatbotPage() {
                       }`}>
                         {isUser ? <User size={14} /> : <Bot size={14} />}
                       </div>
+                      
                       {/* Message Bubble Card */}
                       <div className={`p-3 sm:p-4 rounded-2xl shadow-sm text-left leading-relaxed relative group ${
                         isUser 
@@ -1079,7 +1106,6 @@ export function ChatbotPage() {
                           <p className={`text-[9px] font-semibold ${isUser ? 'text-blue-100' : 'text-gray-400 dark:text-gray-500'}`}>
                             {msg.time}
                           </p>
-                          {/* Branch navigator shown on user messages that have been edited */}
                           {isUser && messageBranches[msg.id] && messageBranches[msg.id].length > 1 && (
                             <div className="flex items-center gap-1">
                               <button onClick={() => handleBranchNav(msg.id, -1)} disabled={(branchIdx[msg.id] ?? 0) === 0} className="text-blue-200 disabled:opacity-30 hover:text-white">
@@ -1094,7 +1120,7 @@ export function ChatbotPage() {
                             </div>
                           )}
                         </div>
-                        {/* Citation panel for bot messages */}
+
                         {!isUser && messageCitations[msg.id] && messageCitations[msg.id].length > 0 && (
                           <div className="mt-3 border-t border-gray-200 dark:border-gray-700 pt-2">
                             <button
@@ -1130,7 +1156,7 @@ export function ChatbotPage() {
                 );
               })}
 
-              {/* Typing Loading Indicator */}
+              {/* Typing Indicator */}
               {isTyping && (
                 <div className="flex justify-start animate-pulse">
                   <div className="flex items-start max-w-[80%] gap-3">
@@ -1151,15 +1177,11 @@ export function ChatbotPage() {
             </div>
           </div>
 
-          {/* Screen reader live region — announces both AI typing state and
-              PII redaction toggle changes (aria-atomic ensures the full message
-              is read rather than just the changed portion). */}
           <div className="sr-only" aria-live="polite" aria-atomic="true">
             {redactionAnnouncement || (isTyping ? 'LegalEase AI is writing an answer...' : '')}
           </div>
 
           <div className="p-3 sm:p-4 bg-white dark:bg-gray-800 border-t border-gray-200 dark:border-gray-800 flex-shrink-0">
-            {/* PII Redaction active indicator */}
             {isRedactionEnabled && (
               <div className="mb-2 flex items-center gap-1.5 text-[10px] font-semibold text-emerald-600 dark:text-emerald-400">
                 <ShieldCheck size={12} />
@@ -1201,7 +1223,6 @@ export function ChatbotPage() {
               </div>
             )}
 
-            {/* Multi-document comparison context banner */}
             {multiDocContext && multiDocContext.length >= 2 && (
               <div className="mb-3 bg-indigo-500/5 dark:bg-indigo-500/10 border border-indigo-500/20 rounded-xl p-3">
                 <div className="flex items-center justify-between mb-2">
@@ -1291,7 +1312,6 @@ export function ChatbotPage() {
               </button>
 
               <div className="flex-1 relative min-w-0">
-                {/* Dynamic Context Badge Indicator */}
                 {uploadedDoc && (
                   <span 
                     className="absolute right-3 top-2.5 bg-green-100 dark:bg-green-900/30 text-green-800 dark:text-green-300 text-[10px] font-semibold px-2 py-0.5 rounded-full flex items-center gap-1.5 border border-green-200 dark:border-green-800/50 animate-pulse z-10"
@@ -1302,7 +1322,6 @@ export function ChatbotPage() {
                   </span>
                 )}
 
-                {/* Accessible Multi-line Text Area for Enter / Shift+Enter management WITH COUNTER LIMIT */}
                 <textarea
                   className="w-full pl-4 pr-16 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent bg-gray-50 dark:bg-gray-700 text-gray-900 dark:text-white placeholder-gray-500 dark:placeholder-gray-400 resize-none max-h-32 min-h-[40px] block align-bottom leading-normal"
                   placeholder={multiDocContext ? "Compare clauses, find conflicts, ask about all documents..." : uploadedDoc ? "Ask about this document..." : "Ask a legal question..."}
@@ -1318,7 +1337,6 @@ export function ChatbotPage() {
                   }}
                 />
 
-                {/* Dynamic Character Counter */}
                 <div 
                   className={`absolute bottom-2 right-3 text-[10px] font-medium transition-colors duration-300 pointer-events-none ${
                     input.length >= MAX_INPUT_CHARS ? 'text-red-500 animate-pulse' :
