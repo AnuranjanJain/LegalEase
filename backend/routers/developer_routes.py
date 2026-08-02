@@ -14,7 +14,7 @@ from backend.auth import (
 )
 from backend.database import get_db
 from backend import models
-
+from backend.core.network_safety import assert_safe_webhook_url, UnsafeUrlError
 router = APIRouter(prefix="/developer", tags=["developer"])
 
 # Keep this list in sync with wherever endpoints call require_scope(...).
@@ -182,8 +182,14 @@ class WebhookCreateRequest(BaseModel):
     @field_validator("url")
     @classmethod
     def url_must_be_https(cls, value: str) -> str:
-        if not value.startswith("https://"):
-            raise ValueError("Webhook url must use https://")
+        # Resolves the hostname and rejects it if it points at a private,
+        # loopback, or link-local address (e.g. cloud metadata endpoints
+        # like 169.254.169.254) — a bare "starts with https://" check does
+        # not prevent SSRF, since https works against internal services too.
+        try:
+            assert_safe_webhook_url(value)
+        except UnsafeUrlError as exc:
+            raise ValueError(str(exc))
         return value
 
 
