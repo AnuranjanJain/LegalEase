@@ -217,7 +217,7 @@ export function DocumentsPage() {
       return;
     }
 
-    const names = docs.map(d => d.name).join(', ');
+    const names = (docs ?? []).map(d => d.name).join(', ');
     const session = ChatStorageService.createSession(`Compare: ${names.substring(0, 60)}`);
     session.multiDocContext = docs.map(d => ({
       id: d.id,
