@@ -290,6 +290,18 @@ class SummarizeRequest(BaseModel):
     text: str
 
 
+class TLDRRequest(BaseModel):
+    text: str
+
+
+class TLDRResponse(BaseModel):
+    parties: str = "Not specified"
+    deadlines: str = "Not specified"
+    financials: str = "Not specified"
+    penalties: str = "Not specified"
+    key_takeaways: list[str] = ["Not specified"]
+
+
 class SimplifyRequest(BaseModel):
     text: str
 
@@ -659,6 +671,19 @@ async def summarize(request: Request, payload: SummarizeRequest, identity: AuthI
 
     summary = await ai_service.generate_summary(sanitized_text)
     return {"summary": summary}
+
+
+@app.post("/api/tldr", response_model=TLDRResponse)
+@app.post("/tldr", response_model=TLDRResponse)
+async def tldr(request: Request, payload: TLDRRequest, identity: AuthIdentity = Depends(validate_token_or_api_key)):
+    if not key_limiter.check(identity.get_rate_limit_key())["allowed"]:
+        raise HTTPException(status_code=429, detail="Rate limit exceeded")
+
+    sanitized_text = sanitize_text(payload.text)
+    validate_summarize_input(sanitized_text)
+
+    tldr_data = await ai_service.generate_tldr(sanitized_text)
+    return TLDRResponse(**tldr_data)
 
 
 @app.post("/api/simplify", response_model=SimplifyResponse)
