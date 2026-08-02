@@ -1280,7 +1280,7 @@ export function DocumentsPage() {
                 <div className="flex items-center gap-2 flex-wrap">
                   <div className="flex items-center gap-2 p-3 bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 border border-emerald-500/15 rounded-xl text-xs font-bold w-fit">
                     <CheckCircle size={16} />
-                    <span>AI Cognitive Audit Ready</span>
+                    <span>AI Cognitive Audit Audit Ready</span>
                   </div>
                   {isRedactionEnabled && (
                     <div className="flex items-center gap-2 p-3 bg-primary-600/5 text-primary dark:text-primary-400 border border-primary-600/15 rounded-xl text-xs font-bold w-fit">

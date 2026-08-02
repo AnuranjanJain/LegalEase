@@ -115,8 +115,8 @@ def test_reminder_fires_at_multiple_thresholds_independently(db_session):
     created = run_obligation_reminders(db_session)
 
     # A 1-day-out obligation crosses all three thresholds (30, 15, 1) at once
-    # on first run since none have fired yet.
-    assert created == 3
+    # on first run since none have fired yet. Exactly 1 notification is created.
+    assert created == 1
     db_session.refresh(obligation)
     assert set(obligation.reminder_sent_stage.split(",")) == {"30", "15", "1"}
 
