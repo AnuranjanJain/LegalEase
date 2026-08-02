@@ -15,6 +15,7 @@ from typing import Any, Dict
 
 import httpx
 from sqlalchemy.orm import Session
+from backend.core.network_safety import assert_safe_webhook_url, UnsafeUrlError
 
 from backend import models
 
@@ -55,6 +56,20 @@ async def fire_webhook(db: Session, user_id: int, event_type: str, payload: Dict
 
     async with httpx.AsyncClient(timeout=WEBHOOK_TIMEOUT_SECONDS) as client:
         for sub in subscriptions:
+            # Re-validate immediately before delivery, not just at
+            # subscription creation time. A hostname that resolved to a
+            # public IP when the webhook was created can be repointed at
+            # an internal address later (DNS rebinding) if the attacker
+            # controls that hostname's DNS records.
+            try:
+                assert_safe_webhook_url(sub.url)
+            except UnsafeUrlError:
+                logger.warning(
+                    "Skipping webhook delivery to subscription %s: url no longer resolves to a safe address",
+                    sub.id, exc_info=True,
+                )
+                continue
+
             signature = _sign_payload(sub.secret, body)
             try:
                 response = await client.post(
