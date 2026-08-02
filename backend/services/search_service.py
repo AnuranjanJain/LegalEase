@@ -1,6 +1,9 @@
 import logging
 from typing import List, Dict, Any
-from duckduckgo_search import DDGS
+try:
+    from duckduckgo_search import DDGS
+except ImportError:
+    DDGS = None
 
 logger = logging.getLogger(__name__)
 
@@ -9,7 +12,9 @@ def perform_web_search(query: str, max_results: int = 5) -> List[Dict[str, Any]]
     """
     Perform a live web search using DuckDuckGo to augment legal context.
     """
-    if not query:
+    if not query or DDGS is None:
+        if DDGS is None:
+            logger.warning("duckduckgo_search package is not installed; web search disabled.")
         return []
 
     try:

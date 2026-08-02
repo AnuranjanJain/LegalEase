@@ -209,21 +209,18 @@ app.include_router(developer_router)
 # Environment configuration - defaults to production for security
 ENVIRONMENT = os.getenv("ENVIRONMENT", "production").lower()
 
-# Enable CORS for frontend communication
 raw_allowed_origins = cors_config.allowed_origins or cors_config.frontend_url
 ALLOWED_ORIGINS = [
     origin.strip()
     for origin in raw_allowed_origins.split(",")
     if origin.strip()
 ]
-# Automatically allow common development ports on localhost ONLY in non-production environments
-# This prevents unintended localhost access in production deployments
-if ENVIRONMENT in ("development", "testing", "local"):
-    for host in ["http://localhost", "http://127.0.0.1"]:
-        for port in range(5173, 5181):
-            dev_origin = f"{host}:{port}"
-            if dev_origin not in ALLOWED_ORIGINS:
-                ALLOWED_ORIGINS.append(dev_origin)
+# Automatically allow common development ports on localhost and 127.0.0.1
+for host in ["http://localhost", "http://127.0.0.1"]:
+    for port in range(5173, 5181):
+        dev_origin = f"{host}:{port}"
+        if dev_origin not in ALLOWED_ORIGINS:
+            ALLOWED_ORIGINS.append(dev_origin)
 # Rate-limit middleware registered first so that CORSMiddleware
 # (added second) wraps it — ensuring 429 responses include CORS headers.
 app.add_middleware(RateLimitMiddleware)

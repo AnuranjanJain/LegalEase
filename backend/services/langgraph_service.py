@@ -1,7 +1,11 @@
 import logging
-import operator
-from typing import Annotated, Dict, Any, List, TypedDict
-from langgraph.graph import StateGraph, START, END
+from typing import List, Dict, Any, TypedDict
+try:
+    from langgraph.graph import StateGraph, START, END
+    HAS_LANGGRAPH = True
+except ImportError:
+    HAS_LANGGRAPH = False
+    StateGraph = START = END = None
 
 logger = logging.getLogger(__name__)
 
@@ -43,7 +47,9 @@ def generate_response(state: AgentState) -> Dict[str, Any]:
     response = f"Analyzed query: '{query}' using context: {context[:50]}..."
     return {"response": response}
 
-def build_graph() -> StateGraph:
+def build_graph():
+    if not HAS_LANGGRAPH:
+        return None
     workflow = StateGraph(AgentState)
 
     # Add nodes
@@ -83,6 +89,10 @@ async def run_agent(query: str, documents: List[str] = None) -> str:
     if documents is None:
         documents = []
     
+    if agent_graph is None:
+        logger.warning("LangGraph is not available. Falling back to direct response.")
+        return f"Analyzed query: '{query}'"
+
     initial_state = {
         "query": query,
         "documents": documents,

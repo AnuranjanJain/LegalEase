@@ -1,8 +1,11 @@
 import logging
 from collections import OrderedDict
-from typing import Optional
-from sentence_transformers import SentenceTransformer, util
-import torch
+from typing import Optional, Any
+try:
+    from sentence_transformers import SentenceTransformer, util
+    import torch
+except ImportError:
+    SentenceTransformer = util = torch = None
 
 logger = logging.getLogger(__name__)
 
@@ -24,11 +27,11 @@ class _NamespaceCache:
         self.max_entries = max_entries
         # Maps query -> {"embedding": Tensor[384], "response": str}
         self.entries: "OrderedDict[str, dict]" = OrderedDict()
-        self._matrix: Optional[torch.Tensor] = None
+        self._matrix: Optional[Any] = None
         self._matrix_keys: list[str] = []
 
     def _rebuild_matrix(self) -> None:
-        if not self.entries:
+        if not self.entries or torch is None:
             self._matrix = None
             self._matrix_keys = []
             return
@@ -37,8 +40,8 @@ class _NamespaceCache:
             [self.entries[k]["embedding"] for k in self._matrix_keys]
         )
 
-    def get(self, query_emb: torch.Tensor, threshold: float) -> Optional[str]:
-        if self._matrix is None or not self._matrix_keys:
+    def get(self, query_emb: Any, threshold: float) -> Optional[str]:
+        if self._matrix is None or not self._matrix_keys or torch is None or util is None:
             return None
         cos_scores = util.cos_sim(query_emb, self._matrix)[0]
         best_score, best_idx = torch.max(cos_scores, dim=0)
@@ -48,11 +51,11 @@ class _NamespaceCache:
         entry = self.entries.get(hit_key)
         if entry is None:
             return None
-        # Refresh LRU position on hit.
+        # Move hit query to end for intra-namespace LRU behavior
         self.entries.move_to_end(hit_key)
         return entry["response"]
 
-    def set(self, query: str, embedding: torch.Tensor, response: str) -> None:
+    def set(self, query: str, embedding: Any, response: str) -> None:
         if query in self.entries:
             self.entries[query]["response"] = response
             self.entries[query]["embedding"] = embedding

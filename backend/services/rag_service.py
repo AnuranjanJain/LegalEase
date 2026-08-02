@@ -2,20 +2,22 @@ import logging
 import time
 from dataclasses import dataclass
 from typing import List, Dict, Any, Tuple, Optional
-
-from langchain_postgres.vectorstores import PGVector
-from langchain_community.vectorstores import Chroma
-from langchain_huggingface import HuggingFaceEmbeddings
-from langchain_text_splitters import RecursiveCharacterTextSplitter
 import os
 import threading
-from typing import List
 from fastapi.concurrency import run_in_threadpool
 from backend.config import get_settings
 
 logger = logging.getLogger(__name__)
 
-RAG_DEPS_AVAILABLE = True
+try:
+    from langchain_postgres.vectorstores import PGVector
+    from langchain_community.vectorstores import Chroma
+    from langchain_huggingface import HuggingFaceEmbeddings
+    from langchain_text_splitters import RecursiveCharacterTextSplitter
+    RAG_DEPS_AVAILABLE = True
+except ImportError:
+    PGVector = Chroma = HuggingFaceEmbeddings = RecursiveCharacterTextSplitter = None
+    RAG_DEPS_AVAILABLE = False
 
 
 @dataclass

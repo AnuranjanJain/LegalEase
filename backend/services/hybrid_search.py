@@ -1,10 +1,20 @@
 import logging
 from typing import List, Dict, Any
-from rank_bm25 import BM25Okapi
 
-# We'll use a mocked vector DB interface for the demo
-from sentence_transformers import SentenceTransformer
-import numpy as np
+try:
+    from rank_bm25 import BM25Okapi
+except ImportError:
+    BM25Okapi = None
+
+try:
+    from sentence_transformers import SentenceTransformer
+except ImportError:
+    SentenceTransformer = None
+
+try:
+    import numpy as np
+except ImportError:
+    np = None
 
 logger = logging.getLogger(__name__)
 
@@ -13,6 +23,8 @@ _model = None
 
 def get_model():
     global _model
+    if SentenceTransformer is None:
+        return None
     if _model is None:
         # Load a small fast model for embeddings
         _model = SentenceTransformer('all-MiniLM-L6-v2')
