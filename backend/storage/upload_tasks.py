@@ -32,9 +32,20 @@ class UploadTaskStorageBackend(ABC):
         status: str = "processing",
         progress: int = 0,
         result: Optional[Dict[str, Any]] = None,
-        ttl_seconds: int = 3600
+        ttl_seconds: int = 3600,
+        user_id: Optional[int] = None,
     ) -> bool:
-        """Create a new upload task."""
+        """Create a new upload task.
+
+        user_id records which user's identity created this task, so
+        upload_status() in main.py can verify a requester actually owns
+        the task before returning its result (which may contain the
+        uploaded document's extracted text). Optional only for backward
+        compatibility with any existing stored/in-flight tasks created
+        before this field existed — get_task() callers must treat a
+        missing/None user_id as "cannot verify ownership" and act
+        accordingly (see upload_status).
+        """
         pass
 
     @abstractmethod
@@ -114,13 +125,15 @@ class InMemoryTaskStorage(UploadTaskStorageBackend):
         status: str = "processing",
         progress: int = 0,
         result: Optional[Dict[str, Any]] = None,
-        ttl_seconds: int = 3600
+        ttl_seconds: int = 3600,
+        user_id: Optional[int] = None,
     ) -> bool:
         self._cleanup_expired()
         self._storage[task_id] = {
             "status": status,
             "progress": progress,
             "result": result,
+            "user_id": user_id,
         }
         self._ttls[task_id] = time.time() + ttl_seconds
         return True
@@ -200,13 +213,15 @@ class RedisTaskStorage(UploadTaskStorageBackend):
         status: str = "processing",
         progress: int = 0,
         result: Optional[Dict[str, Any]] = None,
-        ttl_seconds: int = 3600
+        ttl_seconds: int = 3600,
+        user_id: Optional[int] = None,
     ) -> bool:
         try:
             task_data = {
                 "status": status,
                 "progress": progress,
                 "result": result,
+                "user_id": user_id,
             }
             key = self._make_key(task_id)
             self.client.setex(
@@ -374,11 +389,12 @@ class UploadTaskStorage:
         status: str = "processing",
         progress: int = 0,
         result: Optional[Dict[str, Any]] = None,
-        ttl_seconds: Optional[int] = None
+        ttl_seconds: Optional[int] = None,
+        user_id: Optional[int] = None,
     ) -> bool:
         """Create a new upload task."""
         ttl = ttl_seconds or self.default_ttl_seconds
-        return self._backend.create_task(task_id, status, progress, result, ttl)
+        return self._backend.create_task(task_id, status, progress, result, ttl,user_id)
 
     def get_task(self, task_id: str) -> Optional[Dict[str, Any]]:
         """Retrieve an upload task by ID."""
