@@ -5,7 +5,6 @@ import {
   AlertTriangle, FileText, BookOpen, ShieldCheck, Download
 } from 'lucide-react';
 import { api } from '../services/api';
-import { StorageService } from '../services/storage';
 import { useToast } from '../contexts/ToastContext';
 import { useRedactedText } from '../hooks/useRedactedText';
 import { useRedaction } from '../contexts/RedactionContext';
