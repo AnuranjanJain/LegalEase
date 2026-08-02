@@ -174,7 +174,7 @@ function initChatbot() {
         if (chatMessages) {
             const messageDiv = document.createElement('div');
             messageDiv.className = `chat-message ${sender}`;
-            messageDiv.innerHTML = `
+            messageDiv.textContent = `
                 <div class="chat-bubble ${sender}">
                     <p>${message}</p>
                 </div>
@@ -214,7 +214,7 @@ function animateProcessingSteps(steps) {
                 steps[currentStep].classList.add('completed');
                 const icon = steps[currentStep].querySelector('.step-icon');
                 if (icon) {
-                    icon.innerHTML = '<span class="material-symbols-outlined">check_circle</span>';
+                    icon.textContent = '<span class="material-symbols-outlined">check_circle</span>';
                 }
                 currentStep++;
             }, 2000);
@@ -288,7 +288,7 @@ function showNotification(message, type = 'info', duration = 3000) {
     
     notification.className += ' ' + typeClasses[type];
     
-    notification.innerHTML = `
+    notification.textContent = `
         <div class="flex items-center gap-3">
             <div class="flex-1">
                 <p class="text-sm font-medium">${message}</p>
