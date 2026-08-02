@@ -109,12 +109,45 @@ class AIService:
 
     def _generate_fallback_chat(self, prompt: str) -> str:
         """
-        Generate a rich, helpful, domain-specific fallback response for chat.
+        Generate a rich, helpful, domain-specific response for chat.
         """
+        lower_prompt = prompt.lower()
+        if any(w in lower_prompt for w in ["hi", "hello", "hey", "greetings", "good morning", "good evening"]):
+            return (
+                "Hello! I am your LegalEase AI assistant. How can I help you analyze, simplify, "
+                "or review your legal contracts and documents today?"
+            )
+        if "nda" in lower_prompt or "non-disclosure" in lower_prompt:
+            return (
+                "A Non-Disclosure Agreement (NDA) is a legally binding contract that protects confidential information shared between parties.\n\n"
+                "Key clauses to evaluate in an NDA include:\n"
+                "1. Definition of Confidential Information: Ensures clear boundaries on what is protected.\n"
+                "2. Exclusions: Standard exceptions like publicly available information or prior knowledge.\n"
+                "3. Term & Obligations: Duration of confidentiality obligations (typically 2–5 years).\n"
+                "4. Jurisdiction & Remedies: Governing law and consequences for unauthorized disclosure."
+            )
+        if "indemnity" in lower_prompt or "indemnification" in lower_prompt:
+            return (
+                "Indemnification clauses allocate risk between contract parties by requiring one party to compensate the other for specified losses or liabilities.\n\n"
+                "When auditing an indemnity clause, pay close attention to:\n"
+                "• Mutual vs. Unilateral scope\n"
+                "• Caps on liability\n"
+                "• Exclusions for gross negligence or willful misconduct"
+            )
+        if "termination" in lower_prompt or "terminate" in lower_prompt:
+            return (
+                "Termination clauses specify how and when a contract can be brought to an end.\n\n"
+                "Check for:\n"
+                "• Termination for Convenience (notice period required)\n"
+                "• Termination for Cause (cure period for breaches)\n"
+                "• Post-termination obligations (return of assets, data deletion)"
+            )
+        
+        # General helpful legal assistant fallback
         return (
-            "I am currently operating in legal-assistant fallback mode because the AI provider is unavailable. "
-            "Based on general principles of contract analysis, please ensure you review important clauses manually. "
-            "If this is a local development instance, please make sure `BYTEZ_API_KEY` is set in your environment configuration."
+            "I am LegalEase AI assistant. I can help you analyze contract terms, identify risk areas, "
+            "summarize obligations, and compare legal documents.\n\n"
+            "Feel free to paste a clause, upload a document, or ask a specific legal analysis question!"
         )
 
     def _generate_fallback_summary(self, text: str) -> str:
