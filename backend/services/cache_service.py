@@ -64,15 +64,30 @@ class _NamespaceCache:
         self._rebuild_matrix()
 
 
+# Maximum distinct caller identities (namespaces) retained at once. Bounds
+# total process memory regardless of how many distinct users/API keys the
+# process serves over its lifetime — without this, _namespaces grew
+# forever, one entry per identity ever seen, each holding up to
+# max_entries_per_namespace embedding tensors.
+DEFAULT_MAX_NAMESPACES = 500
+
+
 class SemanticCache:
     def __init__(
         self,
         threshold: float = 0.95,
         max_entries_per_namespace: int = DEFAULT_MAX_ENTRIES_PER_NAMESPACE,
+        max_namespaces: int = DEFAULT_MAX_NAMESPACES,
     ):
         self.threshold = threshold
         self.max_entries_per_namespace = max_entries_per_namespace
-        self._namespaces: dict[str, _NamespaceCache] = {}
+        self.max_namespaces = max_namespaces
+        # LRU-bounded by namespace, same pattern _NamespaceCache already
+        # uses to LRU-bound entries within a namespace. move_to_end() on
+        # every access keeps recently-active identities at the "new" end;
+        # popitem(last=False) evicts the least-recently-used identity once
+        # the cap is exceeded.
+        self._namespaces: "OrderedDict[str, _NamespaceCache]" = OrderedDict()
         try:
             self.model = SentenceTransformer("all-MiniLM-L6-v2")
             logger.info("Semantic Cache initialized successfully.")
@@ -82,9 +97,20 @@ class SemanticCache:
 
     def _get_namespace(self, namespace: str, *, create: bool) -> Optional[_NamespaceCache]:
         ns = self._namespaces.get(namespace)
-        if ns is None and create:
-            ns = _NamespaceCache(self.max_entries_per_namespace)
-            self._namespaces[namespace] = ns
+        if ns is not None:
+            self._namespaces.move_to_end(namespace)
+            return ns
+        if not create:
+            return None
+
+        ns = _NamespaceCache(self.max_entries_per_namespace)
+        self._namespaces[namespace] = ns
+        while len(self._namespaces) > self.max_namespaces:
+            evicted_key, _ = self._namespaces.popitem(last=False)
+            logger.info(
+                f"Evicted least-recently-used cache namespace={evicted_key!r} "
+                f"(namespace cap: {self.max_namespaces})"
+            )
         return ns
 
     def get(self, query: str, namespace: str) -> Optional[str]:
