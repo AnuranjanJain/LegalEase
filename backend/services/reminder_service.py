@@ -58,24 +58,35 @@ def run_obligation_reminders(db: Session | None = None) -> int:
             days_remaining = (obligation.due_date - now).days
             sent_stages = _sent_stages(obligation)
 
-            for threshold in REMINDER_THRESHOLDS_DAYS:
-                # Fire once the obligation is at or inside the threshold
-                # window (e.g. days_remaining <= 30) and hasn't already
-                # fired for that specific threshold, and hasn't already
-                # passed due (avoid spamming for very old overdue items
-                # beyond the smallest threshold check below).
-                if 0 <= days_remaining <= threshold and threshold not in sent_stages:
-                    db.add(
-                        models.Notification(
-                            user_id=obligation.user_id,
-                            title=f"Upcoming deadline: {obligation.title}",
-                            description=obligation.description
-                            or f"Due in {days_remaining} day(s).",
-                            type="document",
-                        )
-                    )
-                    _mark_stage_sent(obligation, threshold)
-                    created += 1
+            if days_remaining < 0:
+                continue
+
+            # Of the thresholds this obligation currently falls inside and
+            # hasn't fired yet, only the closest (smallest) one is actually
+            # actionable to the user right now — the wider ones are moot
+            # once a tighter window has already been reached. Fire exactly
+            # one notification per run, and mark every crossed threshold as
+            # sent so the wider ones never fire retroactively afterward.
+            applicable = [
+                t for t in REMINDER_THRESHOLDS_DAYS
+                if days_remaining <= t and t not in sent_stages
+            ]
+            if not applicable:
+                continue
+
+            closest_threshold = min(applicable)
+            db.add(
+                models.Notification(
+                    user_id=obligation.user_id,
+                    title=f"Upcoming deadline: {obligation.title}",
+                    description=obligation.description
+                    or f"Due in {days_remaining} day(s).",
+                    type="document",
+                )
+            )
+            for t in applicable:
+                _mark_stage_sent(obligation, t)
+            created += 1
 
         db.commit()
         logger.info("Obligation reminder run created %d notification(s)", created)

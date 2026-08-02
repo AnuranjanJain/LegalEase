@@ -68,6 +68,20 @@ class SecurityConfig(BaseSettings):
         description="Development mode API key."
     )
     
+    # Refresh token configuration
+    refresh_token_expire_days: int = Field(
+        default=7,
+        description="Refresh token expiration time in days."
+    )
+    refresh_token_cookie_name: str = Field(
+        default="refresh_token",
+        description="Name of the refresh token cookie."
+    )
+    refresh_token_rotation_enabled: bool = Field(
+        default=True,
+        description="Enable refresh token rotation on each refresh request."
+    )
+    
     @field_validator('jwt_secret_key')
     @classmethod
     def validate_jwt_secret_key(cls, v: str) -> str:
@@ -78,6 +92,19 @@ class SecurityConfig(BaseSettings):
             logger.warning(
                 "JWT_SECRET_KEY is shorter than recommended 16 characters. "
                 "Consider using a stronger secret."
+            )
+        return v
+    
+    @field_validator('refresh_token_expire_days')
+    @classmethod
+    def validate_refresh_token_expire_days(cls, v: int) -> int:
+        """Validate refresh token expiration is positive and reasonable."""
+        if v <= 0:
+            raise ValueError('REFRESH_TOKEN_EXPIRE_DAYS must be greater than 0')
+        if v > 365:
+            logger.warning(
+                f"REFRESH_TOKEN_EXPIRE_DAYS ({v} days) is very long. "
+                "Consider using a shorter duration for better security."
             )
         return v
 
@@ -103,9 +130,22 @@ class EnvironmentConfig(BaseSettings):
         description="Enable test mode for controlled failure simulation."
     )
     
+    @model_validator(mode='before')
+    @classmethod
+    def default_testing_environment_if_test_mode(cls, data):
+        if isinstance(data, dict):
+            test_mode = data.get("test_mode")
+            if isinstance(test_mode, str):
+                test_mode = test_mode.lower() in ("true", "1", "yes")
+            if test_mode and "environment" not in data:
+                data = dict(data)
+                data["environment"] = "testing"
+        return data
+
     @model_validator(mode='after')
     def validate_test_mode_environment(self):
         """Ensure test_mode is only enabled in non-production environments."""
+        # Check the field value, not environment variable
         if self.environment == "production" and self.test_mode:
             raise ValueError(
                 "TEST_MODE cannot be enabled in production environment. "
@@ -290,6 +330,14 @@ class RateLimitConfig(BaseSettings):
     
     model_config = ConfigDict(env_prefix="", case_sensitive=False)
     
+    rate_limit_backend: Literal["redis", "memory", "auto"] = Field(
+        default="auto",
+        description=(
+            "Rate limiting backend: 'redis' for distributed Redis, 'memory' for in-memory, "
+            "'auto' to automatically choose Redis if available, otherwise memory. "
+            "In production, 'redis' is recommended for distributed deployments."
+        )
+    )
     rate_limit_period: int = Field(
         default=60,
         description="Rate limit period in seconds."
@@ -307,11 +355,11 @@ class RateLimitConfig(BaseSettings):
         description="Trust X-Forwarded-* headers for client IP detection."
     )
     require_redis_in_production: bool = Field(
-        default=False,
+        default=True,
         description="Require Redis for rate limiting in production environment. When enabled, application will fail to start if Redis is unavailable in production."
     )
     redis_fail_fast: bool = Field(
-        default=False,
+        default=True,
         description="Fail fast if Redis initialization fails. When enabled, application will fail to start if Redis URL is configured but connection fails."
     )
     
@@ -366,16 +414,28 @@ class RateLimitConfig(BaseSettings):
     @model_validator(mode='after')
     def validate_redis_config_environment(self):
         """Ensure Redis configuration is appropriate for environment."""
+        # This validator runs on RateLimitConfig, so we need to get environment from os
         environment = os.getenv("ENVIRONMENT", "production")
+        test_mode_str = os.getenv("TEST_MODE", "false")
+        test_mode = test_mode_str.lower() in ("true", "1", "yes")
         
-        if environment == "production" and self.require_redis_in_production:
+        # Skip Redis requirement in test mode
+        if environment == "production" and self.require_redis_in_production and not test_mode:
             redis_url = os.getenv("REDIS_URL")
             if not redis_url:
-                logger.warning(
+                raise ValueError(
                     "REQUIRE_REDIS_IN_PRODUCTION is enabled but REDIS_URL is not set. "
-                    "Rate limiting will use in-memory storage, which is not suitable for distributed deployments. "
+                    "Redis is required for distributed rate limiting in production. "
                     "Set REDIS_URL or disable REQUIRE_REDIS_IN_PRODUCTION."
                 )
+        
+        # Validate backend selection against environment
+        if environment == "production" and self.rate_limit_backend == "memory" and not test_mode:
+            logger.warning(
+                "RATE_LIMIT_BACKEND is set to 'memory' in production environment. "
+                "Rate limiting will be process-local only, which is unsafe for distributed deployments. "
+                "Consider setting RATE_LIMIT_BACKEND to 'redis' for distributed rate limiting."
+            )
         
         return self
     
@@ -447,6 +507,18 @@ class AIConfig(BaseSettings):
         default=False,
         description="Enable debug information in health endpoint."
     )
+    rag_init_retry_interval: int = Field(
+        default=300,
+        description="Cooldown in seconds before retrying RAG initialization after a failure."
+    )
+    rag_enable_auto_recovery: bool = Field(
+        default=True,
+        description="Enable automatic retry of failed RAG initialization after the cooldown expires."
+    )
+    rag_max_init_retries: int = Field(
+        default=3,
+        description="Maximum number of initialization attempts before treating the RAG service as permanently degraded."
+    )
     
     @field_validator('max_model_input_chars')
     @classmethod
@@ -488,6 +560,20 @@ class AIConfig(BaseSettings):
         """Validate retry backoff factor is positive."""
         if v <= 0:
             raise ValueError('RETRY_BACKOFF_FACTOR must be greater than 0')
+        return v
+
+    @field_validator('rag_init_retry_interval')
+    @classmethod
+    def validate_rag_init_retry_interval(cls, v: int) -> int:
+        if v < 0:
+            raise ValueError('RAG_INIT_RETRY_INTERVAL must be greater than or equal to 0')
+        return v
+
+    @field_validator('rag_max_init_retries')
+    @classmethod
+    def validate_rag_max_init_retries(cls, v: int) -> int:
+        if v < 0:
+            raise ValueError('RAG_MAX_INIT_RETRIES must be greater than or equal to 0')
         return v
     
     @model_validator(mode='after')
@@ -577,8 +663,10 @@ class EncryptionConfig(BaseSettings):
     def validate_encryption_key_in_production(self):
         """Ensure DOCUMENT_ENCRYPTION_KEY is set in production environment."""
         environment = os.getenv("ENVIRONMENT", "production")
+        test_mode_str = os.getenv("TEST_MODE", "false")
+        test_mode = test_mode_str.lower() in ("true", "1", "yes")
         
-        if environment == "production" and not self.document_encryption_key:
+        if environment == "production" and not self.document_encryption_key and not test_mode:
             logger.error(
                 "DOCUMENT_ENCRYPTION_KEY is required in production. "
                 "Using JWT_SECRET_KEY for document encryption is prohibited."
@@ -645,6 +733,34 @@ def get_settings() -> Settings:
     """
     global _settings
     
+    if _settings is not None:
+        env_in_os = os.getenv("ENVIRONMENT")
+        redis_in_os = os.getenv("REDIS_URL")
+        backend_in_os = os.getenv("RATE_LIMIT_BACKEND")
+        fail_fast_in_os = os.getenv("REDIS_FAIL_FAST")
+        req_redis_in_os = os.getenv("REQUIRE_REDIS_IN_PRODUCTION")
+        test_in_os = os.getenv("TEST_MODE")
+        jwt_in_os = os.getenv("JWT_SECRET_KEY")
+
+        cached_env = _settings.environment.environment
+        cached_redis = _settings.database.redis_url
+        cached_backend = _settings.rate_limit.rate_limit_backend
+        cached_fail_fast = "true" if _settings.rate_limit.redis_fail_fast else "false"
+        cached_req_redis = "true" if _settings.rate_limit.require_redis_in_production else "false"
+        cached_test = "true" if _settings.environment.test_mode else "false"
+        cached_jwt = _settings.security.jwt_secret_key
+
+        if (
+            (env_in_os is not None and env_in_os.lower() != cached_env.lower())
+            or (redis_in_os != cached_redis)
+            or (backend_in_os is not None and backend_in_os.lower() != cached_backend.lower())
+            or (fail_fast_in_os is not None and fail_fast_in_os.lower() != cached_fail_fast)
+            or (req_redis_in_os is not None and req_redis_in_os.lower() != cached_req_redis)
+            or (test_in_os is not None and test_in_os.lower() != cached_test)
+            or (jwt_in_os is not None and jwt_in_os != cached_jwt)
+        ):
+            _settings = None
+
     if _settings is None:
         try:
             _settings = Settings()

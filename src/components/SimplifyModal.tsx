@@ -4,6 +4,7 @@ import { X, Copy, Check, AlertTriangle, Sparkles, Loader2, Download } from 'luci
 import { api } from '../services/api';
 import { useToast } from '../contexts/ToastContext';
 import { FeedbackWidget } from './FeedbackWidget';
+import { LegaleseSimplifier } from './LegaleseSimplifier';
 
 interface SimplifyModalProps {
   clauseText: string | null;
@@ -215,7 +216,7 @@ export function SimplifyModal({ clauseText, onClose }: SimplifyModalProps) {
               Original Legal Clause
             </span>
             <div className="p-4 rounded-xl border border-gray-150 dark:border-gray-800 bg-gray-550/5 dark:bg-gray-950/20 font-mono text-[11px] text-gray-650 dark:text-gray-405 leading-relaxed max-h-40 overflow-y-auto">
-              {clauseText}
+              <LegaleseSimplifier text={clauseText} />
             </div>
           </div>
 
@@ -252,7 +253,7 @@ export function SimplifyModal({ clauseText, onClose }: SimplifyModalProps) {
               ) : (
                 <div className="flex flex-col h-full space-y-4">
                   <div className="text-xs text-gray-800 dark:text-gray-250 leading-relaxed whitespace-pre-wrap select-text">
-                    {simplifiedText}
+                    <LegaleseSimplifier text={simplifiedText} />
                   </div>
                   <FeedbackWidget responseType="simplify" />
                 </div>

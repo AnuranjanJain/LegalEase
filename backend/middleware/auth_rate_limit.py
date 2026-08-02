@@ -7,7 +7,7 @@ to prevent brute-force attacks, credential stuffing, signup abuse, and verificat
 import logging
 from typing import Optional
 from fastapi import Request, HTTPException, status
-from backend.utils.limiter import SimpleRateLimiter
+from backend.utils.limiter import create_rate_limiter
 from backend.config import get_settings
 
 logger = logging.getLogger(__name__)
@@ -30,13 +30,13 @@ AUTH_VERIFICATION_RATE_LIMIT = rate_config.auth_verification_rate_limit
 AUTH_VERIFICATION_RATE_PERIOD = rate_config.auth_verification_rate_period
 
 # Initialize rate limiters
-login_ip_limiter = SimpleRateLimiter(AUTH_LOGIN_RATE_LIMIT, AUTH_LOGIN_RATE_PERIOD)
-login_email_limiter = SimpleRateLimiter(AUTH_LOGIN_RATE_LIMIT, AUTH_LOGIN_RATE_PERIOD)
-signup_ip_limiter = SimpleRateLimiter(AUTH_SIGNUP_RATE_LIMIT, AUTH_SIGNUP_RATE_PERIOD)
-signup_email_limiter = SimpleRateLimiter(AUTH_SIGNUP_RATE_LIMIT, AUTH_SIGNUP_RATE_PERIOD)
-verification_ip_limiter = SimpleRateLimiter(AUTH_VERIFICATION_RATE_LIMIT, AUTH_VERIFICATION_RATE_PERIOD)
-verification_email_limiter = SimpleRateLimiter(AUTH_VERIFICATION_RATE_LIMIT, AUTH_VERIFICATION_RATE_PERIOD)
-failed_login_limiter = SimpleRateLimiter(AUTH_LOGIN_FAILED_ATTEMPT_LIMIT, AUTH_LOGIN_FAILED_ATTEMPT_PERIOD)
+login_ip_limiter = create_rate_limiter(AUTH_LOGIN_RATE_LIMIT, AUTH_LOGIN_RATE_PERIOD)
+login_email_limiter = create_rate_limiter(AUTH_LOGIN_RATE_LIMIT, AUTH_LOGIN_RATE_PERIOD)
+signup_ip_limiter = create_rate_limiter(AUTH_SIGNUP_RATE_LIMIT, AUTH_SIGNUP_RATE_PERIOD)
+signup_email_limiter = create_rate_limiter(AUTH_SIGNUP_RATE_LIMIT, AUTH_SIGNUP_RATE_PERIOD)
+verification_ip_limiter = create_rate_limiter(AUTH_VERIFICATION_RATE_LIMIT, AUTH_VERIFICATION_RATE_PERIOD)
+verification_email_limiter = create_rate_limiter(AUTH_VERIFICATION_RATE_LIMIT, AUTH_VERIFICATION_RATE_PERIOD)
+failed_login_limiter = create_rate_limiter(AUTH_LOGIN_FAILED_ATTEMPT_LIMIT, AUTH_LOGIN_FAILED_ATTEMPT_PERIOD)
 
 
 def get_client_ip(request: Request) -> str:
@@ -68,6 +68,10 @@ def check_login_rate_limit(request: Request, email: str) -> None:
     Raises:
         HTTPException: If rate limit is exceeded
     """
+    # Skip rate limiting in test mode
+    if settings.environment.test_mode:
+        return
+    
     ip = get_client_ip(request)
     email_lower = email.lower()
     
@@ -115,6 +119,10 @@ def check_signup_rate_limit(request: Request, email: str) -> None:
     Raises:
         HTTPException: If rate limit is exceeded
     """
+    # Skip rate limiting in test mode
+    if settings.environment.test_mode:
+        return
+    
     ip = get_client_ip(request)
     email_lower = email.lower()
     
@@ -162,6 +170,10 @@ def check_verification_rate_limit(request: Request, email: str) -> None:
     Raises:
         HTTPException: If rate limit is exceeded
     """
+    # Skip rate limiting in test mode
+    if settings.environment.test_mode:
+        return
+    
     ip = get_client_ip(request)
     email_lower = email.lower()
     

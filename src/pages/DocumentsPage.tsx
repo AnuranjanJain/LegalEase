@@ -14,10 +14,11 @@ import { ClauseAnalysisSection } from '../components/ClauseAnalysisSection';
 import { EntityGraph } from '../components/EntityGraph';
 import { ReadabilityScore } from '../components/ReadabilityScore';
 import { useRedaction } from '../contexts/RedactionContext';
-import { redact } from '../utils/redaction';
+import { redact, redactWithFeedback } from '../utils/redaction';
 import { RedactedText } from '../components/RedactedText';
 import { DocumentCompareSelector } from '../components/DocumentCompareSelector';
 import { FilePreview } from '../components/FilePreview';
+import { PiiPrivacyFilterToggle } from '../components/PiiPrivacyFilterToggle';
 
 function renderHighlightedText(text: string, clauses: any[]) {
   if (!text) return '';
@@ -135,6 +136,53 @@ export function DocumentsPage() {
   }, [selectedAuditDoc]);
 
   const [isExporting, setIsExporting] = useState(false);
+  const [uploadMode, setUploadMode] = useState<'file' | 'paste'>('file');
+  const [pastedText, setPastedText] = useState('');
+  const [pastedDocTitle, setPastedDocTitle] = useState('');
+
+  // Real-time PII visual feedback computation (Acceptance Criteria 3)
+  const piiFeedback = useMemo(() => {
+    return redactWithFeedback(pastedText, 'labeled');
+  }, [pastedText]);
+
+  const handlePasteSubmit = () => {
+    if (!pastedText.trim()) {
+      showToast('Please enter or paste document text to analyze.', 'warning');
+      return;
+    }
+
+    const title = pastedDocTitle.trim() || `Pasted Legal Document (${new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })})`;
+    // Client-side auto-redaction before sending to backend if Privacy Filter is enabled
+    const finalCleanText = isRedactionEnabled ? piiFeedback.redactedText : pastedText;
+
+    const newDoc: Document = {
+      id: `doc_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+      name: title,
+      type: 'txt',
+      size: new Blob([finalCleanText]).size,
+      uploadDate: new Date().toISOString(),
+      status: 'processing',
+      text: finalCleanText,
+    };
+
+    // Save to StorageService and trigger background processing
+    StorageService.saveDocument(newDoc);
+    setDocuments(StorageService.getDocuments());
+    
+    // Create text file for processing
+    const file = new File([finalCleanText], `${title}.txt`, { type: 'text/plain' });
+    setPastedText('');
+    setPastedDocTitle('');
+
+    showToast(
+      isRedactionEnabled && piiFeedback.matchCount > 0
+        ? `Auto-redacted ${piiFeedback.matchCount} PII items client-side! Submitting audit...`
+        : `Submitting pasted document for AI audit...`,
+      'info'
+    );
+
+    navigate('/processing', { state: { docId: newDoc.id, file } });
+  };
   const fileInputRef = useRef<HTMLInputElement>(null);
   const { showToast } = useToast();
   const navigate = useNavigate();
@@ -566,49 +614,182 @@ export function DocumentsPage() {
           </div>
         </div>
 
-        {/* --- UPLOAD AREA WITH GLASSMORPHISM AND NEUMORPHIC GLOW --- */}
-        <div
-          id="global-upload-trigger"
-          onDragOver={handleDragOver}
-          onDragLeave={handleDragLeave}
-          onDrop={handleDrop}
-          onClick={() => fileInputRef.current?.click()}
-          className={`group cursor-pointer p-10 rounded-2xl border-2 border-dashed text-center transition-all duration-500 bg-white/70 dark:bg-gray-950/40 backdrop-blur-md relative overflow-hidden ${
-            stagedFiles.length === 0 ? 'mb-10' : 'mb-6'
-          } ${
-            isDragging
-              ? 'border-primary-600 bg-primary-600/5 dark:bg-primary-500/10 shadow-[0_0_30px_rgba(37,99,235,0.15)] scale-[1.01]'
-              : 'border-gray-250 dark:border-gray-800 hover:border-primary-600 hover:bg-gray-50/50 dark:hover:bg-gray-900/20 hover:shadow-md'
-          }`}
-          role="button"
-          aria-label="Upload documents by dragging and dropping or clicking here"
-        >
-          {/* Ambient card back glow */}
-          <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-48 h-48 bg-primary-600/5 rounded-full filter blur-[60px] opacity-0 group-hover:opacity-100 transition-opacity"></div>
-          
-          <input
-            type="file"
-            ref={fileInputRef}
-            className="hidden"
-            onChange={handleFileChange}
-            accept=".pdf,.doc,.docx,.txt"
-            multiple
-          />
-          
-          <div className="w-16 h-16 bg-primary-600/10 text-primary-600 dark:text-primary-400 rounded-2xl flex items-center justify-center mx-auto mb-4 group-hover:scale-110 group-hover:rotate-12 transition-all duration-300">
-            <UploadCloud size={32} />
-          </div>
-          
-          <h3 className="text-xl font-bold text-gray-900 dark:text-white mb-2">
-            {isDragging ? 'Drop Files Here' : 'Click to Upload or Drag & Drop'}
-          </h3>
-          <p className="text-sm text-gray-500 dark:text-gray-400 mb-1">
-            Supports PDF, DOCX, DOC, and TXT documents.
-          </p>
-          <span className="inline-block text-[11px] font-semibold text-primary px-2.5 py-0.5 rounded-full bg-primary/10 border border-primary/20">
-            Max File Size: 10MB
-          </span>
+        {/* Privacy Filter Toggle Banner (Issue #578) */}
+        <div className="mb-6">
+          <PiiPrivacyFilterToggle />
         </div>
+
+        {/* Upload Mode Selector (File Upload vs Paste Text) */}
+        <div className="flex items-center gap-2 mb-4">
+          <button
+            onClick={() => setUploadMode('file')}
+            className={`px-4 py-2 text-sm font-semibold rounded-xl transition-all ${
+              uploadMode === 'file'
+                ? 'bg-primary-600 text-white shadow-md shadow-primary-500/20'
+                : 'bg-white dark:bg-gray-900 text-gray-600 dark:text-gray-400 border border-gray-200 dark:border-gray-800 hover:text-gray-900 dark:hover:text-white'
+            }`}
+          >
+            <UploadCloud size={16} className="inline mr-2" />
+            Upload File
+          </button>
+          <button
+            onClick={() => setUploadMode('paste')}
+            className={`px-4 py-2 text-sm font-semibold rounded-xl transition-all ${
+              uploadMode === 'paste'
+                ? 'bg-primary-600 text-white shadow-md shadow-primary-500/20'
+                : 'bg-white dark:bg-gray-900 text-gray-600 dark:text-gray-400 border border-gray-200 dark:border-gray-800 hover:text-gray-900 dark:hover:text-white'
+            }`}
+          >
+            <FileText size={16} className="inline mr-2" />
+            Paste Legal Document
+          </button>
+        </div>
+
+        {uploadMode === 'file' ? (
+          /* --- UPLOAD AREA WITH GLASSMORPHISM AND NEUMORPHIC GLOW --- */
+          <div
+            id="global-upload-trigger"
+            onDragOver={handleDragOver}
+            onDragLeave={handleDragLeave}
+            onDrop={handleDrop}
+            onClick={() => fileInputRef.current?.click()}
+            className={`group cursor-pointer p-10 rounded-2xl border-2 border-dashed text-center transition-all duration-500 bg-white/70 dark:bg-gray-950/40 backdrop-blur-md relative overflow-hidden ${
+              stagedFiles.length === 0 ? 'mb-10' : 'mb-6'
+            } ${
+              isDragging
+                ? 'border-primary-600 bg-primary-600/5 dark:bg-primary-500/10 shadow-[0_0_30px_rgba(37,99,235,0.15)] scale-[1.01]'
+                : 'border-gray-250 dark:border-gray-800 hover:border-primary-600 hover:bg-gray-50/50 dark:hover:bg-gray-900/20 hover:shadow-md'
+            }`}
+            role="button"
+            aria-label="Upload documents by dragging and dropping or clicking here"
+          >
+            {/* Ambient card back glow */}
+            <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-48 h-48 bg-primary-600/5 rounded-full filter blur-[60px] opacity-0 group-hover:opacity-100 transition-opacity"></div>
+            
+            <input
+              type="file"
+              ref={fileInputRef}
+              className="hidden"
+              onChange={handleFileChange}
+              accept=".pdf,.doc,.docx,.txt"
+              multiple
+            />
+            
+            <div className="w-16 h-16 bg-primary-600/10 text-primary-600 dark:text-primary-400 rounded-2xl flex items-center justify-center mx-auto mb-4 group-hover:scale-110 group-hover:rotate-12 transition-all duration-300">
+              <UploadCloud size={32} />
+            </div>
+            
+            <h3 className="text-xl font-bold text-gray-900 dark:text-white mb-2">
+              {isDragging ? 'Drop Files Here' : 'Click to Upload or Drag & Drop'}
+            </h3>
+            <p className="text-sm text-gray-500 dark:text-gray-400 mb-1">
+              Supports PDF, DOCX, DOC, and TXT documents.
+            </p>
+            <span className="inline-block text-[11px] font-semibold text-primary px-2.5 py-0.5 rounded-full bg-primary/10 border border-primary/20">
+              Max File Size: 10MB
+            </span>
+          </div>
+        ) : (
+          /* --- PASTE LEGAL DOCUMENT AREA WITH REAL-TIME VISUAL FEEDBACK (Acceptance Criteria 3) --- */
+          <div className="mb-10 p-6 rounded-2xl border border-gray-200 dark:border-gray-800 bg-white/80 dark:bg-gray-950/80 backdrop-blur-md space-y-4">
+            <div>
+              <label htmlFor="pasted-doc-title" className="block text-xs font-bold uppercase tracking-wider text-gray-700 dark:text-gray-300 mb-1">
+                Document Title (Optional)
+              </label>
+              <input
+                id="pasted-doc-title"
+                type="text"
+                value={pastedDocTitle}
+                onChange={(e) => setPastedDocTitle(e.target.value)}
+                placeholder="e.g. Master Services Agreement v2.1"
+                className="w-full px-4 py-2 text-sm rounded-xl border border-gray-200 dark:border-gray-800 bg-gray-50 dark:bg-gray-900 text-gray-900 dark:text-white focus:outline-none focus:border-primary/50 transition-colors"
+              />
+            </div>
+
+            <div>
+              <div className="flex justify-between items-center mb-1">
+                <label htmlFor="pasted-doc-text" className="block text-xs font-bold uppercase tracking-wider text-gray-700 dark:text-gray-300">
+                  Paste Document Content
+                </label>
+                {isRedactionEnabled && piiFeedback.matchCount > 0 && (
+                  <span className="text-[11px] font-bold text-amber-600 dark:text-amber-400 bg-amber-500/10 px-2 py-0.5 rounded border border-amber-500/20 animate-pulse">
+                    Shield Active: {piiFeedback.matchCount} PII Items Auto-Redacted Real-Time
+                  </span>
+                )}
+              </div>
+              <textarea
+                id="pasted-doc-text"
+                rows={6}
+                value={pastedText}
+                onChange={(e) => setPastedText(e.target.value)}
+                placeholder="Paste legal contract text, clauses, terms, or email correspondence here..."
+                className="w-full p-4 text-sm rounded-xl border border-gray-200 dark:border-gray-800 bg-gray-50 dark:bg-gray-900 text-gray-900 dark:text-white focus:outline-none focus:border-primary/50 transition-colors font-mono"
+              />
+            </div>
+
+            {/* REAL-TIME VISUAL FEEDBACK PANEL */}
+            {pastedText.trim() && (
+              <div className="p-4 rounded-xl border border-gray-200 dark:border-gray-800 bg-gray-50/50 dark:bg-gray-900/50 space-y-3">
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <span className="text-xs font-bold uppercase tracking-wider text-gray-700 dark:text-gray-300 flex items-center gap-1.5">
+                    <Eye size={14} className="text-primary" />
+                    Real-Time Visual Redaction Feedback
+                  </span>
+                  <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
+                    piiFeedback.matchCount > 0
+                      ? 'bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-500/20'
+                      : 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20'
+                  }`}>
+                    {piiFeedback.matchCount > 0 ? `${piiFeedback.matchCount} Redactions Detected` : 'No PII Detected'}
+                  </span>
+                </div>
+
+                {/* Detected Breakdown Badges */}
+                {Object.keys(piiFeedback.matchSummary).length > 0 && (
+                  <div className="flex flex-wrap gap-2 pt-1">
+                    {Object.entries(piiFeedback.matchSummary).map(([label, count]) => (
+                      <span
+                        key={label}
+                        className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-md text-[10px] font-bold bg-amber-500/10 text-amber-700 dark:text-amber-300 border border-amber-500/30"
+                      >
+                        <ShieldCheck size={12} />
+                        {label}: {count}
+                      </span>
+                    ))}
+                  </div>
+                )}
+
+                {/* Live Redacted Text Preview Box */}
+                {isRedactionEnabled && (
+                  <div className="p-3 rounded-lg bg-gray-900 text-gray-200 text-xs font-mono max-h-36 overflow-y-auto leading-relaxed border border-gray-800">
+                    <p className="text-[10px] font-extrabold uppercase tracking-widest text-emerald-400 mb-1">
+                      Sanitized Server Payload Preview:
+                    </p>
+                    {piiFeedback.redactedText}
+                  </div>
+                )}
+              </div>
+            )}
+
+            <div className="flex justify-end gap-3 pt-2">
+              <button
+                type="button"
+                onClick={() => setPastedText('')}
+                className="px-4 py-2 text-xs font-semibold text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white"
+              >
+                Clear Text
+              </button>
+              <button
+                type="button"
+                onClick={handlePasteSubmit}
+                className="inline-flex items-center px-5 py-2.5 text-xs font-bold rounded-xl text-white bg-primary-600 hover:bg-primary-500 shadow-md shadow-primary-500/20 transition-all active:scale-95"
+              >
+                <ShieldCheck size={16} className="mr-2" />
+                Audit & Summarize Pasted Document
+              </button>
+            </div>
+          </div>
+        )}
 
         {/* --- STAGED FILES PREVIEW --- */}
         {stagedFiles.length > 0 && (
