@@ -64,7 +64,7 @@ export function SimulationRoom() {
   };
 
   const getRoleName = (role: string) => {
-    return role.split('_').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ');
+    return role.split('_').map(w => w[0].toUpperCase() + w.slice(1)).join(' ');
   };
 
   return (
