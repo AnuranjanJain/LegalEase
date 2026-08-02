@@ -14,6 +14,12 @@ import asyncio
 from datetime import datetime
 from typing import Dict, Set, Optional
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect, Query
+from jose import JWTError, jwt
+from sqlalchemy.orm import Session
+
+from backend.auth import SECRET_KEY, ALGORITHM, is_token_revoked
+from backend.database import SessionLocal
+from backend import models
 
 logger = logging.getLogger(__name__)
 
@@ -110,21 +116,88 @@ class ConnectionManager:
 manager = ConnectionManager()
 
 
+async def _authenticate_websocket(token: Optional[str], db: Session) -> Optional["models.User"]:
+    """
+    Validate a JWT passed as a query param. Browsers cannot attach custom
+    headers to a WebSocket handshake, so Authorization: Bearer isn't an
+    option here — this mirrors how other WS-auth patterns work (token in
+    the connection URL, validated before accept()).
+
+    Returns the authenticated User on success, or None if the token is
+    missing, malformed, expired, or revoked. Callers MUST reject the
+    connection when this returns None rather than falling back to
+    trusting any client-supplied identity.
+    """
+    if not token or not SECRET_KEY:
+        return None
+    try:
+        payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
+    except JWTError:
+        return None
+
+    email = payload.get("sub")
+    jti = payload.get("jti")
+    if not email:
+        return None
+    if jti and is_token_revoked(jti, db):
+        return None
+
+    return db.query(models.User).filter(models.User.email == email).first()
+
+
 @router.websocket("/ws/collaborate/{room_id}")
 async def websocket_collaborate(
     websocket: WebSocket,
     room_id: str,
-    user_id: str = Query(...),
-    username: str = Query(default="Anonymous")
+    token: Optional[str] = Query(default=None),
 ):
     """
     WebSocket endpoint for real-time document collaboration.
+
+    Authentication: the caller must pass a valid JWT access token via the
+    `token` query parameter. user_id and username are derived from the
+    verified token — never trusted from client input, unlike the previous
+    implementation. The caller must also own the document identified by
+    room_id (same ownership rule as comments_routes.py's
+    _get_owned_document), enforced before the connection is accepted.
 
     Clients connect to a room (identified by document ID) and can:
       - Send cursor position updates
       - Send document edits
       - Receive broadcasts of other users' cursors and edits
     """
+    db = SessionLocal()
+    try:
+        user = await _authenticate_websocket(token, db)
+        if user is None:
+            # Reject before accept(): sending a close frame during the
+            # handshake instead of upgrading the connection at all.
+            await websocket.close(code=4401)
+            return
+
+        try:
+            document_id = int(room_id)
+        except ValueError:
+            await websocket.close(code=4404)
+            return
+
+        owns_document = (
+            db.query(models.DocumentRecord)
+            .filter(
+                models.DocumentRecord.id == document_id,
+                models.DocumentRecord.user_id == user.id,
+            )
+            .first()
+        )
+        if owns_document is None:
+            await websocket.close(code=4403)
+            return
+
+        user_id = str(user.id)
+        username = user.email
+    finally:
+        db.close()
+
     await manager.connect(websocket, room_id, user_id, username)
     try:
         while True:
