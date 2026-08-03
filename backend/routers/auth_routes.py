@@ -42,6 +42,24 @@ logger = logging.getLogger(__name__)
 settings = get_settings()
 ENVIRONMENT = settings.environment.environment
 TEST_MODE = settings.environment.test_mode
+TEST_VERIFICATION_FAILURE_EMAILS = [
+    email.strip().lower() 
+    for email in settings.environment.test_verification_failure_emails.split(",") 
+    if email.strip()
+]
+TEST_FAILURE_EMAIL_PATTERNS = [
+    pattern.strip().lower() 
+    for pattern in settings.environment.test_failure_email_patterns.split(",") 
+    if pattern.strip()
+]
+
+# Log test mode configuration at startup
+if TEST_MODE:
+    logger.info(
+        f"Test mode enabled in {ENVIRONMENT} environment. "
+        f"Configured with {len(TEST_VERIFICATION_FAILURE_EMAILS)} specific failure emails "
+        f"and {len(TEST_FAILURE_EMAIL_PATTERNS)} failure patterns."
+    )
 
 router = APIRouter(
     prefix="/auth",
@@ -217,12 +235,28 @@ def resend_verification(request: Request, payload: ResendVerificationRequest, db
     # Test mode: controlled failure simulation for development/testing only
     # This is isolated behind an explicit environment flag and cannot be enabled in production
     if TEST_MODE:
-        if email_lower == "994917jishnu@gmail.com" or "fail" in email_lower:
-            logger.warning(f"Test mode: Simulating verification email failure for {email_lower}")
+        # Check if email matches configured failure emails
+        if email_lower in TEST_VERIFICATION_FAILURE_EMAILS:
+            logger.warning(
+                f"Test mode: Simulating verification email failure for configured email. "
+                f"Failure simulation triggered by exact email match."
+            )
             raise HTTPException(
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
                 detail="Failed to send verification email. Please try again later.",
             )
+        
+        # Check if email contains any configured failure patterns
+        for pattern in TEST_FAILURE_EMAIL_PATTERNS:
+            if pattern in email_lower:
+                logger.warning(
+                    f"Test mode: Simulating verification email failure for email matching pattern. "
+                    f"Failure simulation triggered by pattern match."
+                )
+                raise HTTPException(
+                    status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                    detail="Failed to send verification email. Please try again later.",
+                )
     
     # Check if user exists in the database
     try:

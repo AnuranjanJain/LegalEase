@@ -129,6 +129,22 @@ class EnvironmentConfig(BaseSettings):
         default=False,
         description="Enable test mode for controlled failure simulation."
     )
+    test_verification_failure_emails: str = Field(
+        default="",
+        description="Comma-separated list of email addresses that trigger simulated verification failures in test mode."
+    )
+    test_failure_email_patterns: str = Field(
+        default="fail",
+        description="Comma-separated list of email patterns that trigger simulated verification failures in test mode."
+    )
+    
+    @field_validator("test_verification_failure_emails", "test_failure_email_patterns", mode="before")
+    @classmethod
+    def coerce_string_to_lowercase(cls, v):
+        """Convert string configuration values to lowercase for consistency."""
+        if isinstance(v, str):
+            return v.lower()
+        return v
     
     @model_validator(mode='before')
     @classmethod
