@@ -6,6 +6,8 @@ This document provides deployment recommendations and configuration guidance for
 
 **Security Note:** The application no longer silently falls back to in-memory storage at runtime. Backend selection happens at startup, and the chosen backend is used consistently. In production, Redis is required for distributed rate limiting to prevent security bypass.
 
+**Critical Security Fix:** Rate limiting is **never disabled**, even when `TEST_MODE=true`. The middleware always executes in every environment. For automated testing, use elevated rate limits instead of disabling rate limiting entirely.
+
 ## Architecture
 
 ### Storage Backends
@@ -73,6 +75,64 @@ RATE_LIMIT_BACKEND setting:
 | `RATE_LIMIT_PERIOD` | int | `60` | Rate limit period in seconds |
 | `RATE_LIMIT_KEY_CALLS` | int | `300` | Calls per period for API keys |
 | `RATE_LIMIT_IP_CALLS` | int | `60` | Calls per period for IP addresses |
+
+## Testing Configuration
+
+### Automated Testing with Elevated Limits
+
+**Critical Security Requirement:** Rate limiting middleware **must always execute**, even in test environments. Never disable rate limiting for testing.
+
+Instead, use elevated rate limits to avoid interference while ensuring the middleware still functions correctly:
+
+```bash
+ENVIRONMENT=testing
+TEST_MODE=true
+RATE_LIMIT_IP_CALLS=100000
+RATE_LIMIT_PERIOD=60
+```
+
+**Why this approach:**
+- Middleware executes normally, testing the actual code path
+- High limits prevent test interference from rate limit errors
+- Security controls remain in place
+- Configuration validation still runs
+- Tests validate the complete middleware logic
+
+**Configuration validation:**
+- `TEST_MODE=true` with `ENVIRONMENT=production` will fail to start
+- This prevents accidental deployment with test mode enabled
+- All environments enforce rate limiting
+
+**Startup warning:**
+When running in testing mode with elevated thresholds (>1000 calls), the application logs:
+```
+WARNING: Rate limiting running in testing mode with elevated thresholds.
+RATE_LIMIT_IP_CALLS=100000, RATE_LIMIT_PERIOD=60
+```
+
+### CI/CD Configuration
+
+For CI/CD pipelines, configure elevated limits in your test environment:
+
+```yaml
+# Example CI configuration
+env:
+  ENVIRONMENT: testing
+  TEST_MODE: true
+  RATE_LIMIT_IP_CALLS: 100000
+  RATE_LIMIT_PERIOD: 60
+  RATE_LIMIT_KEY_CALLS: 100000
+```
+
+### Local Development Testing
+
+For local development testing with high limits:
+
+```bash
+ENVIRONMENT=development
+RATE_LIMIT_IP_CALLS=1000
+RATE_LIMIT_PERIOD=60
+```
 
 ## Deployment Scenarios
 
