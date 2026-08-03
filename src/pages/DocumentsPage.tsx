@@ -34,7 +34,7 @@ function renderHighlightedText(text: string, clauses: any[]) {
   const intervals: Interval[] = [];
 
   clauses.forEach(c => {
-    if (!c.clause || c.clause.trim() === '') return;
+    if (!c.clause || c.clause.trim().length === 0) return;
     
     let index = text.indexOf(c.clause);
     while (index !== -1) {
