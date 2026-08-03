@@ -641,6 +641,15 @@ class CORSConfig(BaseSettings):
         default="http://localhost:5173",
         description="Frontend URL for CORS (fallback for allowed_origins)."
     )
+    allow_localhost_cors: bool = Field(
+        default=False,
+        description=(
+            "When enabled, automatically adds common localhost development ports "
+            "(5173-5180 on both localhost and 127.0.0.1) to the CORS allowlist. "
+            "Default is false for security. Localhost origins are never added automatically "
+            "without this explicit configuration."
+        )
+    )
 
 
 class EncryptionConfig(BaseSettings):
