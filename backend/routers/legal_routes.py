@@ -323,6 +323,34 @@ def get_cached_clauses(
     return {"clauses": json.loads(doc.clause_analysis)}   
 
 
+class TLDRRequest(BaseModel):
+    text: str
+
+
+class TLDRResponse(BaseModel):
+    parties: str = "Not specified"
+    deadlines: str = "Not specified"
+    financials: str = "Not specified"
+    penalties: str = "Not specified"
+    key_takeaways: List[str] = ["Not specified"]
+
+
+@router.post("/tldr", response_model=TLDRResponse)
+async def legal_tldr(
+    request: TLDRRequest,
+    identity: AuthIdentity = Depends(validate_token_or_api_key),
+):
+    _check_rate_limit(identity)
+    try:
+        tldr_data = await ai_service.generate_tldr(request.text)
+        return TLDRResponse(**tldr_data)
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=str(e),
+        )
+
+
 class EntityExtractionRequest(BaseModel):
     text: str
 

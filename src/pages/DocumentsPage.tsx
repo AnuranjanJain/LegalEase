@@ -4,7 +4,7 @@ import {
   Grid, List, CheckCircle, ArrowRight, RefreshCcw,
   X, MessageSquare, Download, AlertCircle, ShieldCheck, GitCompare
 } from 'lucide-react';
-import { StorageService, Document, ChatStorageService } from '../services/storage';
+import { StorageService, Document, ChatStorageService, TldrData } from '../services/storage';
 import { useToast } from '../contexts/ToastContext';
 import { useNavigate } from 'react-router-dom';
 import { api } from '../services/api';
@@ -13,6 +13,7 @@ import { WhatsAppShareModal } from '../components/WhatsAppShareModal';
 import { ClauseAnalysisSection } from '../components/ClauseAnalysisSection';
 import { EntityGraph } from '../components/EntityGraph';
 import { ReadabilityScore } from '../components/ReadabilityScore';
+import { TldrSidebar } from '../components/TldrSidebar';
 import { useRedaction } from '../contexts/RedactionContext';
 import { redact, redactWithFeedback } from '../utils/redaction';
 import { RedactedText } from '../components/RedactedText';
@@ -279,7 +280,12 @@ export function DocumentsPage() {
         analyzedClauses = response.clauses;
       } catch (e) {}
 
-      StorageService.updateDocumentStatus(docId, 'processed', compiledBrief, extractedText, analyzedClauses);
+      let tldrRes: TldrData | undefined = undefined;
+      try {
+        tldrRes = await api.post<TldrData>('/tldr', { text: extractedText.substring(0, 4000) });
+      } catch (e) {}
+
+      StorageService.updateDocumentStatus(docId, 'processed', compiledBrief, extractedText, analyzedClauses, tldrRes);
       setDocuments(StorageService.getDocuments());
       showToast(`"${file.name}" analyzed successfully!`, 'success');
     } catch (err) {
@@ -1284,16 +1290,39 @@ export function DocumentsPage() {
                   )}
                 </div>
 
-                {/* Summary Text Content */}
-                <div className="prose prose-sm dark:prose-invert max-w-none text-gray-700 dark:text-gray-200 whitespace-pre-line leading-relaxed text-sm">
-                  <RedactedText text={auditSummaryDisplay} />
-                </div>
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-6 items-start">
+                  {/* Main Summary Column */}
+                  <div className="md:col-span-2 space-y-4">
+                    {/* Summary Text Content */}
+                    <div className="prose prose-sm dark:prose-invert max-w-none text-gray-700 dark:text-gray-200 whitespace-pre-line leading-relaxed text-sm">
+                      <RedactedText text={auditSummaryDisplay} />
+                    </div>
 
-                {/* Readability Score Analysis */}
-                <ReadabilityScore 
-                  originalText={selectedAuditDoc.text} 
-                  summaryText={selectedAuditDoc.summary} 
-                />
+                    {/* Readability Score Analysis */}
+                    <ReadabilityScore 
+                      originalText={selectedAuditDoc.text} 
+                      summaryText={selectedAuditDoc.summary} 
+                    />
+                  </div>
+
+                  {/* Sidebar Column */}
+                  <div className="md:col-span-1">
+                    <TldrSidebar 
+                      tldr={selectedAuditDoc.tldr}
+                      onRefresh={async () => {
+                        try {
+                          const res = await api.post<TldrData>('/tldr', { text: selectedAuditDoc.text || '' });
+                          const updatedDoc = { ...selectedAuditDoc, tldr: res };
+                          setSelectedAuditDoc(updatedDoc);
+                          StorageService.updateDocumentStatus(selectedAuditDoc.id, 'processed', selectedAuditDoc.summary, selectedAuditDoc.text, selectedAuditDoc.clauses, res);
+                          setDocuments(StorageService.getDocuments());
+                        } catch (err) {
+                          console.warn('Failed to regenerate TL;DR:', err);
+                        }
+                      }}
+                    />
+                  </div>
+                </div>
 
                 <ClauseAnalysisSection clauses={selectedAuditDoc.clauses} />
                 <EntityGraph documentText={selectedAuditDoc.text} />

@@ -81,10 +81,7 @@ jobs:
         file: ./coverage/coverage-final.json
         flags: frontend
         name: frontend-coverage
-<<<<<<< HEAD
-=======
         token: ${{ secrets.CODECOV_TOKEN }}
->>>>>>> upstream/main
         fail_ci_if_error: false
 
   lint-check:
