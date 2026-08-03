@@ -56,7 +56,7 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
 
     try {
       const response = await api.notifications.getAll();
-      setNotifications(response.notifications.map(toAppNotification));
+      setNotifications(response.(notifications ?? []).map(toAppNotification));
     } catch (err) {
       console.error('Failed to fetch notifications:', err);
       setError('Failed to load notifications');
