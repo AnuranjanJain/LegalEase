@@ -12,6 +12,7 @@ import json
 import logging
 import os
 import time
+import threading
 from typing import Optional, Dict, Any
 from abc import ABC, abstractmethod
 
@@ -102,22 +103,78 @@ class InMemoryTaskStorage(UploadTaskStorageBackend):
     Each worker process maintains its own independent state.
     """
 
-    def __init__(self):
+    def __init__(self, cleanup_interval: Optional[int] = None, enable_auto_cleanup: bool = True):
         self._storage: Dict[str, Dict[str, Any]] = {}
         self._ttls: Dict[str, float] = {}
+        self._lock = threading.Lock()
+        self._cleanup_thread: Optional[threading.Thread] = None
+        self._stop_cleanup = threading.Event()
+        
+        # Use provided cleanup_interval or get from config with fallback
+        if cleanup_interval is not None:
+            self._cleanup_interval = cleanup_interval
+        else:
+            # Try to get from config
+            try:
+                settings = get_settings()
+                self._cleanup_interval = settings.file_upload.upload_task_cleanup_interval_seconds
+            except Exception:
+                self._cleanup_interval = 300  # Default fallback
+        
+        # Start automatic cleanup thread only if enabled
+        if enable_auto_cleanup:
+            self._start_cleanup_thread()
+        
         logger.warning(
             "Using in-memory upload task storage. "
             "This is NOT suitable for multi-worker deployments. "
             "Configure REDIS_URL for production."
         )
+    
+    def _start_cleanup_thread(self):
+        """Start background thread for automatic cleanup of expired tasks."""
+        def cleanup_worker():
+            logger.info(
+                f"Starting automatic cleanup thread for in-memory upload task storage "
+                f"(interval: {self._cleanup_interval}s)"
+            )
+            while not self._stop_cleanup.wait(self._cleanup_interval):
+                try:
+                    cleaned = self._cleanup_expired()
+                    if cleaned > 0:
+                        logger.debug(f"Automatic cleanup removed {cleaned} expired task(s)")
+                except Exception as e:
+                    logger.warning(f"Unexpected error during automatic cleanup: {e}")
+            logger.info("Automatic cleanup thread for in-memory upload task storage stopped")
+        
+        self._cleanup_thread = threading.Thread(
+            target=cleanup_worker,
+            name="upload_task_cleanup",
+            daemon=True
+        )
+        self._cleanup_thread.start()
+    
+    def _stop_cleanup_thread(self):
+        """Stop the background cleanup thread."""
+        if self._cleanup_thread and self._cleanup_thread.is_alive():
+            self._stop_cleanup.set()
+            self._cleanup_thread.join(timeout=5)
+    
+    def __del__(self):
+        """Cleanup when the storage instance is destroyed."""
+        self._stop_cleanup_thread()
 
     def _cleanup_expired(self):
         """Remove expired tasks based on TTL."""
-        now = time.time()
-        expired = [tid for tid, expiry in self._ttls.items() if expiry < now]
-        for tid in expired:
-            self._storage.pop(tid, None)
-            self._ttls.pop(tid, None)
+        with self._lock:
+            now = time.time()
+            expired = [tid for tid, expiry in self._ttls.items() if expiry < now]
+            for tid in expired:
+                self._storage.pop(tid, None)
+                self._ttls.pop(tid, None)
+            if expired:
+                logger.debug(f"Cleaned up {len(expired)} expired upload task(s)")
+        return len(expired)
 
     def create_task(
         self,
@@ -128,54 +185,62 @@ class InMemoryTaskStorage(UploadTaskStorageBackend):
         ttl_seconds: int = 3600,
         user_id: Optional[int] = None,
     ) -> bool:
-        self._cleanup_expired()
-        self._storage[task_id] = {
-            "status": status,
-            "progress": progress,
-            "result": result,
-            "user_id": user_id,
-        }
-        self._ttls[task_id] = time.time() + ttl_seconds
+        with self._lock:
+            self._cleanup_expired()
+            self._storage[task_id] = {
+                "status": status,
+                "progress": progress,
+                "result": result,
+                "user_id": user_id,
+            }
+            self._ttls[task_id] = time.time() + ttl_seconds
         return True
 
     def get_task(self, task_id: str) -> Optional[Dict[str, Any]]:
-        self._cleanup_expired()
-        return self._storage.get(task_id)
+        with self._lock:
+            self._cleanup_expired()
+            return self._storage.get(task_id)
 
     def update_progress(self, task_id: str, progress: int) -> bool:
-        self._cleanup_expired()
-        if task_id in self._storage:
-            self._storage[task_id]["progress"] = progress
-            return True
+        with self._lock:
+            self._cleanup_expired()
+            if task_id in self._storage:
+                self._storage[task_id]["progress"] = progress
+                return True
         return False
 
     def update_status(self, task_id: str, status: str) -> bool:
-        self._cleanup_expired()
-        if task_id in self._storage:
-            self._storage[task_id]["status"] = status
-            return True
+        with self._lock:
+            self._cleanup_expired()
+            if task_id in self._storage:
+                self._storage[task_id]["status"] = status
+                return True
         return False
 
     def set_result(self, task_id: str, result: Dict[str, Any]) -> bool:
-        self._cleanup_expired()
-        if task_id in self._storage:
-            self._storage[task_id]["result"] = result
-            return True
+        with self._lock:
+            self._cleanup_expired()
+            if task_id in self._storage:
+                self._storage[task_id]["result"] = result
+                return True
         return False
 
     def delete_task(self, task_id: str) -> bool:
-        self._storage.pop(task_id, None)
-        self._ttls.pop(task_id, None)
+        with self._lock:
+            self._storage.pop(task_id, None)
+            self._ttls.pop(task_id, None)
         return True
 
     def task_exists(self, task_id: str) -> bool:
-        self._cleanup_expired()
-        return task_id in self._storage
+        with self._lock:
+            self._cleanup_expired()
+            return task_id in self._storage
 
     def clear(self) -> None:
         """Clear all tasks (useful for testing)."""
-        self._storage.clear()
-        self._ttls.clear()
+        with self._lock:
+            self._storage.clear()
+            self._ttls.clear()
 
 
 class RedisTaskStorage(UploadTaskStorageBackend):

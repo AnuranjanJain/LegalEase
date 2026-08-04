@@ -553,6 +553,7 @@ cp .env.example .env
   - `ALLOW_DEV` — allow using `DEV_API_KEY` for local development (`true`/`false`, default `true`).
   - `MAX_UPLOAD_SIZE` — maximum allowed upload size in bytes (default 26214400 = 25MB).
   - `RATE_LIMIT_IP_CALLS`, `RATE_LIMIT_KEY_CALLS`, `RATE_LIMIT_PERIOD` — simple rate-limiting configuration (defaults: 60, 30, 60).
+  - `UPLOAD_TASK_CLEANUP_INTERVAL_SECONDS` — interval in seconds for automatic cleanup of expired upload tasks in in-memory storage (default: 300). Only applies when `REDIS_URL` is not configured. Redis backend handles expiration automatically via TTL.
 
 - **Run backend (development):**
 
