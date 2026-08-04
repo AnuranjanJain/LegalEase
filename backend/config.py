@@ -183,6 +183,10 @@ class FileUploadConfig(BaseSettings):
         default=3600,
         description="Interval in seconds for token cleanup task."
     )
+    upload_task_cleanup_interval_seconds: int = Field(
+        default=300,
+        description="Interval in seconds for automatic cleanup of expired upload tasks in in-memory storage."
+    )
     
     @field_validator('max_upload_size')
     @classmethod
@@ -245,6 +249,14 @@ class FileUploadConfig(BaseSettings):
         """Validate token cleanup interval is positive."""
         if v <= 0:
             raise ValueError('TOKEN_CLEANUP_INTERVAL_SECONDS must be greater than 0')
+        return v
+    
+    @field_validator('upload_task_cleanup_interval_seconds')
+    @classmethod
+    def validate_upload_task_cleanup_interval_seconds(cls, v: int) -> int:
+        """Validate upload task cleanup interval is positive."""
+        if v <= 0:
+            raise ValueError('UPLOAD_TASK_CLEANUP_INTERVAL_SECONDS must be greater than 0')
         return v
 
 
