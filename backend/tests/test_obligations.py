@@ -3,7 +3,7 @@
 import os
 os.environ["JWT_SECRET_KEY"] = os.getenv("JWT_SECRET_KEY", "testing-secret-key-1234567890-abcdef")
 
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 
 import pytest
 
@@ -54,7 +54,7 @@ def _make_obligation(db, user_id, document_id, due_in_days, status="pending", re
         user_id=user_id,
         document_id=document_id,
         title="Test deadline",
-        due_date=datetime.utcnow() + timedelta(days=due_in_days),
+        due_date=(datetime.now(timezone.utc) + timedelta(days=due_in_days)).replace(tzinfo=None),
         description="A test obligation",
         status=status,
         reminder_sent_stage=reminder_sent_stage,

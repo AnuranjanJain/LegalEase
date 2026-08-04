@@ -12,7 +12,7 @@ This test suite validates the refresh token mechanism including:
 """
 import pytest
 import os
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from unittest.mock import Mock, patch
 from fastapi import HTTPException, status
 from jose import jwt
@@ -139,14 +139,14 @@ def test_validate_refresh_token_success(mock_db, mock_user):
         "sub": "test@example.com",
         "jti": "test-jti-123",
         "type": "refresh",
-        "exp": (datetime.utcnow() + timedelta(days=7)).timestamp()
+        "exp": (datetime.now(timezone.utc) + timedelta(days=7)).timestamp()
     }
     token = jwt.encode(payload_data, SECRET_KEY, algorithm=ALGORITHM)
     
     # Mock database queries
     mock_refresh_token = Mock()
     mock_refresh_token.revoked_at = None
-    mock_refresh_token.expires_at = datetime.utcnow() + timedelta(days=7)
+    mock_refresh_token.expires_at = (datetime.now(timezone.utc) + timedelta(days=7)).replace(tzinfo=None)
     
     # Mock database queries - two separate query calls
     def query_side_effect(model, *args, **kwargs):
@@ -185,7 +185,7 @@ def test_validate_refresh_token_wrong_type(mock_db):
         "sub": "test@example.com",
         "jti": "test-jti-123",
         "type": "access",  # Wrong type
-        "exp": (datetime.utcnow() + timedelta(days=7)).timestamp()
+        "exp": (datetime.now(timezone.utc) + timedelta(days=7)).timestamp()
     }
     token = jwt.encode(payload_data, SECRET_KEY, algorithm=ALGORITHM)
     
@@ -201,7 +201,7 @@ def test_validate_refresh_token_missing_subject(mock_db):
     payload_data = {
         "jti": "test-jti-123",
         "type": "refresh",
-        "exp": (datetime.utcnow() + timedelta(days=7)).timestamp()
+        "exp": (datetime.now(timezone.utc) + timedelta(days=7)).timestamp()
     }
     token = jwt.encode(payload_data, SECRET_KEY, algorithm=ALGORITHM)
     
@@ -217,7 +217,7 @@ def test_validate_refresh_token_missing_jti(mock_db):
     payload_data = {
         "sub": "test@example.com",
         "type": "refresh",
-        "exp": (datetime.utcnow() + timedelta(days=7)).timestamp()
+        "exp": (datetime.now(timezone.utc) + timedelta(days=7)).timestamp()
     }
     token = jwt.encode(payload_data, SECRET_KEY, algorithm=ALGORITHM)
     
@@ -234,7 +234,7 @@ def test_validate_refresh_token_not_in_database(mock_db, mock_user):
         "sub": "test@example.com",
         "jti": "test-jti-123",
         "type": "refresh",
-        "exp": (datetime.utcnow() + timedelta(days=7)).timestamp()
+        "exp": (datetime.now(timezone.utc) + timedelta(days=7)).timestamp()
     }
     token = jwt.encode(payload_data, SECRET_KEY, algorithm=ALGORITHM)
     
@@ -262,14 +262,14 @@ def test_validate_refresh_token_revoked(mock_db, mock_user):
         "sub": "test@example.com",
         "jti": "test-jti-123",
         "type": "refresh",
-        "exp": (datetime.utcnow() + timedelta(days=7)).timestamp()
+        "exp": (datetime.now(timezone.utc) + timedelta(days=7)).timestamp()
     }
     token = jwt.encode(payload_data, SECRET_KEY, algorithm=ALGORITHM)
     
     # Mock revoked refresh token
     mock_refresh_token = Mock()
-    mock_refresh_token.revoked_at = datetime.utcnow()
-    mock_refresh_token.expires_at = datetime.utcnow() + timedelta(days=7)
+    mock_refresh_token.revoked_at = datetime.now(timezone.utc).replace(tzinfo=None)
+    mock_refresh_token.expires_at = (datetime.now(timezone.utc) + timedelta(days=7)).replace(tzinfo=None)
     
     def query_side_effect(model, *args, **kwargs):
         mock_query = Mock()
@@ -294,14 +294,14 @@ def test_validate_refresh_token_expired(mock_db, mock_user):
         "sub": "test@example.com",
         "jti": "test-jti-123",
         "type": "refresh",
-        "exp": (datetime.utcnow() - timedelta(hours=1)).timestamp()
+        "exp": (datetime.now(timezone.utc) - timedelta(hours=1)).timestamp()
     }
     token = jwt.encode(payload_data, SECRET_KEY, algorithm=ALGORITHM)
     
     # Mock expired refresh token in database
     mock_refresh_token = Mock()
     mock_refresh_token.revoked_at = None
-    mock_refresh_token.expires_at = datetime.utcnow() - timedelta(hours=1)
+    mock_refresh_token.expires_at = datetime.now(timezone.utc) - timedelta(hours=1)
     
     def query_side_effect(model, *args, **kwargs):
         mock_query = Mock()
@@ -326,14 +326,14 @@ def test_validate_refresh_token_user_not_found(mock_db):
         "sub": "test@example.com",
         "jti": "test-jti-123",
         "type": "refresh",
-        "exp": (datetime.utcnow() + timedelta(days=7)).timestamp()
+        "exp": (datetime.now(timezone.utc) + timedelta(days=7)).timestamp()
     }
     token = jwt.encode(payload_data, SECRET_KEY, algorithm=ALGORITHM)
     
     # Mock refresh token exists but user doesn't
     mock_refresh_token = Mock()
     mock_refresh_token.revoked_at = None
-    mock_refresh_token.expires_at = datetime.utcnow() + timedelta(days=7)
+    mock_refresh_token.expires_at = (datetime.now(timezone.utc) + timedelta(days=7)).replace(tzinfo=None)
     
     def query_side_effect(model, *args, **kwargs):
         mock_query = Mock()
@@ -381,7 +381,7 @@ def test_revoke_refresh_token_not_found(mock_db):
 def test_revoke_refresh_token_already_revoked(mock_db):
     """Test revoking an already revoked token returns True (idempotent)."""
     mock_refresh_token = Mock()
-    mock_refresh_token.revoked_at = datetime.utcnow()
+    mock_refresh_token.revoked_at = datetime.now(timezone.utc).replace(tzinfo=None)
     mock_db.query.return_value.filter.return_value.first.return_value = mock_refresh_token
     
     result = revoke_refresh_token("test-jti-123", mock_db)
@@ -399,7 +399,7 @@ def test_rotate_refresh_token_success(mock_db):
         "sub": "test@example.com",
         "jti": "old-jti-123",
         "type": "refresh",
-        "exp": (datetime.utcnow() + timedelta(days=7)).timestamp()
+        "exp": (datetime.now(timezone.utc) + timedelta(days=7)).timestamp()
     }
     old_token = jwt.encode(old_payload, SECRET_KEY, algorithm=ALGORITHM)
     
@@ -407,7 +407,7 @@ def test_rotate_refresh_token_success(mock_db):
         "sub": "test@example.com",
         "jti": "new-jti-456",
         "type": "refresh",
-        "exp": (datetime.utcnow() + timedelta(days=7)).timestamp()
+        "exp": (datetime.now(timezone.utc) + timedelta(days=7)).timestamp()
     }
     new_token = jwt.encode(new_payload, SECRET_KEY, algorithm=ALGORITHM)
     
@@ -428,7 +428,7 @@ def test_rotate_refresh_token_old_token_not_found(mock_db):
         "sub": "test@example.com",
         "jti": "new-jti-456",
         "type": "refresh",
-        "exp": (datetime.utcnow() + timedelta(days=7)).timestamp()
+        "exp": (datetime.now(timezone.utc) + timedelta(days=7)).timestamp()
     }
     new_token = jwt.encode(new_payload, SECRET_KEY, algorithm=ALGORITHM)
     

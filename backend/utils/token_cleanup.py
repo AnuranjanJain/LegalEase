@@ -11,7 +11,7 @@ Usage (call periodically, e.g. from a cron job or a FastAPI startup task):
     purge_expired_revoked_tokens(db)
 """
 import logging
-from datetime import datetime
+from datetime import datetime, timezone
 
 from sqlalchemy.orm import Session
 
@@ -25,7 +25,7 @@ def purge_expired_revoked_tokens(db: Session) -> int:
     Delete all RevokedToken rows that have passed their expiry time.
     Returns the number of rows deleted.
     """
-    now = datetime.utcnow()
+    now = datetime.now(timezone.utc).replace(tzinfo=None)
     try:
         deleted = (
             db.query(RevokedToken)

@@ -1,5 +1,5 @@
 import pytest
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from httpx import AsyncClient, ASGITransport
 from sqlalchemy.orm import Session
 
@@ -65,15 +65,15 @@ async def test_list_chat_sessions_unauthorized():
 async def test_list_chat_sessions_paginated(db_session, test_user, user_token):
     """Test paginated fetching of chat sessions."""
     # Seed 5 chat sessions with different updated_at times and varying message counts
-    base_time = datetime.utcnow()
+    base_time = datetime.now(timezone.utc)
     sessions = []
     for i in range(5):
         # We manually space out updated_at so ordering is consistent and deterministic
         session = models.ChatSession(
             user_id=test_user.id,
             title=f"Chat Session {i}",
-            created_at=base_time - timedelta(minutes=10 - i),
-            updated_at=base_time - timedelta(minutes=10 - i)
+            created_at=(base_time - timedelta(minutes=10 - i)).replace(tzinfo=None),
+            updated_at=(base_time - timedelta(minutes=10 - i)).replace(tzinfo=None)
         )
         db_session.add(session)
         db_session.flush()

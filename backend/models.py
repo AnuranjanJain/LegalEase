@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import datetime, timezone
 
 from sqlalchemy import Column, DateTime, ForeignKey, Integer, String, Text, UniqueConstraint
 from sqlalchemy.orm import relationship
@@ -26,8 +26,8 @@ class ChatSession(Base):
     id = Column(Integer, primary_key=True, index=True)
     user_id = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
     title = Column(String, default="New Chat")
-    created_at = Column(DateTime, default=datetime.utcnow)
-    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc).replace(tzinfo=None))
+    updated_at = Column(DateTime, default=lambda: datetime.now(timezone.utc).replace(tzinfo=None), onupdate=lambda: datetime.now(timezone.utc).replace(tzinfo=None))
 
     user = relationship("User", back_populates="chat_sessions")
     messages = relationship("ChatMessage", back_populates="session", cascade="all, delete-orphan", order_by="ChatMessage.created_at")
@@ -40,7 +40,7 @@ class ChatMessage(Base):
     session_id = Column(Integer, ForeignKey("chat_sessions.id"), nullable=False, index=True)
     role = Column(String, nullable=False)  # 'user' or 'assistant'
     content = Column(EncryptedText, nullable=False)
-    created_at = Column(DateTime, default=datetime.utcnow)
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc).replace(tzinfo=None))
 
     # Conversation branching support (#366):
     # parent_id points to the message this one was generated in response to,
@@ -63,7 +63,7 @@ class DocumentRecord(Base):
     summary = Column(EncryptedText, nullable=True)
     clause_analysis = Column(EncryptedText, nullable=True)
     analyzed_at = Column(DateTime, nullable=True) 
-    uploaded_at = Column(DateTime, default=datetime.utcnow)
+    uploaded_at = Column(DateTime, default=lambda: datetime.now(timezone.utc).replace(tzinfo=None))
 
     user = relationship("User", back_populates="documents")
 
@@ -79,7 +79,7 @@ class RevokedToken(Base):
     id = Column(Integer, primary_key=True, index=True)
     jti = Column(String, nullable=False, unique=True, index=True)
     expires_at = Column(DateTime, nullable=False)
-    revoked_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+    revoked_at = Column(DateTime, default=lambda: datetime.now(timezone.utc).replace(tzinfo=None), nullable=False)
 
     __table_args__ = (UniqueConstraint("jti", name="uq_revoked_tokens_jti"),)
 
@@ -95,7 +95,7 @@ class RefreshToken(Base):
     user_id = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
     token_jti = Column(String, nullable=False, unique=True, index=True)
     expires_at = Column(DateTime, nullable=False, index=True)
-    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc).replace(tzinfo=None), nullable=False)
     revoked_at = Column(DateTime, nullable=True)
     replaced_by_token_jti = Column(String, nullable=True, index=True)  # For token rotation tracking
 
@@ -113,7 +113,7 @@ class Notification(Base):
     description = Column(String, nullable=True)
     type = Column(String, nullable=False, default="system")  # 'document', 'security', 'system'
     read = Column(Integer, default=0)  # 0 = unread, 1 = read
-    created_at = Column(DateTime, default=datetime.utcnow)
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc).replace(tzinfo=None))
 
     user = relationship("User", back_populates="notifications")
 
@@ -137,7 +137,7 @@ class Obligation(Base):
     # so the reminder job never sends the same threshold twice.
     # Stored as a comma-separated string of ints, e.g. "30,15".
     reminder_sent_stage = Column(String, nullable=False, default="")
-    created_at = Column(DateTime, default=datetime.utcnow)
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc).replace(tzinfo=None))
 
     user = relationship("User")
     document = relationship("DocumentRecord")
@@ -151,7 +151,7 @@ class Feedback(Base):
     rating = Column(String, nullable=False)
     category = Column(String, nullable=True)
     message = Column(Text, nullable=True)
-    created_at = Column(DateTime, default=datetime.utcnow)
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc).replace(tzinfo=None))
 
     user = relationship("User")
 
@@ -174,7 +174,7 @@ class DocumentComment(Base):
     # Self-referential threading, same pattern as ChatMessage.parent_id
     parent_comment_id = Column(Integer, ForeignKey("document_comments.id"), nullable=True, index=True)
 
-    created_at = Column(DateTime, default=datetime.utcnow)
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc).replace(tzinfo=None))
 
     document = relationship("DocumentRecord")
     user = relationship("User")
@@ -196,7 +196,7 @@ class SavedClause(Base):
     clause_type = Column(String, nullable=True, index=True)
     risk_level = Column(String, nullable=True)
     embedding = Column(Text, nullable=True)  # JSON-encoded float list
-    created_at = Column(DateTime, default=datetime.utcnow)
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc).replace(tzinfo=None))
 
     user = relationship("User")
     document = relationship("DocumentRecord")
@@ -215,7 +215,7 @@ class ApiKey(Base):
     key_suffix = Column(String(4), nullable=False)  # last 4 chars, for the owner to tell keys apart in the UI
     label = Column(String, nullable=False)
     scopes = Column(Text, nullable=False, default="[]")  # JSON-encoded list, e.g. ["documents:read"]
-    created_at = Column(DateTime, default=datetime.utcnow)
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc).replace(tzinfo=None))
     revoked_at = Column(DateTime, nullable=True)
 
     user = relationship("User")
@@ -234,6 +234,6 @@ class WebhookSubscription(Base):
     url = Column(String, nullable=False)
     event_type = Column(String, nullable=False, index=True)
     secret = Column(String, nullable=False)
-    created_at = Column(DateTime, default=datetime.utcnow)
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc).replace(tzinfo=None))
 
     user = relationship("User")
