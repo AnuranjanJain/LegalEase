@@ -55,6 +55,215 @@ def test_decrypt_falls_back_to_raw_value_for_non_fernet_input():
 
 
 @pytest.mark.unit
+def test_legacy_plaintext_returns_unchanged():
+    """Legacy plaintext should be returned unchanged with no warning."""
+    from backend.core.encryption import decrypt_text
+
+    legacy_plaintext = "This is legacy plaintext data."
+    result = decrypt_text(legacy_plaintext)
+    assert result == legacy_plaintext
+
+
+@pytest.mark.unit
+def test_empty_string_returns_unchanged():
+    """Empty string should be returned unchanged."""
+    from backend.core.encryption import decrypt_text
+
+    assert decrypt_text("") == ""
+
+
+@pytest.mark.unit
+def test_none_returns_none():
+    """None should be returned as None."""
+    from backend.core.encryption import decrypt_text
+
+    assert decrypt_text(None) is None
+
+
+@pytest.mark.unit
+def test_valid_encrypted_value_decrypts_successfully():
+    """Valid encrypted values should decrypt successfully."""
+    from backend.core.encryption import encrypt_text, decrypt_text
+
+    plaintext = "Sensitive contract clause data."
+    ciphertext = encrypt_text(plaintext)
+    assert decrypt_text(ciphertext) == plaintext
+
+
+@pytest.mark.unit
+def test_wrong_encryption_key_raises_decryption_error(monkeypatch):
+    """Wrong encryption key should raise DecryptionError with ERROR logging."""
+    import backend.config as config
+    from backend.core import encryption
+    from backend.core.encryption import DecryptionError
+
+    # Encrypt with one key
+    monkeypatch.setenv("DOCUMENT_ENCRYPTION_KEY", "first-encryption-key-1234567890")
+    config._settings = None
+    encryption.reset_fernet_cache()
+
+    plaintext = "This will be encrypted with the first key."
+    ciphertext = encryption.encrypt_text(plaintext)
+
+    # Try to decrypt with a different key
+    monkeypatch.setenv("DOCUMENT_ENCRYPTION_KEY", "second-different-key-0987654321")
+    config._settings = None
+    encryption.reset_fernet_cache()
+
+    with pytest.raises(DecryptionError) as exc_info:
+        encryption.decrypt_text(ciphertext)
+    assert "Failed to decrypt value that appears to be encrypted" in str(exc_info.value)
+
+    # Cleanup
+    config._settings = None
+    encryption.reset_fernet_cache()
+    monkeypatch.delenv("DOCUMENT_ENCRYPTION_KEY", raising=False)
+
+
+@pytest.mark.unit
+def test_corrupted_ciphertext_raises_decryption_error():
+    """Corrupted ciphertext should raise DecryptionError."""
+    from backend.core.encryption import decrypt_text, DecryptionError
+
+    # Create a valid-looking but corrupted Fernet token
+    corrupted_token = "gAAAAA" + "A" * 100  # Valid prefix but corrupted data
+
+    with pytest.raises(DecryptionError) as exc_info:
+        decrypt_text(corrupted_token)
+    assert "Failed to decrypt value that appears to be encrypted" in str(exc_info.value)
+
+
+@pytest.mark.unit
+def test_random_string_starting_with_gaaaa_handled_safely():
+    """Random string starting with 'gAAAA' but not valid base64 should be treated as plaintext."""
+    from backend.core.encryption import decrypt_text
+
+    # String starts with gAAAA but has invalid characters
+    fake_token = "gAAAAA@#$%^&*()invalid"
+
+    # Should be treated as legacy plaintext since it has invalid base64 chars
+    result = decrypt_text(fake_token)
+    assert result == fake_token
+
+
+@pytest.mark.unit
+def test_invalid_base64_handled_safely():
+    """Invalid base64 string should be treated as legacy plaintext."""
+    from backend.core.encryption import decrypt_text
+
+    invalid_base64 = "This is not valid base64!!!"
+
+    result = decrypt_text(invalid_base64)
+    assert result == invalid_base64
+
+
+@pytest.mark.unit
+def test_looks_like_fernet_token_valid_token():
+    """looks_like_fernet_token should return True for valid Fernet tokens."""
+    from backend.core.encryption import encrypt_text, looks_like_fernet_token
+
+    plaintext = "Test data"
+    token = encrypt_text(plaintext)
+    assert looks_like_fernet_token(token) is True
+
+
+@pytest.mark.unit
+def test_looks_like_fernet_token_plaintext():
+    """looks_like_fernet_token should return False for plaintext."""
+    from backend.core.encryption import looks_like_fernet_token
+
+    assert looks_like_fernet_token("This is plaintext") is False
+    assert looks_like_fernet_token("gAAAA") is False  # Too short
+    assert looks_like_fernet_token("xAAAAA" + "A" * 100) is False  # Wrong prefix
+
+
+@pytest.mark.unit
+def test_looks_like_fernet_token_empty_and_none():
+    """looks_like_fernet_token should return False for empty string and None."""
+    from backend.core.encryption import looks_like_fernet_token
+
+    assert looks_like_fernet_token("") is False
+    assert looks_like_fernet_token(None) is False
+
+
+@pytest.mark.unit
+def test_looks_like_fernet_token_invalid_chars():
+    """looks_like_fernet_token should return False for strings with invalid characters."""
+    from backend.core.encryption import looks_like_fernet_token
+
+    # Valid prefix but invalid characters
+    assert looks_like_fernet_token("gAAAAA@#$%^") is False
+    assert looks_like_fernet_token("gAAAAA with spaces") is False
+    assert looks_like_fernet_token("gAAAAA/with+invalid") is False
+
+
+@pytest.mark.unit
+def test_strict_encryption_mode_rejects_legacy_plaintext(monkeypatch):
+    """STRICT_ENCRYPTION_MODE should raise DecryptionError for legacy plaintext."""
+    import backend.config as config
+    from backend.core import encryption
+    from backend.core.encryption import DecryptionError
+
+    monkeypatch.setenv("STRICT_ENCRYPTION_MODE", "true")
+    config._settings = None
+    encryption.reset_fernet_cache()
+
+    legacy_plaintext = "Legacy unencrypted content."
+
+    with pytest.raises(DecryptionError) as exc_info:
+        encryption.decrypt_text(legacy_plaintext)
+    assert "STRICT_ENCRYPTION_MODE is enabled" in str(exc_info.value)
+
+    # Cleanup
+    config._settings = None
+    encryption.reset_fernet_cache()
+    monkeypatch.delenv("STRICT_ENCRYPTION_MODE", raising=False)
+
+
+@pytest.mark.unit
+def test_strict_encryption_mode_allows_valid_encrypted(monkeypatch):
+    """STRICT_ENCRYPTION_MODE should allow valid encrypted values."""
+    import backend.config as config
+    from backend.core import encryption
+
+    monkeypatch.setenv("STRICT_ENCRYPTION_MODE", "true")
+    config._settings = None
+    encryption.reset_fernet_cache()
+
+    plaintext = "Sensitive data"
+    ciphertext = encryption.encrypt_text(plaintext)
+    assert encryption.decrypt_text(ciphertext) == plaintext
+
+    # Cleanup
+    config._settings = None
+    encryption.reset_fernet_cache()
+    monkeypatch.delenv("STRICT_ENCRYPTION_MODE", raising=False)
+
+
+@pytest.mark.unit
+def test_decryption_error_includes_context():
+    """DecryptionError should include helpful context about the failure."""
+    from backend.core.encryption import encrypt_text, DecryptionError
+    import backend.config as config
+
+    plaintext = "Test data"
+    ciphertext = encrypt_text(plaintext)
+
+    # Corrupt the ciphertext by changing a character
+    corrupted = ciphertext[:-10] + "X" * 10
+
+    with pytest.raises(DecryptionError) as exc_info:
+        from backend.core.encryption import decrypt_text
+        decrypt_text(corrupted)
+
+    error_message = str(exc_info.value)
+    # Should include environment information
+    assert "Environment:" in error_message
+    # Should mention the failure type
+    assert "Failed to decrypt" in error_message
+
+
+@pytest.mark.unit
 def test_key_derives_from_jwt_secret_when_no_dedicated_key_set(monkeypatch):
     """Without DOCUMENT_ENCRYPTION_KEY in non-production, encryption works via JWT_SECRET_KEY fallback."""
     import backend.config as config

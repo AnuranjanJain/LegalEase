@@ -695,6 +695,17 @@ class EncryptionConfig(BaseSettings):
             "falls back to JWT_SECRET_KEY if not set."
         ),
     )
+    strict_encryption_mode: bool = Field(
+        default=False,
+        description=(
+            "When enabled, requires all stored values to be properly encrypted. "
+            "Legacy plaintext data will raise DecryptionError instead of being "
+            "returned unchanged. Recommended for production environments after "
+            "all legacy data has been migrated to encrypted format. "
+            "When disabled (default), legacy plaintext is returned unchanged "
+            "with DEBUG-level logging for backward compatibility."
+        ),
+    )
 
     @model_validator(mode='after')
     def validate_encryption_key_in_production(self):
