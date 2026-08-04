@@ -216,14 +216,43 @@ ALLOWED_ORIGINS = [
     for origin in raw_allowed_origins.split(",")
     if origin.strip()
 ]
-# Automatically allow common development ports on localhost ONLY in non-production environments
-# This prevents unintended localhost access in production deployments
-if ENVIRONMENT in ("development", "testing", "local"):
+
+# Add localhost origins only if explicitly configured AND not in production
+if cors_config.allow_localhost_cors and ENVIRONMENT in ("development", "testing", "local"):
+    localhost_origins = []
     for host in ["http://localhost", "http://127.0.0.1"]:
         for port in range(5173, 5181):
-            dev_origin = f"{host}:{port}"
-            if dev_origin not in ALLOWED_ORIGINS:
-                ALLOWED_ORIGINS.append(dev_origin)
+            localhost_origins.append(f"{host}:{port}")
+    
+    # Add localhost origins that aren't already in the list
+    added_count = 0
+    for origin in localhost_origins:
+        if origin not in ALLOWED_ORIGINS:
+            ALLOWED_ORIGINS.append(origin)
+            added_count += 1
+    
+    if added_count > 0:
+        logger.info(f"Localhost CORS enabled: added {added_count} localhost development origins")
+
+# Validate and deduplicate origins
+validated_origins = []
+seen_origins = set()
+for origin in ALLOWED_ORIGINS:
+    # Basic origin format validation
+    if not origin:
+        continue
+    
+    # Check if it looks like a valid origin (scheme://host or scheme://host:port)
+    if not (origin.startswith("http://") or origin.startswith("https://")):
+        logger.warning(f"Invalid CORS origin ignored (missing scheme): {origin}")
+        continue
+    
+    # Remove duplicates while preserving order
+    if origin not in seen_origins:
+        seen_origins.add(origin)
+        validated_origins.append(origin)
+
+ALLOWED_ORIGINS = validated_origins
 # Rate-limit middleware registered first so that CORSMiddleware
 # (added second) wraps it — ensuring 429 responses include CORS headers.
 app.add_middleware(RateLimitMiddleware)

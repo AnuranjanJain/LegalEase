@@ -534,6 +534,8 @@ cp .env.example .env
   From `.env.example`:
   - `BYTEZ_API_KEY` — required by the backend to access the Bytez SDK. Keep this secret.
   - `FRONTEND_URL` — frontend origin used for CORS (default: `http://localhost:5173`).
+  - `ALLOWED_ORIGINS` — comma-separated list of allowed CORS origins (default: `http://localhost:5173`).
+  - `ALLOW_LOCALHOST_CORS` — when set to `true`, automatically adds common localhost development ports (5173-5180 on both localhost and 127.0.0.1) to the CORS allowlist. Default is `false` for security. Localhost origins are never added automatically without this explicit configuration. Set to `true` for local development convenience.
   - `JWT_SECRET_KEY` — secret key for JWT token signing. Required in all environments.
   - `DOCUMENT_ENCRYPTION_KEY` — dedicated key for encrypting stored contract content at rest. **Required in production** to ensure cryptographic key separation. Must be different from `JWT_SECRET_KEY`. In non-production environments (development, testing, local), falls back to `JWT_SECRET_KEY` if not set for convenience. Generate using: `python -c "import secrets; print(secrets.token_urlsafe(32))"`
 

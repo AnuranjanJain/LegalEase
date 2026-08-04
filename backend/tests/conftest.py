@@ -18,6 +18,9 @@ os.environ["HF_HUB_OFFLINE"] = "1"
 os.environ["TRANSFORMERS_OFFLINE"] = "1"
 os.environ["ENVIRONMENT"] = "testing"
 os.environ["TEST_MODE"] = "true"
+# Elevated rate limits for automated testing - middleware still executes but with high thresholds
+os.environ["RATE_LIMIT_IP_CALLS"] = "100000"
+os.environ["RATE_LIMIT_PERIOD"] = "60"
 
 ROOT = Path(__file__).resolve().parents[2]
 root_path = str(ROOT)
