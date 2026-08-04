@@ -4,7 +4,7 @@ import hashlib
 import uuid
 import secrets
 import json
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Optional, Union, Literal
 from fastapi import Depends, HTTPException, Request, status, Response
 from fastapi.security import OAuth2PasswordBearer
@@ -132,7 +132,7 @@ def hash_api_key(key: str) -> str:
 def create_access_token(data: dict, expires_delta: Optional[timedelta] = None) -> str:
     secret_key = _require_secret_key()
     to_encode = data.copy()
-    expire = datetime.utcnow() + (expires_delta if expires_delta else timedelta(hours=ACCESS_TOKEN_EXPIRE_HOURS))
+    expire = (datetime.now(timezone.utc) + (expires_delta if expires_delta else timedelta(hours=ACCESS_TOKEN_EXPIRE_HOURS))).replace(tzinfo=None)
     to_encode.update({
         "exp": expire,
         "jti": str(uuid.uuid4()),  # unique token ID — used for revocation
@@ -165,7 +165,7 @@ def create_refresh_token(data: dict, db: Session, expires_delta: Optional[timede
     settings = get_settings()
     
     to_encode = data.copy()
-    expire = datetime.utcnow() + (expires_delta if expires_delta else timedelta(days=settings.security.refresh_token_expire_days))
+    expire = datetime.now(timezone.utc) + (expires_delta if expires_delta else timedelta(days=settings.security.refresh_token_expire_days))
     to_encode.update({
         "exp": expire,
         "jti": str(uuid.uuid4()),  # unique token ID for revocation
@@ -188,7 +188,7 @@ def create_refresh_token(data: dict, db: Session, expires_delta: Optional[timede
     refresh_token_record = models.RefreshToken(
         user_id=user.id,
         token_jti=jti,
-        expires_at=expire,
+        expires_at=expire.replace(tzinfo=None),
     )
     db.add(refresh_token_record)
     db.commit()
@@ -263,7 +263,12 @@ def validate_refresh_token(token: str, db: Session) -> dict:
         raise credentials_exception
     
     # Check expiration (double-check with database)
-    if datetime.utcnow() > refresh_token_record.expires_at:
+    # Handle both naive and aware datetimes from database
+    if refresh_token_record.expires_at.tzinfo is None:
+        expires_at_aware = refresh_token_record.expires_at.replace(tzinfo=timezone.utc)
+    else:
+        expires_at_aware = refresh_token_record.expires_at
+    if datetime.now(timezone.utc) > expires_at_aware:
         logger.warning(f"Refresh token expired (jti={jti})")
         raise credentials_exception
     
@@ -300,7 +305,7 @@ def revoke_refresh_token(jti: str, db: Session) -> bool:
         logger.info(f"Refresh token already revoked (jti={jti})")
         return True
     
-    refresh_token.revoked_at = datetime.utcnow()
+    refresh_token.revoked_at = datetime.now(timezone.utc).replace(tzinfo=None)
     db.commit()
     
     logger.info(f"Refresh token revoked (jti={jti})")

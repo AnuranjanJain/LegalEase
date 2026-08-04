@@ -1,5 +1,5 @@
 import json
-from datetime import datetime
+from datetime import datetime, timezone
 
 from fastapi import APIRouter,Depends, HTTPException, status
 from pydantic import BaseModel, Field
@@ -205,7 +205,7 @@ async def analyze_clauses(
                 doc.clause_analysis = json.dumps(
                     [c if isinstance(c, dict) else c.dict() for c in clauses]
                 )
-                doc.analyzed_at = datetime.utcnow()
+                doc.analyzed_at = datetime.now(timezone.utc).replace(tzinfo=None)
                 db.commit()
 
                 try:

@@ -6,7 +6,7 @@ from fastapi import Depends, FastAPI, HTTPException, UploadFile, File, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, StreamingResponse
 from pydantic import BaseModel
-from datetime import datetime
+from datetime import datetime, timezone
 from io import BytesIO
 import logging
 import tempfile
@@ -744,7 +744,7 @@ async def health():
     health_data = ai_service.check_health()
     rag_health = rag_service.check_health()
     uptime = time.monotonic() - _app_start_time
-    timestamp = datetime.utcnow().isoformat() + "Z"
+    timestamp = datetime.now(timezone.utc).replace(tzinfo=None).isoformat() + "Z"
 
     # Database connectivity check
     db_status = "ok"

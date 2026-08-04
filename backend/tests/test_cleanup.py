@@ -1,7 +1,7 @@
 import asyncio
 import os
 import pytest
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from unittest.mock import patch, MagicMock
 from fastapi import status, HTTPException
 from httpx import AsyncClient, ASGITransport
@@ -48,7 +48,7 @@ async def test_blacklisted_token_auth_fails(db_session):
     jti = payload.get("jti")
 
     # Blacklist the token
-    revoked = RevokedToken(jti=jti, expires_at=datetime.utcnow() + timedelta(hours=1))
+    revoked = RevokedToken(jti=jti, expires_at=datetime.now(timezone.utc) + timedelta(hours=1))
     db_session.add(revoked)
     db_session.commit()
 
@@ -59,7 +59,7 @@ async def test_blacklisted_token_auth_fails(db_session):
 
 @pytest.mark.asyncio
 async def test_purge_expired_tokens(db_session):
-    now = datetime.utcnow()
+    now = datetime.now(timezone.utc)
     # Add expired token
     expired = RevokedToken(jti="expired-token-jti", expires_at=now - timedelta(seconds=1))
     # Add valid token
@@ -78,7 +78,7 @@ async def test_purge_expired_tokens(db_session):
 
 @pytest.mark.asyncio
 async def test_purge_batch_deletion(db_session):
-    now = datetime.utcnow()
+    now = datetime.now(timezone.utc)
     # Create 5 expired tokens
     expired_tokens = [
         RevokedToken(jti=f"expired-jti-{i}", expires_at=now - timedelta(seconds=1))
@@ -95,7 +95,7 @@ async def test_purge_batch_deletion(db_session):
 
 @pytest.mark.asyncio
 async def test_purge_rollback_on_failure(db_session):
-    now = datetime.utcnow()
+    now = datetime.now(timezone.utc)
     expired = RevokedToken(jti="expired-token-rollback-jti", expires_at=now - timedelta(seconds=1))
     db_session.add(expired)
     db_session.commit()
