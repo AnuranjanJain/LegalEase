@@ -29,6 +29,7 @@ let inFlightRefresh: Promise<string | null> | null = null;
  * in-flight refresh. This prevents duplicate events when multiple callers
  * await the same refresh.
  */
+// Prevent duplicate auth events: emit token-refreshed or session-expired at most once per refresh
 let eventsEmittedForCurrentRefresh = false;
 
 /**
