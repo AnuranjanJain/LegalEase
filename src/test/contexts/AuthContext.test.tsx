@@ -1,17 +1,14 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, waitFor } from '@testing-library/react';
-import React from 'react';
 import { AuthProvider, useAuth } from '../../contexts/AuthContext';
 import { clearAccessToken, getAccessToken } from '../../services/authTokenRegistry';
-import { api } from '../../services/api';
+import { refreshAccessToken } from '../../services/refreshManager';
 
-vi.mock('../../services/api', () => ({
-  api: {
-    refreshSession: vi.fn(),
-  },
+vi.mock('../../services/refreshManager', () => ({
+  refreshAccessToken: vi.fn(),
 }));
 
-const mockRefreshSession = vi.mocked(api.refreshSession);
+const mockRefreshAccessToken = vi.mocked(refreshAccessToken);
 
 function AuthStateProbe() {
   const { isAuthenticated, isVerifying, userEmail, accessToken, login, logout } = useAuth();
@@ -41,11 +38,10 @@ describe('AuthContext', () => {
   });
 
   it('restores a session from the refresh endpoint on startup', async () => {
-    mockRefreshSession.mockResolvedValueOnce({
-      access_token: createJwt({ sub: 'user@example.com', exp: Math.floor(Date.now() / 1000) + 3600 }),
-    });
+    const testToken = createJwt({ sub: 'user@example.com', exp: Math.floor(Date.now() / 1000) + 3600 });
+    mockRefreshAccessToken.mockResolvedValueOnce(testToken);
 
-    global.fetch = vi.fn().mockResolvedValue({
+    (global as any).fetch = vi.fn().mockResolvedValue({
       ok: true,
       json: async () => ({ valid: true, email: 'user@example.com' }),
     });
@@ -66,7 +62,7 @@ describe('AuthContext', () => {
   });
 
   it('finishes verification unauthenticated when refresh fails', async () => {
-    mockRefreshSession.mockRejectedValueOnce(new Error('refresh unavailable'));
+    mockRefreshAccessToken.mockRejectedValueOnce(new Error('refresh unavailable'));
 
     render(
       <AuthProvider>
