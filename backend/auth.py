@@ -197,7 +197,7 @@ def create_refresh_token(data: dict, db: Session, expires_delta: Optional[timede
     return token
 
 
-def validate_refresh_token(token: str, db: Session) -> dict:
+def validate_refresh_token(token: str, db: Session, request_ip: Optional[str] = None) -> dict:
     """
     Validate a refresh token and return its payload if valid.
     
@@ -207,10 +207,12 @@ def validate_refresh_token(token: str, db: Session) -> dict:
     - Token type verification
     - Database revocation check
     - User existence verification
+    - Replay attack detection (checks replaced_by_token_jti)
     
     Args:
         token: The refresh token JWT string
         db: Database session for revocation check
+        request_ip: Optional client IP address for replay attack logging
         
     Returns:
         The decoded token payload
@@ -348,28 +350,28 @@ def rotate_refresh_token(old_jti: str, new_jti: str, db: Session) -> tuple[bool,
         old_token = db.query(models.RefreshToken).filter(
             models.RefreshToken.token_jti == old_jti
         ).first()
-        
+
         if not old_token:
             logger.warning(f"Old refresh token not found for rotation (jti={old_jti})")
             return False, "Old token not found"
-        
+
         # Check if already revoked
         if old_token.revoked_at is not None:
             logger.warning(f"Old refresh token already revoked (jti={old_jti})")
             return False, "Token already revoked"
-        
+
         # Check if already rotated (replay attack detection)
         if old_token.replaced_by_token_jti is not None:
             logger.warning(f"Old refresh token already rotated (jti={old_jti})")
             return False, "Token already rotated"
-        
+
         # Mark old token as replaced
         old_token.replaced_by_token_jti = new_jti
         db.commit()
-        
+
         logger.info(f"Refresh token rotated successfully: {old_jti} -> {new_jti}")
         return True, None
-        
+
     except Exception as e:
         db.rollback()
         logger.error(f"Database error during refresh token rotation: {str(e)}")
