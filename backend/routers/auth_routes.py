@@ -381,65 +381,47 @@ def refresh(
                 db=db,
             )
             
+            # Extract new jti for rotation
+            from jose import jwt as jose_jwt
+            new_payload = jose_jwt.decode(new_refresh_token, SECRET_KEY, algorithms=[ALGORITHM])
+            new_jti = new_payload.get("jti")
+
             # Mark old token as replaced (rotation tracking)
-            # This is now mandatory - if it fails, the entire operation fails
-            rotation_success, new_jti = rotate_refresh_token(old_jti, new_refresh_token, db)
-            
-            if not rotation_success:
-                # Rotation failed - revoke new token and fail the request
-                logger.error(
-                    f"Refresh token rotation failed for user {email} (old_jti={old_jti}). "
-                    f"Failing refresh request to prevent security vulnerability."
-                )
-                # Revoke the newly created token to prevent orphan tokens
-                try:
-                    new_payload = jwt.decode(new_refresh_token, SECRET_KEY, algorithms=[ALGORITHM])
-                    new_jti = new_payload.get("jti")
-                    if new_jti:
-                        revoke_refresh_token(new_jti, db)
-                except Exception:
-                    pass  # Best effort cleanup
-                
-                # Clear cookie and fail
+            success, reason = rotate_refresh_token(old_jti, new_jti, db)
+
+            if not success:
+                # Rotation failed - revoke the new token and clear cookie
+                logger.error(f"Refresh token rotation failed: {reason}")
+                revoke_refresh_token(new_jti, db)
                 clear_refresh_token_cookie(response)
-                db.rollback()
                 raise HTTPException(
                     status_code=status.HTTP_401_UNAUTHORIZED,
-                    detail="Token rotation failed. Please re-authenticate.",
+                    detail="Session refresh failed - please login again",
                 )
             
             # Rotation succeeded - update cookie with new refresh token
             set_refresh_token_cookie(response, new_refresh_token)
-            logger.info(
-                f"Refresh token rotated successfully for user {email} "
-                f"(old_jti={old_jti}, new_jti={new_jti})"
-            )
-        else:
-            logger.info(f"Refresh token rotation disabled, using existing token for user {email}")
-        
-        # Commit the transaction
-        db.commit()
-        
+
+            logger.info(f"Refresh token rotated successfully for user {email}")
     except HTTPException:
-        # Re-raise HTTP exceptions (already logged)
+        # Re-raise HTTP exceptions (already have proper error handling)
         raise
-    except SQLAlchemyError as e:
-        # Database error - rollback and fail
-        db.rollback()
-        logger.exception(f"Database error during refresh for user {email}: {str(e)}")
-        clear_refresh_token_cookie(response)
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Database error during token refresh",
-        )
     except Exception as e:
-        # Unexpected error - rollback and fail
-        db.rollback()
-        logger.exception(f"Unexpected error during refresh for user {email}: {str(e)}")
+        # Unexpected error - revoke new token, clear cookie, and fail
+        logger.error(f"Unexpected error during refresh token rotation: {e}")
+        try:
+            # Try to extract and revoke the new token if it was created
+            from jose import jwt as jose_jwt
+            new_payload = jose_jwt.decode(new_refresh_token, SECRET_KEY, algorithms=[ALGORITHM])
+            new_jti = new_payload.get("jti")
+            if new_jti:
+                revoke_refresh_token(new_jti, db)
+        except Exception:
+            pass
         clear_refresh_token_cookie(response)
         raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Token refresh failed",
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Session refresh failed - please login again",
         )
     
     return {"access_token": access_token, "token_type": "bearer"}
