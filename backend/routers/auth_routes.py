@@ -371,17 +371,48 @@ def refresh(
                 db=db,
             )
             
+            # Extract new jti for rotation
+            from jose import jwt as jose_jwt
+            new_payload = jose_jwt.decode(new_refresh_token, SECRET_KEY, algorithms=[ALGORITHM])
+            new_jti = new_payload.get("jti")
+            
             # Mark old token as replaced (rotation tracking)
-            rotate_refresh_token(old_jti, new_refresh_token, db)
+            success, reason = rotate_refresh_token(old_jti, new_jti, db)
+            
+            if not success:
+                # Rotation failed - revoke the new token and clear cookie
+                logger.error(f"Refresh token rotation failed: {reason}")
+                revoke_refresh_token(new_jti, db)
+                clear_refresh_token_cookie(response)
+                raise HTTPException(
+                    status_code=status.HTTP_401_UNAUTHORIZED,
+                    detail="Session refresh failed - please login again",
+                )
             
             # Update cookie with new refresh token
             set_refresh_token_cookie(response, new_refresh_token)
             
-            logger.info(f"Refresh token rotated for user {email}")
+            logger.info(f"Refresh token rotated successfully for user {email}")
+        except HTTPException:
+            # Re-raise HTTP exceptions (already have proper error handling)
+            raise
         except Exception as e:
-            logger.error(f"Failed to rotate refresh token: {e}")
-            # Continue with non-rotated response if rotation fails
-            # This is a graceful degradation - user still gets a new access token
+            # Unexpected error - revoke new token, clear cookie, and fail
+            logger.error(f"Unexpected error during refresh token rotation: {e}")
+            try:
+                # Try to extract and revoke the new token if it was created
+                from jose import jwt as jose_jwt
+                new_payload = jose_jwt.decode(new_refresh_token, SECRET_KEY, algorithms=[ALGORITHM])
+                new_jti = new_payload.get("jti")
+                if new_jti:
+                    revoke_refresh_token(new_jti, db)
+            except Exception:
+                pass
+            clear_refresh_token_cookie(response)
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Session refresh failed - please login again",
+            )
     
     return {"access_token": access_token, "token_type": "bearer"}
 

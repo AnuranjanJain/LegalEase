@@ -134,7 +134,6 @@ def test_create_refresh_token_stores_in_database(mock_db, mock_user):
 @pytest.mark.unit
 def test_validate_refresh_token_success(mock_db, mock_user):
     """Test successful refresh token validation."""
-    # Create a valid refresh token
     payload_data = {
         "sub": "test@example.com",
         "jti": "test-jti-123",
@@ -143,9 +142,10 @@ def test_validate_refresh_token_success(mock_db, mock_user):
     }
     token = jwt.encode(payload_data, SECRET_KEY, algorithm=ALGORITHM)
     
-    # Mock database queries
+    # Mock valid refresh token in database
     mock_refresh_token = Mock()
     mock_refresh_token.revoked_at = None
+    mock_refresh_token.replaced_by_token_jti = None  # Not rotated
     mock_refresh_token.expires_at = (datetime.now(timezone.utc) + timedelta(days=7)).replace(tzinfo=None)
     
     # Mock database queries - two separate query calls
@@ -351,6 +351,41 @@ def test_validate_refresh_token_user_not_found(mock_db):
     assert exc_info.value.status_code == 401
 
 
+@pytest.mark.unit
+def test_validate_refresh_token_replay_attack_detection(mock_db):
+    """Test refresh token validation fails when token has been rotated (replay attack)."""
+    payload_data = {
+        "sub": "test@example.com",
+        "jti": "test-jti-123",
+        "type": "refresh",
+        "exp": (datetime.now(timezone.utc) + timedelta(days=7)).timestamp()
+    }
+    token = jwt.encode(payload_data, SECRET_KEY, algorithm=ALGORITHM)
+    
+    # Mock refresh token that has been rotated
+    mock_refresh_token = Mock()
+    mock_refresh_token.revoked_at = None
+    mock_refresh_token.replaced_by_token_jti = "new-jti-456"
+    mock_refresh_token.user_id = 1
+    mock_refresh_token.expires_at = (datetime.now(timezone.utc) + timedelta(days=7)).replace(tzinfo=None)
+    
+    def query_side_effect(model, *args, **kwargs):
+        mock_query = Mock()
+        if model is models.User:
+            mock_query.filter.return_value.first.return_value = mock_user = Mock()
+            mock_user.email = "test@example.com"
+        elif model is models.RefreshToken:
+            mock_query.filter.return_value.first.return_value = mock_refresh_token
+        return mock_query
+    
+    mock_db.query.side_effect = query_side_effect
+    
+    with pytest.raises(HTTPException) as exc_info:
+        validate_refresh_token(token, mock_db)
+    
+    assert exc_info.value.status_code == 401
+
+
 # ==================== Refresh Token Revocation Tests ====================
 
 @pytest.mark.unit
@@ -412,11 +447,14 @@ def test_rotate_refresh_token_success(mock_db):
     new_token = jwt.encode(new_payload, SECRET_KEY, algorithm=ALGORITHM)
     
     mock_old_token = Mock()
+    mock_old_token.revoked_at = None
+    mock_old_token.replaced_by_token_jti = None
     mock_db.query.return_value.filter.return_value.first.return_value = mock_old_token
     
-    result = rotate_refresh_token("old-jti-123", new_token, mock_db)
+    success, reason = rotate_refresh_token("old-jti-123", "new-jti-456", mock_db)
     
-    assert result is True
+    assert success is True
+    assert reason is None
     assert mock_old_token.replaced_by_token_jti == "new-jti-456"
     assert mock_db.commit.called
 
@@ -424,29 +462,40 @@ def test_rotate_refresh_token_success(mock_db):
 @pytest.mark.unit
 def test_rotate_refresh_token_old_token_not_found(mock_db):
     """Test rotation fails when old token not found."""
-    new_payload = {
-        "sub": "test@example.com",
-        "jti": "new-jti-456",
-        "type": "refresh",
-        "exp": (datetime.now(timezone.utc) + timedelta(days=7)).timestamp()
-    }
-    new_token = jwt.encode(new_payload, SECRET_KEY, algorithm=ALGORITHM)
-    
     mock_db.query.return_value.filter.return_value.first.return_value = None
     
-    result = rotate_refresh_token("nonexistent-jti", new_token, mock_db)
+    success, reason = rotate_refresh_token("nonexistent-jti", "new-jti-456", mock_db)
     
-    assert result is False
+    assert success is False
+    assert reason == "Old token not found"
 
 
 @pytest.mark.unit
-def test_rotate_refresh_token_new_token_invalid(mock_db):
-    """Test rotation fails when new token is invalid."""
-    invalid_token = "invalid.jwt.token"
+def test_rotate_refresh_token_already_revoked(mock_db):
+    """Test rotation fails when old token is already revoked."""
+    mock_old_token = Mock()
+    mock_old_token.revoked_at = datetime.now(timezone.utc).replace(tzinfo=None)
+    mock_old_token.replaced_by_token_jti = None
+    mock_db.query.return_value.filter.return_value.first.return_value = mock_old_token
     
-    result = rotate_refresh_token("old-jti-123", invalid_token, mock_db)
+    success, reason = rotate_refresh_token("old-jti-123", "new-jti-456", mock_db)
     
-    assert result is False
+    assert success is False
+    assert reason == "Token already revoked"
+
+
+@pytest.mark.unit
+def test_rotate_refresh_token_already_rotated(mock_db):
+    """Test rotation fails when old token is already rotated (replay attack)."""
+    mock_old_token = Mock()
+    mock_old_token.revoked_at = None
+    mock_old_token.replaced_by_token_jti = "previous-jti-789"
+    mock_db.query.return_value.filter.return_value.first.return_value = mock_old_token
+    
+    success, reason = rotate_refresh_token("old-jti-123", "new-jti-456", mock_db)
+    
+    assert success is False
+    assert reason == "Token already rotated"
 
 
 # ==================== Cookie Management Tests ====================

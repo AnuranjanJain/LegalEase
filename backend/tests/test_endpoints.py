@@ -143,13 +143,28 @@ async def test_summarize_endpoint_with_valid_key():
 async def test_upload_endpoint_with_text_file():
     """Test upload endpoint with a text file"""
     import os
+    import backend.config
     os.environ["ALLOW_DEV"] = "true"
+    os.environ["ENVIRONMENT"] = "testing"
+    
+    # Reset settings to pick up environment changes
+    backend.config._settings = None
     
     headers = {"x-api-key": "dev-token"}
     content = b"This is a sample text file content."
     files = {"file": ("sample.txt", content, "text/plain")}
     
-    with patch("backend.main.process_upload_job_async"):
+    # Mock the job queue to prevent actual background processing
+    mock_queue = MagicMock()
+    mock_queue.using_redis = True  # Set to True to prevent background thread from spawning
+    mock_queue.enqueue.return_value = True
+    
+    # Mock task storage to prevent Redis connection attempts
+    mock_task_storage = MagicMock()
+    mock_task_storage.create_task.return_value = True
+    
+    with patch("backend.main.UploadJobQueue", return_value=mock_queue), \
+         patch("backend.main.get_upload_task_storage", return_value=mock_task_storage):
         async with AsyncClient(transport=ASGITransport(app=main.app), base_url="http://test") as ac:
             r = await ac.post("/upload", files=files, headers=headers)
             assert r.status_code == 202
@@ -158,20 +173,36 @@ async def test_upload_endpoint_with_text_file():
     
     if "ALLOW_DEV" in os.environ:
         del os.environ["ALLOW_DEV"]
+    backend.config._settings = None
 
 
 @pytest.mark.asyncio
 async def test_upload_endpoint_with_pdf():
     """Test upload endpoint with a PDF file (mock)"""
     import os
+    import backend.config
     os.environ["ALLOW_DEV"] = "true"
+    os.environ["ENVIRONMENT"] = "testing"
+    
+    # Reset settings to pick up environment changes
+    backend.config._settings = None
     
     headers = {"x-api-key": "dev-token"}
     # Mock PDF content
     content = b"%PDF-1.4\n%mock pdf content"
     files = {"file": ("sample.pdf", content, "application/pdf")}
     
-    with patch("backend.main.process_upload_job_async"):
+    # Mock the job queue to prevent actual background processing
+    mock_queue = MagicMock()
+    mock_queue.using_redis = True  # Set to True to prevent background thread from spawning
+    mock_queue.enqueue.return_value = True
+    
+    # Mock task storage to prevent Redis connection attempts
+    mock_task_storage = MagicMock()
+    mock_task_storage.create_task.return_value = True
+    
+    with patch("backend.main.UploadJobQueue", return_value=mock_queue), \
+         patch("backend.main.get_upload_task_storage", return_value=mock_task_storage):
         async with AsyncClient(transport=ASGITransport(app=main.app), base_url="http://test") as ac:
             r = await ac.post("/upload", files=files, headers=headers)
             # Will return 202
@@ -179,6 +210,7 @@ async def test_upload_endpoint_with_pdf():
     
     if "ALLOW_DEV" in os.environ:
         del os.environ["ALLOW_DEV"]
+    backend.config._settings = None
 
 
 @pytest.mark.asyncio
@@ -187,9 +219,14 @@ async def test_upload_endpoint_with_docx():
     import os
     import io
     import zipfile
+    import backend.config
     from unittest.mock import Mock, patch
     
     os.environ["ALLOW_DEV"] = "true"
+    os.environ["ENVIRONMENT"] = "testing"
+    
+    # Reset settings to pick up environment changes
+    backend.config._settings = None
 
     mock_doc = Mock()
     mock_para = Mock()
@@ -206,8 +243,18 @@ async def test_upload_endpoint_with_docx():
     
     files = {"file": ("sample.docx", content, "application/vnd.openxmlformats-officedocument.wordprocessingml.document")}
 
+    # Mock the job queue to prevent actual background processing
+    mock_queue = MagicMock()
+    mock_queue.using_redis = True  # Set to True to prevent background thread from spawning
+    mock_queue.enqueue.return_value = True
+    
+    # Mock task storage to prevent Redis connection attempts
+    mock_task_storage = MagicMock()
+    mock_task_storage.create_task.return_value = True
+
     with patch("backend.main.DocxDocument", return_value=mock_doc), \
-         patch("backend.main.process_upload_job_async"):
+         patch("backend.main.UploadJobQueue", return_value=mock_queue), \
+         patch("backend.main.get_upload_task_storage", return_value=mock_task_storage):
         async with AsyncClient(transport=ASGITransport(app=main.app), base_url="http://test") as ac:
             r = await ac.post("/upload", files=files, headers=headers)
             assert r.status_code == 202
@@ -216,6 +263,7 @@ async def test_upload_endpoint_with_docx():
 
     if "ALLOW_DEV" in os.environ:
         del os.environ["ALLOW_DEV"]
+    backend.config._settings = None
 
 
 
