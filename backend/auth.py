@@ -262,6 +262,18 @@ def validate_refresh_token(token: str, db: Session) -> dict:
         logger.warning(f"Refresh token has been revoked (jti={jti})")
         raise credentials_exception
     
+    # Check if token has been rotated (replay attack detection)
+    if refresh_token_record.replaced_by_token_jti is not None:
+        logger.warning(
+            "Replay attack detected - refresh token already used and rotated",
+            extra={
+                "user_id": refresh_token_record.user_id,
+                "jti": jti,
+                "replaced_by": refresh_token_record.replaced_by_token_jti,
+            },
+        )
+        raise credentials_exception
+    
     # Check expiration (double-check with database)
     # Handle both naive and aware datetimes from database
     if refresh_token_record.expires_at.tzinfo is None:
@@ -312,47 +324,56 @@ def revoke_refresh_token(jti: str, db: Session) -> bool:
     return True
 
 
-def rotate_refresh_token(old_jti: str, new_token: str, db: Session) -> bool:
+def rotate_refresh_token(old_jti: str, new_jti: str, db: Session) -> tuple[bool, Optional[str]]:
     """
     Rotate a refresh token by marking the old one as replaced by the new one.
     
     This enables detection of replay attacks - if an old refresh token
     is used after rotation, it will be rejected.
     
+    This function performs the database update atomically within a transaction.
+    
     Args:
         old_jti: The JWT ID of the old refresh token
-        new_token: The new refresh token JWT string
+        new_jti: The JWT ID of the new refresh token
         db: Database session
         
     Returns:
-        True if rotation succeeded, False otherwise
+        Tuple of (success: bool, reason: Optional[str])
+        - success: True if rotation succeeded, False otherwise
+        - reason: Error reason if failed, None if succeeded
     """
-    # Extract jti from new token
     try:
-        secret_key = _require_secret_key()
-        new_payload = jwt.decode(new_token, secret_key, algorithms=[ALGORITHM])
-        new_jti = new_payload.get("jti")
-        if not new_jti:
-            logger.error("New refresh token missing jti claim")
-            return False
-    except JWTError as e:
-        logger.error(f"Failed to decode new refresh token: {str(e)}")
-        return False
-    
-    # Update old token record
-    old_token = db.query(models.RefreshToken).filter(
-        models.RefreshToken.token_jti == old_jti
-    ).first()
-    
-    if not old_token:
-        logger.warning(f"Old refresh token not found for rotation (jti={old_jti})")
-        return False
-    
-    old_token.replaced_by_token_jti = new_jti
-    db.commit()
-    
-    logger.info(f"Refresh token rotated: {old_jti} -> {new_jti}")
-    return True
+        # Query old token record
+        old_token = db.query(models.RefreshToken).filter(
+            models.RefreshToken.token_jti == old_jti
+        ).first()
+        
+        if not old_token:
+            logger.warning(f"Old refresh token not found for rotation (jti={old_jti})")
+            return False, "Old token not found"
+        
+        # Check if already revoked
+        if old_token.revoked_at is not None:
+            logger.warning(f"Old refresh token already revoked (jti={old_jti})")
+            return False, "Token already revoked"
+        
+        # Check if already rotated (replay attack detection)
+        if old_token.replaced_by_token_jti is not None:
+            logger.warning(f"Old refresh token already rotated (jti={old_jti})")
+            return False, "Token already rotated"
+        
+        # Mark old token as replaced
+        old_token.replaced_by_token_jti = new_jti
+        db.commit()
+        
+        logger.info(f"Refresh token rotated successfully: {old_jti} -> {new_jti}")
+        return True, None
+        
+    except Exception as e:
+        db.rollback()
+        logger.error(f"Database error during refresh token rotation: {str(e)}")
+        return False, "Database error"
 
 
 def set_refresh_token_cookie(response: Response, token: str) -> None:
