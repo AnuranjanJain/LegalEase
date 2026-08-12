@@ -8,7 +8,7 @@ Obligation.reminder_sent_stage.
 """
 
 import logging
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 
 from sqlalchemy.orm import Session
 
@@ -47,7 +47,7 @@ def run_obligation_reminders(db: Session | None = None) -> int:
 
     created = 0
     try:
-        now = datetime.utcnow()
+        now = datetime.now(timezone.utc)
         pending = (
             db.query(models.Obligation)
             .filter(models.Obligation.status == "pending")
@@ -55,7 +55,11 @@ def run_obligation_reminders(db: Session | None = None) -> int:
         )
 
         for obligation in pending:
-            days_remaining = (obligation.due_date - now).days
+            # Handle both naive and aware datetimes from database
+            due_date = obligation.due_date
+            if due_date.tzinfo is None:
+                due_date = due_date.replace(tzinfo=timezone.utc)
+            days_remaining = (due_date - now).days
             sent_stages = _sent_stages(obligation)
 
             if days_remaining < 0:

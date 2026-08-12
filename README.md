@@ -534,6 +534,8 @@ cp .env.example .env
   From `.env.example`:
   - `BYTEZ_API_KEY` — required by the backend to access the Bytez SDK. Keep this secret.
   - `FRONTEND_URL` — frontend origin used for CORS (default: `http://localhost:5173`).
+  - `ALLOWED_ORIGINS` — comma-separated list of allowed CORS origins (default: `http://localhost:5173`).
+  - `ALLOW_LOCALHOST_CORS` — when set to `true`, automatically adds common localhost development ports (5173-5180 on both localhost and 127.0.0.1) to the CORS allowlist. Default is `false` for security. Localhost origins are never added automatically without this explicit configuration. Set to `true` for local development convenience.
   - `JWT_SECRET_KEY` — secret key for JWT token signing. Required in all environments.
   - `DOCUMENT_ENCRYPTION_KEY` — dedicated key for encrypting stored contract content at rest. **Required in production** to ensure cryptographic key separation. Must be different from `JWT_SECRET_KEY`. In non-production environments (development, testing, local), falls back to `JWT_SECRET_KEY` if not set for convenience. Generate using: `python -c "import secrets; print(secrets.token_urlsafe(32))"`
 
@@ -551,6 +553,7 @@ cp .env.example .env
   - `ALLOW_DEV` — allow using `DEV_API_KEY` for local development (`true`/`false`, default `true`).
   - `MAX_UPLOAD_SIZE` — maximum allowed upload size in bytes (default 26214400 = 25MB).
   - `RATE_LIMIT_IP_CALLS`, `RATE_LIMIT_KEY_CALLS`, `RATE_LIMIT_PERIOD` — simple rate-limiting configuration (defaults: 60, 30, 60).
+  - `UPLOAD_TASK_CLEANUP_INTERVAL_SECONDS` — interval in seconds for automatic cleanup of expired upload tasks in in-memory storage (default: 300). Only applies when `REDIS_URL` is not configured. Redis backend handles expiration automatically via TTL.
 
 - **Run backend (development):**
 

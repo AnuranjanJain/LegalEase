@@ -10,7 +10,7 @@ import hashlib
 import hmac
 import json
 import logging
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Any, Dict
 
 import httpx
@@ -49,7 +49,7 @@ async def fire_webhook(db: Session, user_id: int, event_type: str, payload: Dict
 
     envelope = {
         "event": event_type,
-        "fired_at": datetime.utcnow().isoformat() + "Z",
+        "fired_at": datetime.now(timezone.utc).replace(tzinfo=None).isoformat() + "Z",
         "data": payload,
     }
     body = json.dumps(envelope, default=str).encode("utf-8")

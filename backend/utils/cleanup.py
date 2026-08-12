@@ -1,6 +1,6 @@
 import asyncio
 import logging
-from datetime import datetime
+from datetime import datetime, timezone
 from sqlalchemy.orm import Session
 from backend.database import SessionLocal
 from backend.models import RevokedToken
@@ -14,7 +14,7 @@ def purge_expired_tokens_sync(batch_size: int = 1000):
     """
     db: Session = SessionLocal()
     try:
-        now = datetime.utcnow()
+        now = datetime.now(timezone.utc).replace(tzinfo=None)
         total_deleted = 0
         while True:
             # Query IDs first to keep the transaction size and locks minimal

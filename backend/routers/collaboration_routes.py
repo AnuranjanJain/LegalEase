@@ -11,7 +11,7 @@ Provides:
 import json
 import logging
 import asyncio
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Dict, Set, Optional
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect, Query
 from jose import JWTError, jwt
@@ -57,7 +57,7 @@ class ConnectionManager:
             "user_id": user_id,
             "username": username,
             "active_users": self.active_users.get(room_id, {}),
-            "timestamp": datetime.utcnow().isoformat()
+            "timestamp": datetime.now(timezone.utc).replace(tzinfo=None).isoformat()
         }, exclude=websocket)
 
         # Send current state to the new user
@@ -65,7 +65,7 @@ class ConnectionManager:
             "type": "room_state",
             "active_users": self.active_users.get(room_id, {}),
             "cursors": self.user_cursors.get(room_id, {}),
-            "timestamp": datetime.utcnow().isoformat()
+            "timestamp": datetime.now(timezone.utc).replace(tzinfo=None).isoformat()
         })
 
     def disconnect(self, websocket: WebSocket, room_id: str, user_id: str):
@@ -101,7 +101,7 @@ class ConnectionManager:
             "type": "cursor_update",
             "user_id": user_id,
             "cursor": cursor_data,
-            "timestamp": datetime.utcnow().isoformat()
+            "timestamp": datetime.now(timezone.utc).replace(tzinfo=None).isoformat()
         }, exclude=sender)
 
     async def handle_edit(self, room_id: str, user_id: str, edit_data: dict, sender: WebSocket):
@@ -109,7 +109,7 @@ class ConnectionManager:
             "type": "document_edit",
             "user_id": user_id,
             "edit": edit_data,
-            "timestamp": datetime.utcnow().isoformat()
+            "timestamp": datetime.now(timezone.utc).replace(tzinfo=None).isoformat()
         }, exclude=sender)
 
 
@@ -222,7 +222,7 @@ async def websocket_collaborate(
             "user_id": user_id,
             "username": username,
             "active_users": manager.active_users.get(room_id, {}),
-            "timestamp": datetime.utcnow().isoformat()
+            "timestamp": datetime.now(timezone.utc).replace(tzinfo=None).isoformat()
         })
     except Exception as e:
         logger.error(f"WebSocket error in room {room_id}: {e}")

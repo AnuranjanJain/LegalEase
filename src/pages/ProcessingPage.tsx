@@ -5,7 +5,6 @@ import {
   AlertTriangle, FileText, BookOpen, ShieldCheck, Download
 } from 'lucide-react';
 import { api } from '../services/api';
-import { StorageService } from '../services/storage';
 import { useToast } from '../contexts/ToastContext';
 import { useRedactedText } from '../hooks/useRedactedText';
 import { useRedaction } from '../contexts/RedactionContext';
@@ -14,6 +13,8 @@ import { RedactedText } from '../components/RedactedText';
 import { ReadabilityScore } from '../components/ReadabilityScore';
 import { FeedbackWidget } from '../components/FeedbackWidget';
 import { CalendarExportWidget } from '../components/CalendarExportWidget';
+import { TldrSidebar } from '../components/TldrSidebar';
+import { StorageService, TldrData } from '../services/storage';
 
 
 // Word-based sliding window chunking algorithm
@@ -58,6 +59,8 @@ export function ProcessingPage() {
   const [finalSummary, setFinalSummary] = useState('');
   const [originalText, setOriginalText] = useState('');
   const [isExporting, setIsExporting] = useState(false);
+  const [tldrData, setTldrData] = useState<TldrData | null>(null);
+  const [isTldrLoading, setIsTldrLoading] = useState(false);
 
   // Apply PII redaction to the live preview (original summary kept in state)
   const redactedSummary = useRedactedText(finalSummary);
@@ -176,9 +179,7 @@ export function ProcessingPage() {
 
         setFinalSummary(compiledBrief);
 
-        // Fetch clause-level risk assessment, scoped to the user's selected
-        // jurisdiction so flagged clauses reflect jurisdiction-specific risk
-        // instead of generic, jurisdiction-agnostic rules.
+        // Fetch clause-level risk assessment
         let analyzedClauses: any[] = [];
         try {
           const jurisdiction = localStorage.getItem('le_selected_jurisdiction') || 'General / Not Specified';
@@ -188,10 +189,23 @@ export function ProcessingPage() {
           console.warn('Failed to analyze clauses, falling back to empty clauses array:', clauseErr);
         }
 
+        // Fetch TL;DR Quick Facts in parallel
+        let extractedTldr: TldrData | undefined = undefined;
+        try {
+          setIsTldrLoading(true);
+          const tldrRes = await api.post<TldrData>('/tldr', { text: extractedText });
+          extractedTldr = tldrRes;
+          setTldrData(tldrRes);
+        } catch (tldrErr) {
+          console.warn('Failed to fetch TL;DR facts:', tldrErr);
+        } finally {
+          setIsTldrLoading(false);
+        }
+
         setStage4Status('completed');
 
         // Save complete results back to StorageService
-        StorageService.updateDocumentStatus(docId, 'processed', compiledBrief, extractedText, analyzedClauses);
+        StorageService.updateDocumentStatus(docId, 'processed', compiledBrief, extractedText, analyzedClauses, extractedTldr);
         showToast(`"${file.name}" analyzed successfully!`, 'success');
       } catch {
         setStage4Status('failed');
@@ -560,35 +574,60 @@ export function ProcessingPage() {
                 </div>
               )}
 
-              {/* Live Preview Panel (Only displayed when successfully finished) */}
+              {/* Live Preview Panel & TL;DR Sidebar */}
               {isPipelineCompleted && finalSummary && (
-                <>
-                  <div className="bg-gray-50/50 dark:bg-gray-950/20 rounded-xl border border-gray-150 dark:border-gray-850 p-5 text-left space-y-3 animate-slide-up">
-                    <div className="flex items-center justify-between border-b border-gray-200 dark:border-gray-850 pb-2">
-                      <span className="text-xs font-extrabold uppercase tracking-widest text-primary flex items-center gap-1.5">
-                        <BookOpen size={14} />
-                        Previewing Compiled AI Summary
-                      </span>
-                      <div className="flex items-center gap-2">
-                        {isRedactionEnabled && (
-                          <span className="text-[10px] font-bold text-primary flex items-center gap-1">
-                            <ShieldCheck size={11} />
-                            PII Redacted
-                          </span>
-                        )}
-                        <span className="text-[10px] text-gray-400 font-medium">Rendered instantly</span>
+                <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 items-start text-left animate-slide-up">
+                  {/* Left (2 Cols): Summary & Analysis */}
+                  <div className="lg:col-span-2 space-y-4">
+                    <div className="bg-gray-50/50 dark:bg-gray-950/20 rounded-xl border border-gray-150 dark:border-gray-850 p-5 text-left space-y-3">
+                      <div className="flex items-center justify-between border-b border-gray-200 dark:border-gray-850 pb-2">
+                        <span className="text-xs font-extrabold uppercase tracking-widest text-primary flex items-center gap-1.5">
+                          <BookOpen size={14} />
+                          Previewing Compiled AI Summary
+                        </span>
+                        <div className="flex items-center gap-2">
+                          {isRedactionEnabled && (
+                            <span className="text-[10px] font-bold text-primary flex items-center gap-1">
+                              <ShieldCheck size={11} />
+                              PII Redacted
+                            </span>
+                          )}
+                          <span className="text-[10px] text-gray-400 font-medium">Rendered instantly</span>
+                        </div>
                       </div>
-                    </div>
-                    <div className="max-h-60 overflow-y-auto text-xs text-gray-700 dark:text-gray-300 leading-relaxed space-y-4 pr-2 scrollbar-thin scrollbar-thumb-gray-200 dark:scrollbar-thumb-gray-850">
-                      <div className="whitespace-pre-line prose prose-sm dark:prose-invert">
-                        <RedactedText text={redactedSummary} />
+                      <div className="max-h-60 overflow-y-auto text-xs text-gray-700 dark:text-gray-300 leading-relaxed space-y-4 pr-2 scrollbar-thin scrollbar-thumb-gray-200 dark:scrollbar-thumb-gray-850">
+                        <div className="whitespace-pre-line prose prose-sm dark:prose-invert">
+                          <RedactedText text={redactedSummary} />
+                        </div>
                       </div>
+                      <FeedbackWidget responseType="summary" />
                     </div>
-                    <FeedbackWidget responseType="summary" />
+                    <ReadabilityScore originalText={originalText} summaryText={finalSummary} />
+                    <CalendarExportWidget documentText={originalText} />
                   </div>
-                  <ReadabilityScore originalText={originalText} summaryText={finalSummary} />
-                  <CalendarExportWidget documentText={originalText} />
-                </>
+
+                  {/* Right (1 Col): Floating TL;DR Sidebar */}
+                  <div className="lg:col-span-1">
+                    <TldrSidebar 
+                      tldr={tldrData} 
+                      isLoading={isTldrLoading}
+                      onRefresh={async () => {
+                        try {
+                          setIsTldrLoading(true);
+                          const res = await api.post<TldrData>('/tldr', { text: originalText });
+                          setTldrData(res);
+                          if (docId) {
+                            StorageService.updateDocumentStatus(docId, 'processed', finalSummary, originalText, undefined, res);
+                          }
+                        } catch (err) {
+                          console.warn('Failed to regenerate TL;DR:', err);
+                        } finally {
+                          setIsTldrLoading(false);
+                        }
+                      }}
+                    />
+                  </div>
+                </div>
               )}
 
               {/* Action buttons */}
