@@ -1,6 +1,8 @@
 import time
 import logging
 import asyncio
+import json
+import re
 from typing import Optional, List, Dict, Any, AsyncGenerator
 from contextvars import ContextVar
 
@@ -230,6 +232,116 @@ class AIService:
                 return self._generate_fallback_summary(text)
             else:
                 logger.error(f"[{self._get_corr_id()}] Error in summary generation, graceful degradation disabled: {e}")
+                raise
+
+    def _generate_fallback_tldr(self, text: str) -> Dict[str, Any]:
+        """
+        Generate a heuristic-based fallback TL;DR Quick Facts dictionary when AI is offline or parsing fails.
+        """
+        if not text or not text.strip():
+            return {
+                "parties": "Not specified",
+                "deadlines": "Not specified",
+                "financials": "Not specified",
+                "penalties": "Not specified",
+                "key_takeaways": ["Not specified"]
+            }
+
+        text_sub = text[:5000]
+
+        # Extract parties
+        party_match = re.findall(r'(?:between|by and between|party|parties|client|contractor|employer|employee|buyer|seller)\s*:?\s*([A-Z][A-Za-z0-9\s,&.]{2,40})', text_sub, re.IGNORECASE)
+        parties = ", ".join(list(dict.fromkeys([p.strip() for p in party_match if len(p.strip()) > 3]))[:3]) if party_match else ""
+        if not parties:
+            parties = "Not specified"
+
+        # Extract deadlines / dates
+        date_match = re.findall(r'(?:\d{1,2}\s+(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]*\s+\d{4}|\d{1,2}/\d{1,2}/\d{2,4}|\d+\s+days|\b(?:due|deadline|effective|expiration)\b[^\.\n]{5,40})', text_sub, re.IGNORECASE)
+        deadlines = "; ".join(list(dict.fromkeys([d.strip() for d in date_match]))[:3]) if date_match else ""
+        if not deadlines:
+            deadlines = "Not specified"
+
+        # Extract financials
+        fin_match = re.findall(r'(\$\s*\d+(?:,\d{3})*(?:\.\d{2})?|\b\d+\s*(?:USD|EUR|GBP|INR)\b|payment[^\.\n]{5,50})', text_sub, re.IGNORECASE)
+        financials = "; ".join(list(dict.fromkeys([f.strip() for f in fin_match]))[:3]) if fin_match else ""
+        if not financials:
+            financials = "Not specified"
+
+        # Extract penalties
+        pen_match = re.findall(r'(\b(?:penalty|penalties|late fee|termination fee|liquidated damages|interest|liability|breach)\b[^\.\n]{5,60})', text_sub, re.IGNORECASE)
+        penalties = "; ".join(list(dict.fromkeys([p.strip() for p in pen_match]))[:2]) if pen_match else ""
+        if not penalties:
+            penalties = "Not specified"
+
+        # Extract key takeaways
+        sentences = [s.strip() for s in re.split(r'[\.\n]+', text_sub) if len(s.strip()) > 20]
+        takeaways = sentences[:3] if sentences else ["Not specified"]
+
+        return {
+            "parties": parties,
+            "deadlines": deadlines,
+            "financials": financials,
+            "penalties": penalties,
+            "key_takeaways": takeaways
+        }
+
+    async def generate_tldr(self, text: str) -> Dict[str, Any]:
+        """
+        Generate structured TL;DR Quick Facts for document analysis.
+        Extracts key actionable points (parties, deadlines, financials, penalties, key_takeaways).
+        """
+        prompt = (
+            "You are an expert legal AI assistant. Analyze the following legal text and extract key actionable facts.\n"
+            "Return ONLY a valid JSON object matching this exact JSON structure with no extra text or explanations:\n"
+            "{\n"
+            '  "parties": "<Parties involved, or \'Not specified\'>",\n'
+            '  "deadlines": "<Important deadlines, key dates, or notice periods, or \'Not specified\'>",\n'
+            '  "financials": "<Financial terms, fees, payment amounts, or compensation, or \'Not specified\'>",\n'
+            '  "penalties": "<Penalties, late fees, breach liabilities, or consequences, or \'Not specified\'>",\n'
+            '  "key_takeaways": ["<Bullet point 1>", "<Bullet point 2>", "<Bullet point 3>"]\n'
+            "}\n\n"
+            f"Document Text:\n{text}"
+        )
+
+        if len(prompt) > self.max_model_input_chars:
+            logger.info(f"[{self._get_corr_id()}] TL;DR prompt length ({len(prompt)}) exceeds max limit ({self.max_model_input_chars}). Truncating.")
+            prompt = prompt[:self.max_model_input_chars]
+
+        messages = [{"role": "user", "content": prompt}]
+
+        try:
+            if self.stub_mode:
+                return self._generate_fallback_tldr(text)
+
+            output = await self._execute_with_retry_and_timeout(self.summarize_model_name, messages)
+            res_str = output.output if hasattr(output, 'output') else str(output)
+
+            # Strip code block wrappers if present
+            clean_json = res_str.strip()
+            if clean_json.startswith("```"):
+                clean_json = re.sub(r'^```(?:json)?\n?', '', clean_json)
+                clean_json = re.sub(r'\n?```$', '', clean_json).strip()
+
+            parsed = json.loads(clean_json)
+
+            parties = parsed.get("parties")
+            deadlines = parsed.get("deadlines")
+            financials = parsed.get("financials")
+            penalties = parsed.get("penalties")
+            takeaways = parsed.get("key_takeaways")
+
+            return {
+                "parties": str(parties).strip() if parties and str(parties).strip() else "Not specified",
+                "deadlines": str(deadlines).strip() if deadlines and str(deadlines).strip() else "Not specified",
+                "financials": str(financials).strip() if financials and str(financials).strip() else "Not specified",
+                "penalties": str(penalties).strip() if penalties and str(penalties).strip() else "Not specified",
+                "key_takeaways": [str(t).strip() for t in takeaways if str(t).strip()] if isinstance(takeaways, list) and len(takeaways) > 0 else ["Not specified"],
+            }
+        except Exception as e:
+            logger.info(f"[{self._get_corr_id()}] TL;DR extraction failed or returned non-JSON, falling back to heuristic extraction: {e}")
+            if self.graceful_degradation:
+                return self._generate_fallback_tldr(text)
+            else:
                 raise
 
     async def suggest_redline(

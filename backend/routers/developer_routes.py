@@ -1,5 +1,5 @@
 import json
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, status
@@ -156,7 +156,7 @@ async def revoke_api_key(
     if not row:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="API key not found")
     if row.revoked_at is None:
-        row.revoked_at = datetime.utcnow()
+        row.revoked_at = datetime.now(timezone.utc).replace(tzinfo=None)
         db.commit()
     return None
 

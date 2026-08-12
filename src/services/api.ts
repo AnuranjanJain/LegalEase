@@ -1,5 +1,6 @@
 import { API_BASE_URL } from '../config/api';
-import { getAccessToken, setAccessToken, clearAccessToken } from './authTokenRegistry';
+import { getAccessToken } from './authTokenRegistry';
+import { refreshAccessToken } from './refreshManager';
 
 const getAuthHeaders = (): Record<string, string> => {
   const token = getAccessToken();
@@ -59,54 +60,12 @@ async function handleErrorResponse(response: Response, fallbackPrefix: string): 
 // expired/revoked), the failure is surfaced as an 'auth:session-expired'
 // window event so AuthContext can update isAuthenticated/userEmail without
 // this module needing direct access to React state.
+//
+// All refresh operations are now coordinated through refreshManager to
+// prevent race conditions with refresh-token rotation backends.
 // ---------------------------------------------------------------------------
 
 const REFRESH_ENDPOINT = '/auth/refresh';
-
-/** Dedupes concurrent refresh attempts: several 401s arriving at once
- * should trigger exactly one /auth/refresh call, not one per request. */
-let inFlightRefresh: Promise<string | null> | null = null;
-
-async function performTokenRefresh(): Promise<string | null> {
-  if (inFlightRefresh) {
-    return inFlightRefresh;
-  }
-
-  inFlightRefresh = (async () => {
-    try {
-      const response = await fetch(
-        `${API_BASE_URL}${REFRESH_ENDPOINT}`,
-        includeCredentials({ method: 'GET' })
-      );
-
-      if (!response.ok) {
-        clearAccessToken();
-        window.dispatchEvent(new CustomEvent('auth:session-expired'));
-        return null;
-      }
-
-      const data = await response.json();
-      const newToken: string | undefined = data?.access_token;
-      if (!newToken) {
-        clearAccessToken();
-        window.dispatchEvent(new CustomEvent('auth:session-expired'));
-        return null;
-      }
-
-      setAccessToken(newToken);
-      window.dispatchEvent(new CustomEvent('auth:token-refreshed', { detail: { token: newToken } }));
-      return newToken;
-    } catch {
-      clearAccessToken();
-      window.dispatchEvent(new CustomEvent('auth:session-expired'));
-      return null;
-    } finally {
-      inFlightRefresh = null;
-    }
-  })();
-
-  return inFlightRefresh;
-}
 
 /**
  * Perform a fetch with the current access token attached. On a 401,
@@ -121,7 +80,7 @@ async function fetchWithAuthRetry(
   let response = await fetch(`${API_BASE_URL}${endpoint}`, buildRequest());
 
   if (response.status === 401 && endpoint !== REFRESH_ENDPOINT) {
-    const refreshedToken = await performTokenRefresh();
+    const refreshedToken = await refreshAccessToken();
     if (refreshedToken) {
       response = await fetch(`${API_BASE_URL}${endpoint}`, buildRequest());
     }

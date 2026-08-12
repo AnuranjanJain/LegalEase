@@ -1,7 +1,7 @@
 import re
 import difflib
 from io import BytesIO
-from datetime import datetime
+from datetime import datetime, timezone
 from docx import Document
 from docx.oxml import OxmlElement
 from docx.oxml.ns import qn
@@ -29,7 +29,7 @@ def generate_redlined_docx(original_text: str, suggested_text: str) -> bytes:
     matcher = difflib.SequenceMatcher(None, orig_paragraphs, sugg_paragraphs)
     
     revision_id = 0
-    now_str = datetime.utcnow().isoformat() + "Z"
+    now_str = datetime.now(timezone.utc).replace(tzinfo=None).isoformat() + "Z"
     author = "LegalEase AI"
 
     def add_inserted(p, text):

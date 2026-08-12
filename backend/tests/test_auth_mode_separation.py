@@ -70,11 +70,11 @@ def expired_jwt_token():
     """Create an expired JWT token for testing."""
     if not SECRET_KEY:
         pytest.skip("JWT_SECRET_KEY not configured")
-    from datetime import datetime, timedelta
+    from datetime import datetime, timedelta, timezone
     payload = {
         "sub": "test@example.com",
         "jti": "expired-jti",
-        "exp": datetime.utcnow() - timedelta(hours=1)
+        "exp": datetime.now(timezone.utc) - timedelta(hours=1)
     }
     return jwt.encode(payload, SECRET_KEY, algorithm=ALGORITHM)
 
