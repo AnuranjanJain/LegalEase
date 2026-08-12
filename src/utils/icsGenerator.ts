@@ -28,7 +28,7 @@ export function generateICS(events: LegalDeadline[]): string {
     const dtstart = `${year}${month}${day}`;
     
     // End date is start date + 1 day for all-day events in ICS standard
-    const startDateObj = new Date(parseInt(year), parseInt(month) - 1, parseInt(day));
+    const startDateObj = new Date(parseInt(year, 10), parseInt(month) - 1, parseInt(day));
     startDateObj.setDate(startDateObj.getDate() + 1);
     const endYear = startDateObj.getFullYear();
     const endMonth = String(startDateObj.getMonth() + 1).padStart(2, '0');
