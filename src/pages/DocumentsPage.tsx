@@ -2,12 +2,13 @@ import { useState, useRef, useEffect, useMemo } from 'react';
 import { 
   UploadCloud, FileText, Trash2, Eye, Search, 
   Grid, List, CheckCircle, ArrowRight, RefreshCcw,
-  X, MessageSquare, Download, AlertCircle, ShieldCheck, GitCompare
+  X, MessageSquare, Download, AlertCircle, ShieldCheck, GitCompare, FileSignature
 } from 'lucide-react';
 import { StorageService, Document, ChatStorageService, TldrData } from '../services/storage';
 import { useToast } from '../contexts/ToastContext';
 import { useNavigate } from 'react-router-dom';
 import { api } from '../services/api';
+import { LegalIntakeFormModal } from '../components/LegalIntakeFormModal';
 import { ShareButton } from '../components/ShareButton';
 import { WhatsAppShareModal } from '../components/WhatsAppShareModal';
 import { ClauseAnalysisSection } from '../components/ClauseAnalysisSection';
@@ -137,6 +138,7 @@ export function DocumentsPage() {
   }, [selectedAuditDoc]);
 
   const [isExporting, setIsExporting] = useState(false);
+  const [isIntakeModalOpen, setIsIntakeModalOpen] = useState(false);
   const [uploadMode, setUploadMode] = useState<'file' | 'paste'>('file');
   const [pastedText, setPastedText] = useState('');
   const [pastedDocTitle, setPastedDocTitle] = useState('');
@@ -610,6 +612,14 @@ export function DocumentsPage() {
                 Compare ({selectedDocIds.length})
               </button>
             )}
+            <button
+              onClick={() => setIsIntakeModalOpen(true)}
+              className="inline-flex items-center px-4 py-3 text-sm font-semibold rounded-xl text-primary-600 dark:text-primary-400 bg-primary-600/10 dark:bg-primary-600/20 border border-primary-500/20 hover:bg-primary-600 hover:text-white shadow-md hover:shadow-primary-500/30 hover:scale-[1.02] active:scale-95 transition-all duration-300"
+              aria-label="Open Legal Intake Form Generator"
+            >
+              <FileSignature size={18} className="mr-2" />
+              Legal Intake Form
+            </button>
             <button
               onClick={() => fileInputRef.current?.click()}
               className="inline-flex items-center px-5 py-3 text-sm font-semibold rounded-xl text-white bg-primary-600 hover:bg-primary-500 shadow-lg shadow-primary-500/20 hover:shadow-primary-500/35 hover:scale-[1.02] active:scale-95 transition-all duration-300"
@@ -1371,6 +1381,12 @@ export function DocumentsPage() {
           </div>
         </div>
       )}
+
+      {/* Legal Intake Form Modal */}
+      <LegalIntakeFormModal
+        isOpen={isIntakeModalOpen}
+        onClose={() => setIsIntakeModalOpen(false)}
+      />
     </div>
   );
 }
