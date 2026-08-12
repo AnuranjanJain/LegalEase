@@ -1,7 +1,7 @@
 import { createContext, useContext, useEffect, useRef, useState, ReactNode } from 'react';
 import { API_BASE_URL } from '../config/api';
-import { api } from '../services/api';
 import { setAccessToken as setTokenInRegistry, clearAccessToken as clearTokenFromRegistry } from '../services/authTokenRegistry';
+import { refreshAccessToken } from '../services/refreshManager';
 
 interface AuthContextType {
   isAuthenticated: boolean;
@@ -12,11 +12,6 @@ interface AuthContextType {
   accessToken: string | null;
   login: (token: string) => Promise<void>;
   logout: () => boolean;
-}
-
-interface RefreshResponse {
-  access_token: string;
-  token_type?: string;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -81,12 +76,12 @@ function msUntilProactiveRefresh(token: string): number | null {
 
 async function restoreSession(): Promise<string | null> {
   try {
-    const response = await api.refreshSession<RefreshResponse>();
-    if (!response?.access_token || !(await verifyTokenWithBackend(response.access_token))) {
+    const token = await refreshAccessToken();
+    if (!token || !(await verifyTokenWithBackend(token))) {
       return null;
     }
 
-    return response.access_token;
+    return token;
   } catch (error) {
     console.warn('Session restore failed; continuing unauthenticated.', error);
     return null;

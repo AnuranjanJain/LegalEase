@@ -42,6 +42,24 @@ logger = logging.getLogger(__name__)
 settings = get_settings()
 ENVIRONMENT = settings.environment.environment
 TEST_MODE = settings.environment.test_mode
+TEST_VERIFICATION_FAILURE_EMAILS = [
+    email.strip().lower() 
+    for email in settings.environment.test_verification_failure_emails.split(",") 
+    if email.strip()
+]
+TEST_FAILURE_EMAIL_PATTERNS = [
+    pattern.strip().lower() 
+    for pattern in settings.environment.test_failure_email_patterns.split(",") 
+    if pattern.strip()
+]
+
+# Log test mode configuration at startup
+if TEST_MODE:
+    logger.info(
+        f"Test mode enabled in {ENVIRONMENT} environment. "
+        f"Configured with {len(TEST_VERIFICATION_FAILURE_EMAILS)} specific failure emails "
+        f"and {len(TEST_FAILURE_EMAIL_PATTERNS)} failure patterns."
+    )
 
 router = APIRouter(
     prefix="/auth",
@@ -217,12 +235,28 @@ def resend_verification(request: Request, payload: ResendVerificationRequest, db
     # Test mode: controlled failure simulation for development/testing only
     # This is isolated behind an explicit environment flag and cannot be enabled in production
     if TEST_MODE:
-        if email_lower == "994917jishnu@gmail.com" or "fail" in email_lower:
-            logger.warning(f"Test mode: Simulating verification email failure for {email_lower}")
+        # Check if email matches configured failure emails
+        if email_lower in TEST_VERIFICATION_FAILURE_EMAILS:
+            logger.warning(
+                f"Test mode: Simulating verification email failure for configured email. "
+                f"Failure simulation triggered by exact email match."
+            )
             raise HTTPException(
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
                 detail="Failed to send verification email. Please try again later.",
             )
+        
+        # Check if email contains any configured failure patterns
+        for pattern in TEST_FAILURE_EMAIL_PATTERNS:
+            if pattern in email_lower:
+                logger.warning(
+                    f"Test mode: Simulating verification email failure for email matching pattern. "
+                    f"Failure simulation triggered by pattern match."
+                )
+                raise HTTPException(
+                    status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                    detail="Failed to send verification email. Please try again later.",
+                )
     
     # Check if user exists in the database
     try:
@@ -278,18 +312,27 @@ def refresh(
     
     Process:
     1. Extract refresh token from HttpOnly cookie
-    2. Validate refresh token (signature, expiration, revocation, user existence)
+    2. Validate refresh token (signature, expiration, revocation, user existence, replay detection)
     3. Issue new access token
-    4. Optionally rotate refresh token (if enabled in config)
-    5. Update cookie with new refresh token (if rotated)
+    4. Rotate refresh token (mandatory when enabled)
+    5. Update cookie with new refresh token
+    
+    Security guarantees:
+    - Refresh token rotation is atomic and fail-closed
+    - If rotation fails, the entire refresh request fails
+    - Replay attacks are detected and rejected
+    - Database failures trigger rollback and authentication failure
     
     Returns:
         JSON with new access token
         
     Raises:
-        401: If refresh token is missing, invalid, expired, or revoked
+        401: If refresh token is missing, invalid, expired, revoked, or replay detected
     """
     settings = get_settings()
+    
+    # Extract client IP for replay attack logging
+    client_ip = request.client.host if request.client else None
     
     # Extract refresh token from cookie
     refresh_token = get_refresh_token_from_cookie(request)
@@ -300,9 +343,9 @@ def refresh(
             detail="Missing refresh token",
         )
     
-    # Validate refresh token
+    # Validate refresh token (includes replay attack detection)
     try:
-        payload = validate_refresh_token(refresh_token, db)
+        payload = validate_refresh_token(refresh_token, db, request_ip=client_ip)
     except HTTPException:
         # Clear invalid refresh token cookie
         clear_refresh_token_cookie(response)
@@ -322,32 +365,64 @@ def refresh(
             detail="User not found",
         )
     
-    # Create new access token
-    access_token = create_access_token(
-        data={"sub": user.email},
-        expires_delta=timedelta(hours=ACCESS_TOKEN_EXPIRE_HOURS)
-    )
-    
-    # Rotate refresh token if enabled
-    if settings.security.refresh_token_rotation_enabled:
-        try:
+    # Begin database transaction for atomic refresh operation
+    try:
+        # Create new access token
+        access_token = create_access_token(
+            data={"sub": user.email},
+            expires_delta=timedelta(hours=ACCESS_TOKEN_EXPIRE_HOURS)
+        )
+        
+        # Rotate refresh token if enabled (MANDATORY)
+        if settings.security.refresh_token_rotation_enabled:
             # Create new refresh token
             new_refresh_token = create_refresh_token(
                 data={"sub": user.email},
                 db=db,
             )
             
+            # Extract new jti for rotation
+            from jose import jwt as jose_jwt
+            new_payload = jose_jwt.decode(new_refresh_token, SECRET_KEY, algorithms=[ALGORITHM])
+            new_jti = new_payload.get("jti")
+
             # Mark old token as replaced (rotation tracking)
-            rotate_refresh_token(old_jti, new_refresh_token, db)
+            success, reason = rotate_refresh_token(old_jti, new_jti, db)
+
+            if not success:
+                # Rotation failed - revoke the new token and clear cookie
+                logger.error(f"Refresh token rotation failed: {reason}")
+                revoke_refresh_token(new_jti, db)
+                clear_refresh_token_cookie(response)
+                raise HTTPException(
+                    status_code=status.HTTP_401_UNAUTHORIZED,
+                    detail="Session refresh failed - please login again",
+                )
             
-            # Update cookie with new refresh token
+            # Rotation succeeded - update cookie with new refresh token
             set_refresh_token_cookie(response, new_refresh_token)
-            
-            logger.info(f"Refresh token rotated for user {email}")
-        except Exception as e:
-            logger.error(f"Failed to rotate refresh token: {e}")
-            # Continue with non-rotated response if rotation fails
-            # This is a graceful degradation - user still gets a new access token
+
+            logger.info(f"Refresh token rotated successfully for user {email}")
+    except HTTPException:
+        # Re-raise HTTP exceptions (already have proper error handling)
+        raise
+    except Exception as e:
+        # Unexpected error - revoke new token, clear cookie, and fail
+        logger.error(f"Unexpected error during refresh token rotation: {e}")
+        try:
+            # Try to extract and revoke the new token if it was created
+            from jose import jwt as jose_jwt
+            new_payload = jose_jwt.decode(new_refresh_token, SECRET_KEY, algorithms=[ALGORITHM])
+            new_jti = new_payload.get("jti")
+            if new_jti:
+                revoke_refresh_token(new_jti, db)
+        except Exception:
+            pass
+        clear_refresh_token_cookie(response)
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Session refresh failed - please login again",
+        )
     
     return {"access_token": access_token, "token_type": "bearer"}
 

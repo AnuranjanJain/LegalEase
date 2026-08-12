@@ -4,7 +4,7 @@ import hashlib
 import uuid
 import secrets
 import json
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Optional, Union, Literal
 from fastapi import Depends, HTTPException, Request, status, Response
 from fastapi.security import OAuth2PasswordBearer
@@ -132,7 +132,7 @@ def hash_api_key(key: str) -> str:
 def create_access_token(data: dict, expires_delta: Optional[timedelta] = None) -> str:
     secret_key = _require_secret_key()
     to_encode = data.copy()
-    expire = datetime.utcnow() + (expires_delta if expires_delta else timedelta(hours=ACCESS_TOKEN_EXPIRE_HOURS))
+    expire = (datetime.now(timezone.utc) + (expires_delta if expires_delta else timedelta(hours=ACCESS_TOKEN_EXPIRE_HOURS))).replace(tzinfo=None)
     to_encode.update({
         "exp": expire,
         "jti": str(uuid.uuid4()),  # unique token ID — used for revocation
@@ -165,7 +165,7 @@ def create_refresh_token(data: dict, db: Session, expires_delta: Optional[timede
     settings = get_settings()
     
     to_encode = data.copy()
-    expire = datetime.utcnow() + (expires_delta if expires_delta else timedelta(days=settings.security.refresh_token_expire_days))
+    expire = datetime.now(timezone.utc) + (expires_delta if expires_delta else timedelta(days=settings.security.refresh_token_expire_days))
     to_encode.update({
         "exp": expire,
         "jti": str(uuid.uuid4()),  # unique token ID for revocation
@@ -188,7 +188,7 @@ def create_refresh_token(data: dict, db: Session, expires_delta: Optional[timede
     refresh_token_record = models.RefreshToken(
         user_id=user.id,
         token_jti=jti,
-        expires_at=expire,
+        expires_at=expire.replace(tzinfo=None),
     )
     db.add(refresh_token_record)
     db.commit()
@@ -197,7 +197,7 @@ def create_refresh_token(data: dict, db: Session, expires_delta: Optional[timede
     return token
 
 
-def validate_refresh_token(token: str, db: Session) -> dict:
+def validate_refresh_token(token: str, db: Session, request_ip: Optional[str] = None) -> dict:
     """
     Validate a refresh token and return its payload if valid.
     
@@ -207,10 +207,12 @@ def validate_refresh_token(token: str, db: Session) -> dict:
     - Token type verification
     - Database revocation check
     - User existence verification
+    - Replay attack detection (checks replaced_by_token_jti)
     
     Args:
         token: The refresh token JWT string
         db: Database session for revocation check
+        request_ip: Optional client IP address for replay attack logging
         
     Returns:
         The decoded token payload
@@ -262,8 +264,25 @@ def validate_refresh_token(token: str, db: Session) -> dict:
         logger.warning(f"Refresh token has been revoked (jti={jti})")
         raise credentials_exception
     
+    # Check if token has been rotated (replay attack detection)
+    if refresh_token_record.replaced_by_token_jti is not None:
+        logger.warning(
+            "Replay attack detected - refresh token already used and rotated",
+            extra={
+                "user_id": refresh_token_record.user_id,
+                "jti": jti,
+                "replaced_by": refresh_token_record.replaced_by_token_jti,
+            },
+        )
+        raise credentials_exception
+    
     # Check expiration (double-check with database)
-    if datetime.utcnow() > refresh_token_record.expires_at:
+    # Handle both naive and aware datetimes from database
+    if refresh_token_record.expires_at.tzinfo is None:
+        expires_at_aware = refresh_token_record.expires_at.replace(tzinfo=timezone.utc)
+    else:
+        expires_at_aware = refresh_token_record.expires_at
+    if datetime.now(timezone.utc) > expires_at_aware:
         logger.warning(f"Refresh token expired (jti={jti})")
         raise credentials_exception
     
@@ -300,54 +319,63 @@ def revoke_refresh_token(jti: str, db: Session) -> bool:
         logger.info(f"Refresh token already revoked (jti={jti})")
         return True
     
-    refresh_token.revoked_at = datetime.utcnow()
+    refresh_token.revoked_at = datetime.now(timezone.utc).replace(tzinfo=None)
     db.commit()
     
     logger.info(f"Refresh token revoked (jti={jti})")
     return True
 
 
-def rotate_refresh_token(old_jti: str, new_token: str, db: Session) -> bool:
+def rotate_refresh_token(old_jti: str, new_jti: str, db: Session) -> tuple[bool, Optional[str]]:
     """
     Rotate a refresh token by marking the old one as replaced by the new one.
     
     This enables detection of replay attacks - if an old refresh token
     is used after rotation, it will be rejected.
     
+    This function performs the database update atomically within a transaction.
+    
     Args:
         old_jti: The JWT ID of the old refresh token
-        new_token: The new refresh token JWT string
+        new_jti: The JWT ID of the new refresh token
         db: Database session
         
     Returns:
-        True if rotation succeeded, False otherwise
+        Tuple of (success: bool, reason: Optional[str])
+        - success: True if rotation succeeded, False otherwise
+        - reason: Error reason if failed, None if succeeded
     """
-    # Extract jti from new token
     try:
-        secret_key = _require_secret_key()
-        new_payload = jwt.decode(new_token, secret_key, algorithms=[ALGORITHM])
-        new_jti = new_payload.get("jti")
-        if not new_jti:
-            logger.error("New refresh token missing jti claim")
-            return False
-    except JWTError as e:
-        logger.error(f"Failed to decode new refresh token: {str(e)}")
-        return False
-    
-    # Update old token record
-    old_token = db.query(models.RefreshToken).filter(
-        models.RefreshToken.token_jti == old_jti
-    ).first()
-    
-    if not old_token:
-        logger.warning(f"Old refresh token not found for rotation (jti={old_jti})")
-        return False
-    
-    old_token.replaced_by_token_jti = new_jti
-    db.commit()
-    
-    logger.info(f"Refresh token rotated: {old_jti} -> {new_jti}")
-    return True
+        # Query old token record
+        old_token = db.query(models.RefreshToken).filter(
+            models.RefreshToken.token_jti == old_jti
+        ).first()
+
+        if not old_token:
+            logger.warning(f"Old refresh token not found for rotation (jti={old_jti})")
+            return False, "Old token not found"
+
+        # Check if already revoked
+        if old_token.revoked_at is not None:
+            logger.warning(f"Old refresh token already revoked (jti={old_jti})")
+            return False, "Token already revoked"
+
+        # Check if already rotated (replay attack detection)
+        if old_token.replaced_by_token_jti is not None:
+            logger.warning(f"Old refresh token already rotated (jti={old_jti})")
+            return False, "Token already rotated"
+
+        # Mark old token as replaced
+        old_token.replaced_by_token_jti = new_jti
+        db.commit()
+
+        logger.info(f"Refresh token rotated successfully: {old_jti} -> {new_jti}")
+        return True, None
+
+    except Exception as e:
+        db.rollback()
+        logger.error(f"Database error during refresh token rotation: {str(e)}")
+        return False, "Database error"
 
 
 def set_refresh_token_cookie(response: Response, token: str) -> None:

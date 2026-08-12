@@ -7,7 +7,7 @@ generate ONE notification, with all crossed thresholds marked as sent —
 not one notification per crossed threshold.
 """
 
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 
 import pytest
 from sqlalchemy import create_engine
@@ -62,7 +62,7 @@ def _make_obligation(db_session, user, document, days_from_now, reminder_sent_st
         user_id=user.id,
         document_id=document.id,
         title="Test filing deadline",
-        due_date=datetime.utcnow() + timedelta(days=days_from_now),
+        due_date=(datetime.now(timezone.utc) + timedelta(days=days_from_now)).replace(tzinfo=None),
         status="pending",
         reminder_sent_stage=reminder_sent_stage,
     )

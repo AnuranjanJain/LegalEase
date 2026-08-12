@@ -174,7 +174,7 @@ function initChatbot() {
         if (chatMessages) {
             const messageDiv = document.createElement('div');
             messageDiv.className = `chat-message ${sender}`;
-            messageDiv.innerHTML = `
+            messageDiv.textContent = `
                 <div class="chat-bubble ${sender}">
                     <p>${message}</p>
                 </div>

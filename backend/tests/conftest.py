@@ -18,6 +18,9 @@ os.environ["HF_HUB_OFFLINE"] = "1"
 os.environ["TRANSFORMERS_OFFLINE"] = "1"
 os.environ["ENVIRONMENT"] = "testing"
 os.environ["TEST_MODE"] = "true"
+# Elevated rate limits for automated testing - middleware still executes but with high thresholds
+os.environ["RATE_LIMIT_IP_CALLS"] = "100000"
+os.environ["RATE_LIMIT_PERIOD"] = "60"
 
 ROOT = Path(__file__).resolve().parents[2]
 root_path = str(ROOT)
@@ -94,6 +97,38 @@ def clear_rate_limiters():
     try:
         from backend.routers import legal_routes
         legal_routes._legal_ai_limiter.storage.clear()
+    except Exception:
+        pass
+
+@pytest.fixture(autouse=True)
+def clear_database():
+    """Clear database tables before each test to ensure test isolation."""
+    try:
+        from backend.database import engine
+        from sqlalchemy import inspect
+        
+        # Get all tables
+        inspector = inspect(engine)
+        tables = inspector.get_table_names()
+        
+        # Clear all tables in reverse order of dependencies
+        with engine.connect() as conn:
+            # Disable foreign key constraints for SQLite
+            if engine.dialect.name == 'sqlite':
+                conn.execute("PRAGMA foreign_keys=OFF")
+            
+            # Delete all rows from each table
+            for table in reversed(tables):
+                try:
+                    conn.execute(f"DELETE FROM {table}")
+                except Exception:
+                    pass
+            
+            # Re-enable foreign key constraints for SQLite
+            if engine.dialect.name == 'sqlite':
+                conn.execute("PRAGMA foreign_keys=ON")
+            
+            conn.commit()
     except Exception:
         pass
 
