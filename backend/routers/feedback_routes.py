@@ -1,6 +1,6 @@
 import logging
 from typing import Optional
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
@@ -28,9 +28,16 @@ def submit_feedback(
     db: Session = Depends(get_db)
 ):
     """Submit user feedback for an AI response."""
+        user_id = identity.get_user_id()
+    if user_id is None:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Feedback requires a user-authenticated identity, not an API key.",
+        )
+
     try:
         new_feedback = Feedback(
-            user_id=identity.user_id,
+            user_id=user_id,
             response_type=feedback.response_type,
             rating=feedback.rating,
             category=feedback.category,
