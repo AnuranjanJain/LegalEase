@@ -64,7 +64,7 @@ export function SimulationRoom() {
   };
 
   const getRoleName = (role: string) => {
-    return role.split('_').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ');
+    return role.split('_').map(w => w[0].toUpperCase() + w.slice(1)).join(' ');
   };
 
   return (
@@ -117,7 +117,7 @@ export function SimulationRoom() {
               </div>
             )}
             
-            {messages.map((msg) => (
+            {(messages ?? []).map((msg) => (
               <div key={msg.id} className="bg-white dark:bg-gray-800 p-4 rounded-lg shadow-sm border border-gray-100 dark:border-gray-700">
                 <div className="flex items-center gap-2 mb-2">
                   {getRoleIcon(msg.role)}

@@ -129,6 +129,22 @@ class EnvironmentConfig(BaseSettings):
         default=False,
         description="Enable test mode for controlled failure simulation."
     )
+    test_verification_failure_emails: str = Field(
+        default="",
+        description="Comma-separated list of email addresses that trigger simulated verification failures in test mode."
+    )
+    test_failure_email_patterns: str = Field(
+        default="fail",
+        description="Comma-separated list of email patterns that trigger simulated verification failures in test mode."
+    )
+    
+    @field_validator("test_verification_failure_emails", "test_failure_email_patterns", mode="before")
+    @classmethod
+    def coerce_string_to_lowercase(cls, v):
+        """Convert string configuration values to lowercase for consistency."""
+        if isinstance(v, str):
+            return v.lower()
+        return v
     
     @model_validator(mode='before')
     @classmethod
@@ -182,6 +198,10 @@ class FileUploadConfig(BaseSettings):
     token_cleanup_interval_seconds: int = Field(
         default=3600,
         description="Interval in seconds for token cleanup task."
+    )
+    upload_task_cleanup_interval_seconds: int = Field(
+        default=300,
+        description="Interval in seconds for automatic cleanup of expired upload tasks in in-memory storage."
     )
     
     @field_validator('max_upload_size')
@@ -245,6 +265,14 @@ class FileUploadConfig(BaseSettings):
         """Validate token cleanup interval is positive."""
         if v <= 0:
             raise ValueError('TOKEN_CLEANUP_INTERVAL_SECONDS must be greater than 0')
+        return v
+    
+    @field_validator('upload_task_cleanup_interval_seconds')
+    @classmethod
+    def validate_upload_task_cleanup_interval_seconds(cls, v: int) -> int:
+        """Validate upload task cleanup interval is positive."""
+        if v <= 0:
+            raise ValueError('UPLOAD_TASK_CLEANUP_INTERVAL_SECONDS must be greater than 0')
         return v
 
 
@@ -641,6 +669,15 @@ class CORSConfig(BaseSettings):
         default="http://localhost:5173",
         description="Frontend URL for CORS (fallback for allowed_origins)."
     )
+    allow_localhost_cors: bool = Field(
+        default=False,
+        description=(
+            "When enabled, automatically adds common localhost development ports "
+            "(5173-5180 on both localhost and 127.0.0.1) to the CORS allowlist. "
+            "Default is false for security. Localhost origins are never added automatically "
+            "without this explicit configuration."
+        )
+    )
 
 
 class EncryptionConfig(BaseSettings):
@@ -656,6 +693,17 @@ class EncryptionConfig(BaseSettings):
             "Required in production to ensure cryptographic key separation. "
             "In non-production environments (development, testing, local), "
             "falls back to JWT_SECRET_KEY if not set."
+        ),
+    )
+    strict_encryption_mode: bool = Field(
+        default=False,
+        description=(
+            "When enabled, requires all stored values to be properly encrypted. "
+            "Legacy plaintext data will raise DecryptionError instead of being "
+            "returned unchanged. Recommended for production environments after "
+            "all legacy data has been migrated to encrypted format. "
+            "When disabled (default), legacy plaintext is returned unchanged "
+            "with DEBUG-level logging for backward compatibility."
         ),
     )
 

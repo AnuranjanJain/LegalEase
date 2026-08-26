@@ -1,5 +1,5 @@
 import json
-from datetime import datetime
+from datetime import datetime, timezone
 
 from fastapi import APIRouter,Depends, HTTPException, status
 from pydantic import BaseModel, Field
@@ -205,7 +205,7 @@ async def analyze_clauses(
                 doc.clause_analysis = json.dumps(
                     [c if isinstance(c, dict) else c.dict() for c in clauses]
                 )
-                doc.analyzed_at = datetime.utcnow()
+                doc.analyzed_at = datetime.now(timezone.utc).replace(tzinfo=None)
                 db.commit()
 
                 try:
@@ -321,6 +321,34 @@ def get_cached_clauses(
         )
 
     return {"clauses": json.loads(doc.clause_analysis)}   
+
+
+class TLDRRequest(BaseModel):
+    text: str
+
+
+class TLDRResponse(BaseModel):
+    parties: str = "Not specified"
+    deadlines: str = "Not specified"
+    financials: str = "Not specified"
+    penalties: str = "Not specified"
+    key_takeaways: List[str] = ["Not specified"]
+
+
+@router.post("/tldr", response_model=TLDRResponse)
+async def legal_tldr(
+    request: TLDRRequest,
+    identity: AuthIdentity = Depends(validate_token_or_api_key),
+):
+    _check_rate_limit(identity)
+    try:
+        tldr_data = await ai_service.generate_tldr(request.text)
+        return TLDRResponse(**tldr_data)
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=str(e),
+        )
 
 
 class EntityExtractionRequest(BaseModel):

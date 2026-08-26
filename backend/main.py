@@ -6,7 +6,7 @@ from fastapi import Depends, FastAPI, HTTPException, UploadFile, File, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, StreamingResponse
 from pydantic import BaseModel
-from datetime import datetime
+from datetime import datetime, timezone
 from io import BytesIO
 import logging
 import tempfile
@@ -215,12 +215,43 @@ ALLOWED_ORIGINS = [
     for origin in raw_allowed_origins.split(",")
     if origin.strip()
 ]
-# Automatically allow common development ports on localhost and 127.0.0.1
-for host in ["http://localhost", "http://127.0.0.1"]:
-    for port in range(5173, 5181):
-        dev_origin = f"{host}:{port}"
-        if dev_origin not in ALLOWED_ORIGINS:
-            ALLOWED_ORIGINS.append(dev_origin)
+
+# Add localhost origins only if explicitly configured AND not in production
+if cors_config.allow_localhost_cors and ENVIRONMENT in ("development", "testing", "local"):
+    localhost_origins = []
+    for host in ["http://localhost", "http://127.0.0.1"]:
+        for port in range(5173, 5181):
+            localhost_origins.append(f"{host}:{port}")
+    
+    # Add localhost origins that aren't already in the list
+    added_count = 0
+    for origin in localhost_origins:
+        if origin not in ALLOWED_ORIGINS:
+            ALLOWED_ORIGINS.append(origin)
+            added_count += 1
+    
+    if added_count > 0:
+        logger.info(f"Localhost CORS enabled: added {added_count} localhost development origins")
+
+# Validate and deduplicate origins
+validated_origins = []
+seen_origins = set()
+for origin in ALLOWED_ORIGINS:
+    # Basic origin format validation
+    if not origin:
+        continue
+    
+    # Check if it looks like a valid origin (scheme://host or scheme://host:port)
+    if not (origin.startswith("http://") or origin.startswith("https://")):
+        logger.warning(f"Invalid CORS origin ignored (missing scheme): {origin}")
+        continue
+    
+    # Remove duplicates while preserving order
+    if origin not in seen_origins:
+        seen_origins.add(origin)
+        validated_origins.append(origin)
+
+ALLOWED_ORIGINS = validated_origins
 # Rate-limit middleware registered first so that CORSMiddleware
 # (added second) wraps it — ensuring 429 responses include CORS headers.
 app.add_middleware(RateLimitMiddleware)
@@ -285,6 +316,18 @@ class EditMessageRequest(BaseModel):
 
 class SummarizeRequest(BaseModel):
     text: str
+
+
+class TLDRRequest(BaseModel):
+    text: str
+
+
+class TLDRResponse(BaseModel):
+    parties: str = "Not specified"
+    deadlines: str = "Not specified"
+    financials: str = "Not specified"
+    penalties: str = "Not specified"
+    key_takeaways: list[str] = ["Not specified"]
 
 
 class SimplifyRequest(BaseModel):
@@ -658,6 +701,19 @@ async def summarize(request: Request, payload: SummarizeRequest, identity: AuthI
     return {"summary": summary}
 
 
+@app.post("/api/tldr", response_model=TLDRResponse)
+@app.post("/tldr", response_model=TLDRResponse)
+async def tldr(request: Request, payload: TLDRRequest, identity: AuthIdentity = Depends(validate_token_or_api_key)):
+    if not key_limiter.check(identity.get_rate_limit_key())["allowed"]:
+        raise HTTPException(status_code=429, detail="Rate limit exceeded")
+
+    sanitized_text = sanitize_text(payload.text)
+    validate_summarize_input(sanitized_text)
+
+    tldr_data = await ai_service.generate_tldr(sanitized_text)
+    return TLDRResponse(**tldr_data)
+
+
 @app.post("/api/simplify", response_model=SimplifyResponse)
 @app.post("/simplify", response_model=SimplifyResponse)
 async def simplify(request: Request, payload: SimplifyRequest, identity: AuthIdentity = Depends(validate_token_or_api_key)):
@@ -687,7 +743,7 @@ async def health():
     health_data = ai_service.check_health()
     rag_health = rag_service.check_health()
     uptime = time.monotonic() - _app_start_time
-    timestamp = datetime.utcnow().isoformat() + "Z"
+    timestamp = datetime.now(timezone.utc).replace(tzinfo=None).isoformat() + "Z"
 
     # Database connectivity check
     db_status = "ok"

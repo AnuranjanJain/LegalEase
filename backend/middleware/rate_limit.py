@@ -1,18 +1,28 @@
-import os
 import ipaddress
+import logging
 from fastapi import Request
 from fastapi.responses import JSONResponse
 from starlette.middleware.base import BaseHTTPMiddleware
 from backend.utils.limiter import create_rate_limiter
 from backend.config import get_settings
 
+logger = logging.getLogger(__name__)
+
 # Get configuration from centralized settings
 settings = get_settings()
 rate_config = settings.rate_limit
+environment_config = settings.environment
 
 RATE_LIMIT_PERIOD = rate_config.rate_limit_period
 RATE_LIMIT_IP_CALLS = rate_config.rate_limit_ip_calls
 TRUST_PROXY_HEADERS = rate_config.trust_proxy_headers
+
+# Log warning if running in testing mode with elevated thresholds
+if environment_config.test_mode and RATE_LIMIT_IP_CALLS > 1000:
+    logger.warning(
+        "Rate limiting running in testing mode with elevated thresholds. "
+        f"RATE_LIMIT_IP_CALLS={RATE_LIMIT_IP_CALLS}, RATE_LIMIT_PERIOD={RATE_LIMIT_PERIOD}"
+    )
 
 ip_limiter = create_rate_limiter(RATE_LIMIT_IP_CALLS, RATE_LIMIT_PERIOD)
 EXCLUDED_PATHS = {
@@ -47,16 +57,6 @@ def get_client_ip(request: Request) -> str:
 class RateLimitMiddleware(BaseHTTPMiddleware):
     async def dispatch(self, request: Request, call_next):
         if request.url.path in EXCLUDED_PATHS:
-            return await call_next(request)
-        
-        # Skip rate limiting in test mode
-        test_mode_env = os.getenv("TEST_MODE")
-        if test_mode_env is not None:
-            is_test_mode = test_mode_env.lower() in ("true", "1", "yes")
-        else:
-            is_test_mode = get_settings().environment.test_mode
-            
-        if is_test_mode:
             return await call_next(request)
         
         ip = get_client_ip(request)
