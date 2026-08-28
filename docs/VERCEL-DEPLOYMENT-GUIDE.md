@@ -121,8 +121,17 @@ vercel logs <deployment-url>
 │   └── config.py         # Configuration management
 ├── vercel.json           # Vercel configuration
 ├── package.json          # Frontend dependencies
-└── backend/requirements.txt  # Python dependencies
+├── requirements.txt          # Vercel Python runtime dependencies
+└── backend/requirements.txt  # Full local/test dependency set
 ```
+
+The root `requirements.txt` includes the core PyMuPDF dependency so PDF
+uploads remain supported on Vercel. It omits heavyweight optional RAG,
+BM25, dense-search, and web-search packages so the single serverless
+function stays within the platform size limit. The backend degrades those
+optional features cleanly when they are absent; deploy the full
+`backend/requirements.txt` set on a separate backend host when those
+features are required in production.
 
 ## AI Services Configuration
 
@@ -173,9 +182,41 @@ AI_STUB_MODE=false
    - Verify with: `vercel logs --output=raw | grep "Creating tables"`
 
 ### SQLite (Development Only)
-- Automatically used if DATABASE_URL not set
-- Stored in-memory during function execution (not persistent)
-- Requires PostgreSQL in production
+- Used only for local development and tests.
+- Vercel uses a temporary filesystem, so SQLite cannot provide persistent accounts.
+- Login and signup return `503 Persistent database is not configured for this deployment` until `DATABASE_URL` points to hosted PostgreSQL.
+
+### Required Vercel production values
+
+Set these in the Vercel project for the **Production** environment, then redeploy:
+
+```text
+ENVIRONMENT=production
+VERCEL=1
+JWT_SECRET_KEY=<unique-random-secret>
+DOCUMENT_ENCRYPTION_KEY=<different-unique-random-secret>
+DATABASE_URL=postgresql://<user>:<password>@<host>:<port>/<database>
+FRONTEND_URL=https://<your-project>.vercel.app
+ALLOWED_ORIGINS=https://<your-project>.vercel.app
+ALLOW_DEV=false
+STUB_MODE=false
+```
+
+For production rate limiting and upload task state, also configure Redis:
+
+```text
+REDIS_URL=rediss://<user>:<password>@<host>:<port>
+RATE_LIMIT_BACKEND=redis
+REQUIRE_REDIS_IN_PRODUCTION=true
+REDIS_FAIL_FAST=true
+```
+
+Vercel cannot host the repository's long-running `worker.py` process. When
+`VERCEL=1`, uploads therefore require Redis and are processed during the
+serverless invocation; without Redis the endpoint returns a clear `503`
+instead of accepting a task that can never be completed.
+
+Do not copy the local `.env` file into Vercel. Vercel only receives variables configured in Project Settings or with `vercel env`, and changing them requires a new deployment.
 
 ## Rate Limiting & Caching
 
@@ -222,7 +263,11 @@ vercel status
 
 #### Issue: Database Connection Failed
 - **Cause**: DATABASE_URL not set or invalid
-- **Solution**: Verify PostgreSQL connection string in environment variables
+- **Solution**: Add a hosted PostgreSQL connection string to the Vercel Production environment, verify its SSL/network access, and redeploy. Do not use `sqlite:///./legalease.db` in Vercel.
+
+#### Issue: `FUNCTION_INVOCATION_FAILED` on `/api/health` or `/api/auth/login`
+- **Cause**: The Python function crashed during import, commonly because optional ML packages attempted to load a model at cold start or because a production environment variable is invalid.
+- **Solution**: Deploy the current `vercel.json` and runtime requirements, then inspect the Vercel function log. `/api/health` should return JSON rather than Vercel's plain-text invocation error.
 
 #### Issue: Bytez API Key Invalid
 - **Cause**: BYTEZ_API_KEY not set or expired

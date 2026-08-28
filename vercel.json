@@ -1,6 +1,10 @@
 {
+  "framework": "vite",
+  "buildCommand": "npm run build",
+  "outputDirectory": "dist",
   "functions": {
-    "api/**/*.py": {
+    "api/index.py": {
+      "includeFiles": "backend/data/**",
       "excludeFiles": "{backend/tests/**,coverage/**,docs/**,legacy/**,assets/**,node_modules/**,dist/**,**/__pycache__/**,**/*.pyc}"
     }
   },

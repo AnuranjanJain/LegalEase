@@ -2,7 +2,7 @@ import logging
 from typing import List, Dict, Any
 try:
     from duckduckgo_search import DDGS
-except ImportError:
+except Exception:
     DDGS = None
 
 logger = logging.getLogger(__name__)

@@ -106,7 +106,10 @@ class InMemoryTaskStorage(UploadTaskStorageBackend):
     def __init__(self, cleanup_interval: Optional[int] = None, enable_auto_cleanup: bool = True):
         self._storage: Dict[str, Dict[str, Any]] = {}
         self._ttls: Dict[str, float] = {}
-        self._lock = threading.Lock()
+        # Reentrant: create_task/get_task/update_* acquire this lock and then
+        # call _cleanup_expired(), which acquires it again. A plain Lock would
+        # self-deadlock the calling thread on that second acquisition.
+        self._lock = threading.RLock()
         self._cleanup_thread: Optional[threading.Thread] = None
         self._stop_cleanup = threading.Event()
         

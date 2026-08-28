@@ -48,3 +48,7 @@ backend/.flake8
 *.db
 pnpm-lock.yaml
 venv_test/  
+.vercel
+
+.vercel
+.env*

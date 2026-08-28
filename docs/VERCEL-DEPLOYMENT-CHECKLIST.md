@@ -37,7 +37,7 @@ python -c "import secrets; print('DOCUMENT_ENCRYPTION_KEY=' + secrets.token_urls
 | `DOCUMENT_ENCRYPTION_KEY` | Generate above | `gssoc26_...` | ✅ Yes (Production) |
 | `BYTEZ_API_KEY` | Your Bytez API key | `bz_live_...` | ✅ Yes |
 | `DATABASE_URL` | PostgreSQL connection | `postgresql://...` | ✅ Yes |
-| `REDIS_URL` | Redis connection (Upstash) | `redis://...` | ⭕ Recommended |
+| `REDIS_URL` | Redis connection (Upstash) | `rediss://...` | ✅ Required for Vercel uploads |
 | `FRONTEND_URL` | Your Vercel domain | `https://legal-ease.vercel.app` | ✅ Yes |
 | `ALLOWED_ORIGINS` | Frontend URLs | `https://legal-ease.vercel.app` | ✅ Yes |
 | `ENVIRONMENT` | Environment type | `production` | ✅ Yes |
@@ -60,6 +60,7 @@ vercel env add
 - [ ] All required environment variables added
 - [ ] Variables set for Production environment
 - [ ] Sensitive keys stored securely
+- [ ] A new deployment was created after adding or changing variables
 
 ## 🗄️ Database Setup
 
@@ -83,6 +84,7 @@ DATABASE_URL=postgresql://user:password@host.region.compute.amazonaws.com:5432/l
 
 - [ ] External PostgreSQL database created
 - [ ] DATABASE_URL configured
+- [ ] DATABASE_URL is hosted PostgreSQL, not SQLite
 - [ ] Database user permissions verified
 - [ ] SSL/TLS connection enabled
 
@@ -98,7 +100,7 @@ vercel logs
 - [ ] Tables created successfully
 - [ ] No database connection errors in logs
 
-## 💾 Redis Setup (Recommended for Production)
+## 💾 Redis Setup (Required for Vercel Uploads)
 
 ### Step 7: Configure Redis
 **Using Upstash Redis (free tier available):**
@@ -119,7 +121,8 @@ Alternatively:
 
 - [ ] Redis database created
 - [ ] REDIS_URL environment variable set
-- [ ] RATE_LIMIT_BACKEND=redis configured (optional)
+- [ ] RATE_LIMIT_BACKEND=redis configured (recommended for distributed rate limiting)
+- [ ] Redis connectivity verified before testing document uploads
 
 ## 🤖 AI Services Setup
 
@@ -206,6 +209,7 @@ vercel status
 - [ ] Rate limiting active
 - [ ] Error logging functional
 - [ ] CORS properly configured
+- [ ] `/api/health` returns JSON and does not show `FUNCTION_INVOCATION_FAILED`
 
 ## 📊 Performance & Monitoring
 

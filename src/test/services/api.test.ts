@@ -66,6 +66,19 @@ describe('API Service', () => {
       await expect(api.post('/test', {})).rejects.toThrow('API error: 500');
     });
 
+    it('should explain a plain-text Vercel function invocation failure', async () => {
+      const mockFetch = vi.fn().mockResolvedValue({
+        ok: false,
+        status: 500,
+        text: async () => 'A server error has occurred\\nFUNCTION_INVOCATION_FAILED',
+      });
+      global.fetch = mockFetch;
+
+      await expect(api.post('/auth/login', {})).rejects.toThrow(
+        'The server failed to start. Check the deployment environment variables and function logs.'
+      );
+    });
+
     it('should handle network errors', async () => {
       const mockFetch = vi.fn().mockRejectedValue(new Error('Network error'));
       global.fetch = mockFetch;

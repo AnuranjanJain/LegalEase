@@ -6,7 +6,7 @@ from sqlalchemy.exc import IntegrityError, SQLAlchemyError
 from sqlalchemy.orm import Session
 from pydantic import BaseModel, EmailStr, Field
 
-from backend.database import get_db
+from backend.database import get_db, using_ephemeral_sqlite
 from backend import models
 from backend.auth import (
     verify_password,
@@ -88,6 +88,12 @@ class ResendVerificationRequest(BaseModel):
 
 @router.post("/signup", status_code=status.HTTP_201_CREATED, response_model=TokenResponse)
 def signup(request: Request, response: Response, user: UserCreate, db: Session = Depends(get_db)):
+    if using_ephemeral_sqlite:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Persistent database is not configured for this deployment",
+        )
+
     # Enforce rate limiting before database operations
     check_signup_rate_limit(request, user.email)
     
@@ -140,6 +146,12 @@ def signup(request: Request, response: Response, user: UserCreate, db: Session =
 
 @router.post("/login", response_model=TokenResponse)
 def login(request: Request, response: Response, user: UserLogin, db: Session = Depends(get_db)):
+    if using_ephemeral_sqlite:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Persistent database is not configured for this deployment",
+        )
+
     # Enforce rate limiting before processing
     check_login_rate_limit(request, user.email)
     

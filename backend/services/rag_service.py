@@ -9,15 +9,37 @@ from backend.config import get_settings
 
 logger = logging.getLogger(__name__)
 
-try:
-    from langchain_postgres.vectorstores import PGVector
-    from langchain_community.vectorstores import Chroma
-    from langchain_huggingface import HuggingFaceEmbeddings
-    from langchain_text_splitters import RecursiveCharacterTextSplitter
-    RAG_DEPS_AVAILABLE = True
-except ImportError:
-    PGVector = Chroma = HuggingFaceEmbeddings = RecursiveCharacterTextSplitter = None
-    RAG_DEPS_AVAILABLE = False
+PGVector = Chroma = HuggingFaceEmbeddings = RecursiveCharacterTextSplitter = None
+RAG_DEPS_AVAILABLE = False
+_rag_import_attempted = False
+
+
+def _load_rag_dependencies() -> bool:
+    """Load optional RAG dependencies only when a request needs RAG."""
+    global PGVector, Chroma, HuggingFaceEmbeddings, RecursiveCharacterTextSplitter
+    global RAG_DEPS_AVAILABLE, _rag_import_attempted
+
+    if _rag_import_attempted:
+        return RAG_DEPS_AVAILABLE
+
+    _rag_import_attempted = True
+    try:
+        from langchain_postgres.vectorstores import PGVector as _PGVector
+        from langchain_community.vectorstores import Chroma as _Chroma
+        from langchain_huggingface import HuggingFaceEmbeddings as _HuggingFaceEmbeddings
+        from langchain_text_splitters import RecursiveCharacterTextSplitter as _RecursiveCharacterTextSplitter
+        PGVector = _PGVector
+        Chroma = _Chroma
+        HuggingFaceEmbeddings = _HuggingFaceEmbeddings
+        RecursiveCharacterTextSplitter = _RecursiveCharacterTextSplitter
+        RAG_DEPS_AVAILABLE = True
+    except Exception as exc:
+        logger.warning(
+            "RAG disabled because optional dependencies are unavailable (%s)",
+            type(exc).__name__,
+        )
+        RAG_DEPS_AVAILABLE = False
+    return RAG_DEPS_AVAILABLE
 
 
 @dataclass
@@ -94,7 +116,7 @@ class RAGService:
             self._init_state.last_attempt_at = time.time()
 
             try:
-                if not RAG_DEPS_AVAILABLE:
+                if not _load_rag_dependencies():
                     raise RuntimeError("RAG dependencies are not available on this system due to import/DLL load errors.")
 
                 logger.info("Lazily initializing RAG Service components...")

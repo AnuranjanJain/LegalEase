@@ -544,7 +544,9 @@ cp .env.example .env
   - Add `JWT_SECRET_KEY` to Vercel environment variables before testing login/signup.
   - Add `DOCUMENT_ENCRYPTION_KEY` to Vercel environment variables for production deployments to ensure cryptographic key separation.
   - Add `BYTEZ_API_KEY` to enable AI-backed features; otherwise `/api/health` reports degraded.
-  - Add `DATABASE_URL` for persistent accounts. Without it, Vercel uses temporary SQLite storage that can reset between serverless instances.
+  - Add a hosted PostgreSQL `DATABASE_URL` for persistent accounts. Vercel deployments reject the ephemeral SQLite fallback for login/signup.
+  - Add `REDIS_URL` and set `RATE_LIMIT_BACKEND=redis` for distributed rate limiting and upload task state. On Vercel, uploads are processed inline because Vercel has no persistent in-process worker or filesystem.
+  - The root `requirements.txt` includes core PyMuPDF for PDF uploads and omits heavyweight optional RAG, BM25, dense-search, and web-search packages to stay below Vercel's function-size limit. Features that need those optional packages should run on a separate full backend host.
   - If using a separate backend host instead, set frontend `VITE_API_URL` to that backend URL and backend `FRONTEND_URL` to the Vercel frontend URL.
 
   Optional backend controls:

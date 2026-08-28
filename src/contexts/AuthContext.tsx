@@ -32,6 +32,7 @@ async function verifyTokenWithBackend(token: string): Promise<boolean> {
         Authorization: `Bearer ${token}`,
         'Content-Type': 'application/json',
       },
+      credentials: 'include',
     });
 
     return response.ok;
@@ -218,6 +219,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         fetch(`${API_BASE_URL}/auth/logout`, {
           method: 'POST',
           headers: { Authorization: `Bearer ${token}` },
+          credentials: 'include',
         }).catch((err) => console.warn('Server-side logout failed:', err));
       }
 

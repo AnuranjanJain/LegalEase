@@ -319,7 +319,8 @@ async def process_upload_job_async(job: UploadJob, *, cleanup_on_exit: bool = Tr
         extracted_text = ""
         task_storage.update_progress(job.task_id, 30)
 
-        if job.file_extension == ".pdf" or job.content_prefix.startswith(b"%PDF-"):
+        is_pdf = job.file_extension == ".pdf" or job.content_prefix.startswith(b"%PDF-")
+        if is_pdf:
             extracted_text = await _run_bounded_parser(_extract_pdf_text, job.file_path)
         elif job.file_extension == ".docx":
             extracted_text = await _run_bounded_parser(_extract_docx_text, job.file_path)
@@ -331,10 +332,29 @@ async def process_upload_job_async(job: UploadJob, *, cleanup_on_exit: bool = Tr
 
         task_storage.update_progress(job.task_id, 80)
         extracted_text = extracted_text[:MAX_EXTRACTED_TEXT_CHARS]
+
+        # A PDF that yields effectively no text is almost always a scanned or
+        # image-only document. LegalEase has no OCR engine, so extraction
+        # returns an empty string that would silently produce a blank
+        # analysis. Surface a clear, actionable failure instead.
+        if is_pdf and len(extracted_text.strip()) < 10:
+            raise ValidationError(
+                "This PDF appears to be scanned or image-only, so no text could be "
+                "extracted. Please upload a text-based PDF, DOCX, or TXT file, or run "
+                "the document through OCR first."
+            )
+
         task_storage.mark_completed(job.task_id, {"filename": job.filename, "text": extracted_text})
         logger.info(f"[{job.task_id}] Upload processing complete")
     except Exception as exc:
-        message = exc.detail if hasattr(exc, "detail") else "Failed to process the uploaded document. Please try again or use a different file."
+        if hasattr(exc, "detail"):
+            message = exc.detail
+        elif isinstance(exc, ValidationError):
+            # Validation failures carry a user-actionable message (e.g. a
+            # scanned/image-only PDF that produced no extractable text).
+            message = str(exc)
+        else:
+            message = "Failed to process the uploaded document. Please try again or use a different file."
         task_storage.mark_failed(job.task_id, message)
         logger.error(f"[{job.task_id}] Upload processing failed: {exc}", exc_info=True)
         raise

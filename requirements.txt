@@ -3,10 +3,10 @@ uvicorn
 bytez
 pydantic
 pydantic-settings
-pymupdf
 python-docx
 python-multipart
 python-dotenv
+pymupdf
 sqlalchemy
 psycopg2-binary
 bcrypt
@@ -16,14 +16,5 @@ email-validator
 redis
 reportlab
 apscheduler
-langchain
-langchain-community
-langchain-huggingface
-langchain-text-splitters
-langchain-postgres
-sentence-transformers
-duckduckgo-search
-langgraph
-langchain-core
-rank-bm25
+httpx
 

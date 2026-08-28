@@ -1,13 +1,47 @@
 import logging
 from collections import OrderedDict
 from typing import Optional, Any
-try:
-    from sentence_transformers import SentenceTransformer, util
-    import torch
-except ImportError:
-    SentenceTransformer = util = torch = None
+import threading
 
 logger = logging.getLogger(__name__)
+
+# These optional ML dependencies are deliberately imported on first cache use.
+# Importing SentenceTransformer at module load can download a model or fail on
+# serverless runtimes, which would prevent unrelated auth endpoints from
+# starting.
+_torch = None
+_torch_import_attempted = False
+_sentence_transformer = None
+_sentence_transformer_import_attempted = False
+
+
+def _load_torch():
+    global _torch, _torch_import_attempted
+    if _torch_import_attempted:
+        return _torch
+    _torch_import_attempted = True
+    try:
+        import torch
+        _torch = torch
+    except Exception as exc:
+        logger.warning("Semantic cache disabled: PyTorch is unavailable (%s)", type(exc).__name__)
+    return _torch
+
+
+def _load_sentence_transformer():
+    global _sentence_transformer, _sentence_transformer_import_attempted
+    if _sentence_transformer_import_attempted:
+        return _sentence_transformer
+    _sentence_transformer_import_attempted = True
+    try:
+        from sentence_transformers import SentenceTransformer, util
+        _sentence_transformer = (SentenceTransformer, util)
+    except Exception as exc:
+        logger.warning(
+            "Semantic cache disabled: sentence-transformers is unavailable (%s)",
+            type(exc).__name__,
+        )
+    return _sentence_transformer
 
 
 # Maximum cached responses retained per identity. Bounded so a single
@@ -31,6 +65,7 @@ class _NamespaceCache:
         self._matrix_keys: list[str] = []
 
     def _rebuild_matrix(self) -> None:
+        torch = _load_torch()
         if not self.entries or torch is None:
             self._matrix = None
             self._matrix_keys = []
@@ -41,9 +76,12 @@ class _NamespaceCache:
         )
 
     def get(self, query_emb: Any, threshold: float) -> Optional[str]:
-        if self._matrix is None or not self._matrix_keys or torch is None or util is None:
+        torch = _load_torch()
+        if self._matrix is None or not self._matrix_keys or torch is None:
             return None
-        cos_scores = util.cos_sim(query_emb, self._matrix)[0]
+        cos_scores = torch.nn.functional.cosine_similarity(
+            query_emb.unsqueeze(0), self._matrix
+        )
         best_score, best_idx = torch.max(cos_scores, dim=0)
         if best_score.item() < threshold:
             return None
@@ -91,12 +129,32 @@ class SemanticCache:
         # popitem(last=False) evicts the least-recently-used identity once
         # the cap is exceeded.
         self._namespaces: "OrderedDict[str, _NamespaceCache]" = OrderedDict()
-        try:
-            self.model = SentenceTransformer("all-MiniLM-L6-v2")
-            logger.info("Semantic Cache initialized successfully.")
-        except Exception as e:
-            logger.error(f"Failed to initialize Semantic Cache: {e}")
-            self.model = None
+        self.model = None
+        self._model_lock = threading.Lock()
+        self._model_load_attempted = False
+
+    def _get_model(self):
+        """Load the embedding model only when a cache operation needs it."""
+        if self.model is not None or self._model_load_attempted:
+            return self.model
+
+        with self._model_lock:
+            if self.model is not None or self._model_load_attempted:
+                return self.model
+            self._model_load_attempted = True
+            dependency = _load_sentence_transformer()
+            if dependency is None:
+                return None
+            sentence_transformer, _ = dependency
+            try:
+                self.model = sentence_transformer("all-MiniLM-L6-v2")
+                logger.info("Semantic Cache initialized successfully.")
+            except Exception as exc:
+                logger.warning(
+                    "Semantic cache model could not be loaded; continuing without cache (%s)",
+                    type(exc).__name__,
+                )
+            return self.model
 
     def _get_namespace(self, namespace: str, *, create: bool) -> Optional[_NamespaceCache]:
         ns = self._namespaces.get(namespace)
@@ -117,12 +175,13 @@ class SemanticCache:
         return ns
 
     def get(self, query: str, namespace: str) -> Optional[str]:
-        if not self.model or not namespace:
+        model = self._get_model()
+        if not model or not namespace:
             return None
         ns = self._get_namespace(namespace, create=False)
         if ns is None:
             return None
-        query_emb = self.model.encode(query, convert_to_tensor=True)
+        query_emb = model.encode(query, convert_to_tensor=True)
         hit = ns.get(query_emb, self.threshold)
         if hit is not None:
             logger.info(
@@ -131,11 +190,12 @@ class SemanticCache:
         return hit
 
     def set(self, query: str, response: str, namespace: str) -> None:
-        if not self.model or not namespace:
+        model = self._get_model()
+        if not model or not namespace:
             return
         ns = self._get_namespace(namespace, create=True)
         assert ns is not None
-        embedding = self.model.encode(query, convert_to_tensor=True)
+        embedding = model.encode(query, convert_to_tensor=True)
         ns.set(query, embedding, response)
         logger.info(
             f"Cached response for namespace={namespace!r} "

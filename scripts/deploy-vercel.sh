@@ -252,7 +252,7 @@ ALLOWED_ORIGINS=https://your-domain.vercel.app
 # REQUIRED: Environment
 ENVIRONMENT=production
 
-# OPTIONAL: Redis (recommended for distributed rate limiting)
+# REQUIRED for Vercel document uploads; also enables distributed rate limiting
 REDIS_URL=redis://<host>:<port>
 
 # OPTIONAL: Configuration

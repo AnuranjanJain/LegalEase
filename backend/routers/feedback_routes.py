@@ -28,7 +28,7 @@ def submit_feedback(
     db: Session = Depends(get_db)
 ):
     """Submit user feedback for an AI response."""
-        user_id = identity.get_user_id()
+    user_id = identity.get_user_id()
     if user_id is None:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,

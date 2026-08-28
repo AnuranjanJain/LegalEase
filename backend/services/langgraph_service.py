@@ -3,7 +3,7 @@ from typing import List, Dict, Any, TypedDict
 try:
     from langgraph.graph import StateGraph, START, END
     HAS_LANGGRAPH = True
-except ImportError:
+except Exception:
     HAS_LANGGRAPH = False
     StateGraph = START = END = None
 
@@ -81,8 +81,13 @@ def build_graph():
 
     return workflow.compile()
 
-# Singleton graph instance
-agent_graph = build_graph()
+# Singleton graph instance. An incompatible optional LangGraph installation
+# must not prevent the authentication application from starting.
+try:
+    agent_graph = build_graph()
+except Exception as exc:
+    logger.warning("LangGraph disabled during initialization (%s)", type(exc).__name__)
+    agent_graph = None
 
 async def run_agent(query: str, documents: List[str] = None) -> str:
     """Run the LangGraph workflow."""

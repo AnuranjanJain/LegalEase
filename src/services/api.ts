@@ -35,7 +35,18 @@ async function handleErrorResponse(response: Response, fallbackPrefix: string): 
     throw new Error(`Too many requests.${wait}`);
   }
 
-  const errorData = await response.json().catch(() => ({}));
+  const responseText = typeof response.text === 'function'
+    ? await response.text().catch(() => '')
+    : '';
+  let errorData: any = {};
+  try {
+    errorData = responseText ? JSON.parse(responseText) : {};
+  } catch {
+    // Vercel returns plain text for a function invocation failure.
+  }
+  if (!responseText && typeof response.json === 'function') {
+    errorData = await response.json().catch(() => ({}));
+  }
   let message = '';
   if (typeof errorData?.detail === 'string') {
     message = errorData.detail;
@@ -43,6 +54,8 @@ async function handleErrorResponse(response: Response, fallbackPrefix: string): 
     message = errorData.detail[0]?.msg || 'Validation failed';
   } else if (errorData?.error) {
     message = errorData.error;
+  } else if (responseText.includes('FUNCTION_INVOCATION_FAILED')) {
+    message = 'The server failed to start. Check the deployment environment variables and function logs.';
   } else {
     message = `${fallbackPrefix}: ${response.status}`;
   }
@@ -99,6 +112,7 @@ export const api = {
     const response = await fetchWithAuthRetry(
       () => ({
         method: 'POST',
+        credentials: 'include',
         headers: {
           'Content-Type': 'application/json',
           ...getAuthHeaders(),
@@ -115,6 +129,7 @@ export const api = {
   get: async <T>(endpoint: string): Promise<T> => {
     const response = await fetchWithAuthRetry(
       () => ({
+        credentials: 'include',
         headers: {
           ...getAuthHeaders(),
         },
@@ -130,6 +145,7 @@ export const api = {
     const response = await fetchWithAuthRetry(
       () => ({
         method: 'PUT',
+        credentials: 'include',
         headers: {
           'Content-Type': 'application/json',
           ...getAuthHeaders(),
@@ -147,6 +163,7 @@ export const api = {
     const response = await fetchWithAuthRetry(
       () => ({
         method: 'DELETE',
+        credentials: 'include',
         headers: {
           ...getAuthHeaders(),
         },
@@ -162,6 +179,7 @@ export const api = {
     const response = await fetchWithAuthRetry(
       () => ({
         method: 'POST',
+        credentials: 'include',
         headers: {
           ...getAuthHeaders(),
         },
@@ -178,6 +196,7 @@ export const api = {
     const response = await fetchWithAuthRetry(
       () => ({
         method: 'POST',
+        credentials: 'include',
         headers: {
           'Content-Type': 'application/json',
           ...getAuthHeaders(),
@@ -196,6 +215,7 @@ export const api = {
     const response = await fetchWithAuthRetry(
       () => ({
         method: 'POST',
+        credentials: 'include',
         headers: {
           'Content-Type': 'application/json',
           ...getAuthHeaders(),

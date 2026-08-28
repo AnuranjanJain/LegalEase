@@ -1,6 +1,7 @@
 import os
 import threading
 import time
+import uuid
 from typing import Dict, List
 import logging
 import redis
@@ -164,16 +165,20 @@ class RedisStorage(BaseStorage):
                     "error": "Redis ping failed - server not responding"
                 }
             
-            # Test basic operation (set/get/delete)
-            test_key = "health_check_test"
-            self.client.set(test_key, "test", ex=5)
-            value = self.client.get(test_key)
-            if value != "test":
-                return {
-                    "healthy": False,
-                    "error": "Redis read/write test failed"
-                }
-            self.client.delete(test_key)
+            # Use a unique key because multiple Vercel cold starts can run
+            # this check concurrently. A shared key would let one instance
+            # overwrite or delete another instance's test value.
+            test_key = f"health_check_test:{uuid.uuid4().hex}"
+            try:
+                self.client.set(test_key, "test", ex=5)
+                value = self.client.get(test_key)
+                if value != "test":
+                    return {
+                        "healthy": False,
+                        "error": "Redis read/write test failed"
+                    }
+            finally:
+                self.client.delete(test_key)
             
             return {"healthy": True}
             

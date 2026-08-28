@@ -14,7 +14,7 @@ import time
 from typing import Optional
 import uuid
 
-from backend.database import engine, Base, SessionLocal
+from backend.database import engine, Base, SessionLocal, using_ephemeral_sqlite
 from backend.routers import auth_routes
 from backend.routers import legal_routes
 from backend.routers import history_routes
@@ -83,6 +83,13 @@ _app_start_time = time.monotonic()
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    # Vercel may create and freeze function instances between requests. Long-
+    # lived cleanup/scheduler tasks do not have a reliable lifecycle there and
+    # can keep a serverless invocation alive unnecessarily.
+    if os.getenv("VERCEL"):
+        yield
+        return
+
     # Start the token blacklist cleanup worker in the background
     cleanup_interval = file_config.token_cleanup_interval_seconds
     cleanup_task = asyncio.create_task(start_token_cleanup_task(interval_seconds=cleanup_interval))
@@ -183,8 +190,17 @@ def handle_uncaught_exception(exc_type, exc_value, exc_traceback):
 sys.excepthook = handle_uncaught_exception
 
 
-# Create database tables
-Base.metadata.create_all(bind=engine)
+# Create database tables once per process. A database outage should be
+# reported by /health and by the affected endpoint, not turn every Vercel
+# invocation into an opaque FUNCTION_INVOCATION_FAILED response.
+database_initialization_error: Optional[str] = None
+try:
+    Base.metadata.create_all(bind=engine)
+except Exception as exc:
+    database_initialization_error = type(exc).__name__
+    logger.exception(
+        "Database schema initialization failed; requests will report database unavailability."
+    )
 
 # Include authentication router
 app.include_router(auth_routes.router)
@@ -209,9 +225,15 @@ app.include_router(developer_router)
 # Environment configuration - defaults to production for security
 ENVIRONMENT = os.getenv("ENVIRONMENT", "production").lower()
 
-raw_allowed_origins = cors_config.allowed_origins or cors_config.frontend_url
+configured_allowed_origins = os.getenv("ALLOWED_ORIGINS")
+configured_frontend_url = os.getenv("FRONTEND_URL")
+if configured_allowed_origins is None and configured_frontend_url:
+    # FRONTEND_URL is a documented fallback when ALLOWED_ORIGINS is omitted.
+    raw_allowed_origins = configured_frontend_url
+else:
+    raw_allowed_origins = cors_config.allowed_origins or cors_config.frontend_url
 ALLOWED_ORIGINS = [
-    origin.strip()
+    origin.strip().rstrip("/")
     for origin in raw_allowed_origins.split(",")
     if origin.strip()
 ]
@@ -578,7 +600,53 @@ async def upload_document(
         logger.error(f"Upload error: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail="Failed to receive document")
 
-    # Register the task as "queued" and launch the background worker
+    job = build_upload_job(
+        task_id=task_id,
+        file_path=temp_path,
+        filename=filename,
+        content_type=file.content_type or "",
+        file_extension=file_extension,
+        content_prefix=content_prefix,
+    )
+
+    # Vercel does not keep a worker process alive after the request returns.
+    # Require shared task storage and finish extraction inside the invocation
+    # so accepted uploads cannot remain queued forever.
+    if os.getenv("VERCEL"):
+        task_storage = get_upload_task_storage()
+        if not task_storage.using_redis:
+            if temp_path and os.path.exists(temp_path):
+                os.unlink(temp_path)
+            raise HTTPException(
+                status_code=503,
+                detail="Document processing requires REDIS_URL on Vercel",
+            )
+
+        task_storage.create_task(
+            task_id,
+            status="processing",
+            progress=0,
+            result=None,
+            user_id=identity.get_user_id(),
+        )
+        try:
+            await process_upload_job_async(job)
+        except Exception:
+            # The worker helper records the failure in Redis. Return the task
+            # so the client can display its normal failed-processing state.
+            logger.exception("[%s] Inline Vercel upload processing failed", task_id)
+
+        task = task_storage.get_task(task_id) or {}
+        return JSONResponse(
+            status_code=202,
+            content={
+                "task_id": task_id,
+                "filename": filename,
+                "status": task.get("status", "failed"),
+            },
+        )
+
+    # Register the task as "queued" and launch the background worker.
     task_storage = get_upload_task_storage()
     task_storage.create_task(
         task_id,
@@ -589,15 +657,16 @@ async def upload_document(
     )
     logger.info(f"[{task_id}] Upload task created")
 
-    job_queue = UploadJobQueue()
-    job = build_upload_job(
-        task_id=task_id,
-        file_path=temp_path,
-        filename=filename,
-        content_type=file.content_type or "",
-        file_extension=file_extension,
-        content_prefix=content_prefix,
-    )
+    try:
+        job_queue = UploadJobQueue()
+    except RuntimeError:
+        task_storage.mark_failed(task_id, "Document processing is not configured")
+        if temp_path and os.path.exists(temp_path):
+            os.unlink(temp_path)
+        raise HTTPException(
+            status_code=503,
+            detail="Document processing requires REDIS_URL in production",
+        )
 
     if not job_queue.enqueue(job):
         task_storage.mark_failed(task_id, "Failed to enqueue upload job")
@@ -757,22 +826,30 @@ async def health():
         logger.error(f"Database health check failed: {e}")
         db_status = "down"
 
+    if using_ephemeral_sqlite or database_initialization_error:
+        db_status = "down"
+
     redis_status = "ok"
-    if hasattr(key_limiter, "_redis_backend") and key_limiter._redis_backend:
+    redis_backend = getattr(key_limiter, "_redis_backend", None)
+    if redis_backend:
         try:
-            h_res = key_limiter._redis_backend.health_check()
+            h_res = redis_backend.health_check()
             if not h_res.get("healthy", True):
                 redis_status = "degraded"
         except Exception as e:
             logger.error(f"Redis health check failed: {e}")
             redis_status = "down"
+    elif ENVIRONMENT in {"production", "staging"}:
+        # The fallback is process-local and cannot support durable upload task
+        # state or distributed rate limits on a serverless deployment.
+        redis_status = "not_configured"
 
     status = health_data.get("status", "unknown")
     if rag_health.get("status") in {"degraded", "failed"} and status == "ok":
         status = "degraded"
     if db_status == "down":
         status = "degraded"
-    if redis_status in ("degraded", "down"):
+    if redis_status in ("degraded", "down", "not_configured"):
         status = "degraded"
 
     details = health_data.get("details") or {}
@@ -780,6 +857,7 @@ async def health():
         details = {"ai_details": details}
     details["rag"] = rag_health
     details["database"] = db_status
+    details["database_persistence"] = "ephemeral" if using_ephemeral_sqlite else "persistent"
     details["redis"] = redis_status
 
     response = HealthResponse(

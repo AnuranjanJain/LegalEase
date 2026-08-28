@@ -3,31 +3,36 @@ from typing import List, Dict, Any
 
 try:
     from rank_bm25 import BM25Okapi
-except ImportError:
+except Exception:
     BM25Okapi = None
 
 try:
-    from sentence_transformers import SentenceTransformer
-except ImportError:
-    SentenceTransformer = None
-
-try:
     import numpy as np
-except ImportError:
+except Exception:
     np = None
 
 logger = logging.getLogger(__name__)
 
 # Load a lightweight sentence transformer (we lazy load to speed up startup)
 _model = None
+_model_import_attempted = False
 
 def get_model():
-    global _model
-    if SentenceTransformer is None:
+    global _model, _model_import_attempted
+    if _model is not None or _model_import_attempted:
+        return _model
+    _model_import_attempted = True
+    try:
+        from sentence_transformers import SentenceTransformer
+    except Exception as exc:
+        logger.warning("Dense hybrid search disabled (%s)", type(exc).__name__)
         return None
-    if _model is None:
+
+    try:
         # Load a small fast model for embeddings
         _model = SentenceTransformer('all-MiniLM-L6-v2')
+    except Exception as exc:
+        logger.warning("Dense hybrid search model unavailable (%s)", type(exc).__name__)
     return _model
 
 def get_hybrid_results(query: str, documents: List[str], top_k: int = 3) -> List[Dict[str, Any]]:
@@ -40,6 +45,8 @@ def get_hybrid_results(query: str, documents: List[str], top_k: int = 3) -> List
 
     try:
         # 1. BM25 (Sparse) Search
+        if BM25Okapi is None:
+            return []
         tokenized_corpus = [doc.lower().split(" ") for doc in documents]
         bm25 = BM25Okapi(tokenized_corpus)
         tokenized_query = query.lower().split(" ")
@@ -51,6 +58,12 @@ def get_hybrid_results(query: str, documents: List[str], top_k: int = 3) -> List
 
         # 2. Dense Vector Search
         model = get_model()
+        if model is None or np is None:
+            return [
+                {"content": documents[idx], "score": float(norm_bm25[idx]),
+                 "bm25_score": float(norm_bm25[idx]), "dense_score": 0.0}
+                for idx in sorted(range(len(documents)), key=lambda i: norm_bm25[i], reverse=True)[:top_k]
+            ]
         query_emb = model.encode(query, normalize_embeddings=True)
         doc_embs = model.encode(documents, normalize_embeddings=True)
         
@@ -91,6 +104,8 @@ def embed_text(text: str) -> List[float]:
     SavedClause.embedding) without depending on numpy at the call site.
     """
     model = get_model()
+    if model is None:
+        return []
     return model.encode(text, normalize_embeddings=True).tolist()
 
 
@@ -109,6 +124,8 @@ def search_saved_clauses(query: str, clauses: List[Dict[str, Any]], top_k: int =
     try:
         contents = [c["content"] for c in clauses]
 
+        if BM25Okapi is None:
+            return []
         tokenized_corpus = [c.lower().split(" ") for c in contents]
         bm25 = BM25Okapi(tokenized_corpus)
         tokenized_query = query.lower().split(" ")
@@ -117,6 +134,18 @@ def search_saved_clauses(query: str, clauses: List[Dict[str, Any]], top_k: int =
         norm_bm25 = [score / max_bm25 for score in bm25_scores]
 
         model = get_model()
+        if model is None or np is None:
+            ranked_indices = sorted(range(len(clauses)), key=lambda i: norm_bm25[i], reverse=True)[:top_k]
+            return [
+                {
+                    "id": clauses[idx]["id"],
+                    "content": clauses[idx]["content"],
+                    "score": float(norm_bm25[idx]),
+                    "bm25_score": float(norm_bm25[idx]),
+                    "dense_score": 0.0,
+                }
+                for idx in ranked_indices
+            ]
         query_emb = model.encode(query, normalize_embeddings=True)
         doc_embs = np.array([c["embedding"] for c in clauses])
         cosine_scores = np.dot(doc_embs, query_emb)

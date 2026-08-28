@@ -2,6 +2,7 @@ fastapi
 uvicorn
 bytez
 pydantic
+pydantic-settings
 pymupdf
 python-docx
 python-multipart
@@ -15,6 +16,7 @@ email-validator
 redis
 reportlab
 apscheduler
+httpx
 # RAG and Semantic Cache dependencies
 langchain
 langchain-community
