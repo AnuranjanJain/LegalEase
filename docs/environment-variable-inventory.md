@@ -74,8 +74,8 @@ This document catalogs all environment variables used across the LegalEase appli
 | Variable Name | Type | Default | Required | Current Validation | File Location |
 |--------------|------|---------|----------|-------------------|---------------|
 | BYTEZ_API_KEY | string | None | No | None | backend/services/ai_service.py |
-| CHAT_MODEL | string | inference-net/Schematron-3B | No | None | backend/services/ai_service.py |
-| SUMMARIZE_MODEL | string | inference-net/Schematron-3B | No | None | backend/services/ai_service.py |
+| CHAT_MODEL | string | Equall/Saul-7B-Instruct-v1 | No | None | backend/services/ai_service.py |
+| SUMMARIZE_MODEL | string | Equall/Saul-7B-Instruct-v1 | No | None | backend/services/ai_service.py |
 | MAX_MODEL_INPUT_CHARS | int | 15000 | No | None | backend/services/ai_service.py |
 | PROVIDER_TIMEOUT | float | 30.0 | No | None | backend/services/ai_service.py |
 | PROVIDER_RETRIES | int | 3 | No | None | backend/services/ai_service.py |

@@ -145,9 +145,9 @@ LegalEase uses Bytez for:
 ### Configuration in Backend
 ```python
 # backend/services/ai_service.py
-- Chat Model: Configured via AI_CHAT_MODEL env var
-- Summarize Model: Configured via AI_SUMMARIZE_MODEL env var
-- Timeout: 30 seconds (configurable via AI_PROVIDER_TIMEOUT)
+- Chat Model: Configured via CHAT_MODEL env var
+- Summarize Model: Configured via SUMMARIZE_MODEL env var
+- Timeout: 30 seconds (configurable via PROVIDER_TIMEOUT)
 - Retries: 3 attempts with exponential backoff
 - Graceful Degradation: Falls back to stub mode if API unavailable
 ```
@@ -155,11 +155,11 @@ LegalEase uses Bytez for:
 ### Environment Variables for AI
 ```
 BYTEZ_API_KEY=<your-api-key>
-AI_CHAT_MODEL=bytez-chat-model-name
-AI_SUMMARIZE_MODEL=bytez-summarize-model-name
-AI_PROVIDER_TIMEOUT=30
-AI_PROVIDER_RETRIES=3
-AI_STUB_MODE=false
+CHAT_MODEL=Equall/Saul-7B-Instruct-v1
+SUMMARIZE_MODEL=Equall/Saul-7B-Instruct-v1
+PROVIDER_TIMEOUT=30
+PROVIDER_RETRIES=3
+STUB_MODE=false
 ```
 
 ## Database Setup

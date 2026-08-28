@@ -223,7 +223,7 @@ async def test_ai_service_provider_retry_strategy():
     ai_service.provider_timeout = 1.0
     
     messages = [{"role": "user", "content": "test prompt"}]
-    output = await ai_service._execute_with_retry_and_timeout("inference-net/Schematron-3B", messages)
+    output = await ai_service._execute_with_retry_and_timeout("Equall/Saul-7B-Instruct-v1", messages)
     
     assert output.output == "Retry success"
     assert mock_model.run.call_count == 3

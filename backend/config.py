@@ -500,11 +500,11 @@ class AIConfig(BaseSettings):
         description="API key for Bytez AI service."
     )
     chat_model: str = Field(
-        default="inference-net/Schematron-3B",
+        default="Equall/Saul-7B-Instruct-v1",
         description="Model name for chat requests."
     )
     summarize_model: str = Field(
-        default="inference-net/Schematron-3B",
+        default="Equall/Saul-7B-Instruct-v1",
         description="Model name for summarization requests."
     )
     max_model_input_chars: int = Field(

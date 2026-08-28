@@ -291,7 +291,7 @@ class TestAIConfig:
     def test_chat_model_default(self):
         """Test that CHAT_MODEL has default value."""
         config = AIConfig()
-        assert config.chat_model == "inference-net/Schematron-3B"
+        assert config.chat_model == "Equall/Saul-7B-Instruct-v1"
 
     def test_max_model_input_chars_default(self):
         """Test that MAX_MODEL_INPUT_CHARS has default value."""
