@@ -33,34 +33,39 @@ LegalEase helps users by:
 - Providing AI-powered legal assistance
 - Improving accessibility and understanding
 
+
 ## 📚 Table of Contents
 
-- About LegalEase
-- Live Demo
-- Features
-- Screenshots
-- Technology Stack
-- Project Structure
-- Installation
-- Usage
-- Testing
-- Configuration
+- [Why LegalEase?](#-why-legalease)
+- [Live Demo](#-live-demo)
+- [Screenshots](#-screenshots)
+- [How It Works](#-how-it-works)
+- [Features](#features)
+- [Technology Stack](#technology-stack)
+- [Project Structure](#project-structure)
+- [Setup Instructions](#setup-instructions)
+- [Testing](#testing)
+- [Configuration](#configuration)
 - [Tailwind Theme Guide](docs/tailwind-theme-guide.md)
-- Security
-- Contributing
-- Code of Conduct
-- Future Enhancements
-- License
+- [Readability Score Analyzer](#-readability-score-analyzer)
+- [Jurisdiction Context-Switching](#-jurisdiction-context-switching)
+- [Accessibility](#-accessibility)
+- [Security Considerations](#security-considerations)
+- [Contributing](#-how-to-contribute)
+- [Code of Conduct](#-code-of-conduct)
+- [Future Enhancements](#future-enhancements)
+- [License](#license)
 
-# LegalEase Website
-
-A comprehensive legal document analysis platform that combines AI-powered document processing, chatbot assistance, and user-friendly interfaces.
 ## 🌐 Live Demo
+
+1. **Upload** — Drop a PDF, DOCX, or TXT file (up to 25MB)
+2. **AI Processing** — LegalEase extracts, analyzes, and simplifies the legal text
+3. **Review** — Get a plain-language summary, risk highlights, and readability score
+4. **Ask Questions** — Use the AI chatbot for jurisdiction-aware follow-ups
+5. **Export** — Download your summary and chat transcript as a PDF
 
 Check out the live project here:  
 👉 [visit Live Demo](https://legal-ease-silk.vercel.app)
-
-Explore the LegalEase platform to upload documents,view summaries,and interact with the AI chatbot interface.
 
 ## 📸 Screenshots
 
@@ -81,6 +86,12 @@ Explore the LegalEase platform to upload documents,view summaries,and interact w
 
 
 ## Project Structure
+
+## 🏗️ Architecture
+
+React (Vite) frontend → FastAPI backend → Supabase (PostgreSQL)
+                              ↓
+                    AI Service (Bytez SDK)
 
 ```
 LEGAL EASE
@@ -162,8 +173,7 @@ LEGAL EASE
 ├── CONTRIBUTING.md
 ├── LICENSE
 ├── package.json
-├── pnpm-lock.yaml
-├── pnpm-workspace.yaml
+├── package-lock.json
 ├── postcss.config.js
 ├── README.md
 ├── tailwind.config.js
@@ -264,11 +274,6 @@ LEGAL EASE
 - Firefox 75+
 - Safari 13+
 - Edge 80+
-
-## 📊 Readability Score Analyzer
-
-### Feature Overview
-The Readability Score Analyzer provides an instant visual comparison between the **Original Legal Document** and the **AI Generated Summary**. This helps users quantify how much easier the summary is to read and comprehend.
 
 ### How Scores Are Calculated
 Readability metrics are calculated based on linguistic properties of the text using sentence count, word count, and syllable count heuristics.
